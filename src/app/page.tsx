@@ -63,7 +63,7 @@ export default function HomePage() {
 
       {/* Hero */}
       <section className="mx-auto flex w-full max-w-5xl flex-col items-center gap-6 px-6 py-20 text-center md:py-28">
-        <span className="rounded-full border border-primary/20 bg-primary/8 px-4 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-primary">
+        <span className="rounded-full border border-primary/25 bg-primary/12 px-4 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-primary">
           Short-term rental operations
         </span>
         <h1 className="max-w-3xl text-4xl font-semibold leading-tight tracking-tight text-balance md:text-6xl">
@@ -140,13 +140,13 @@ export default function HomePage() {
           <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">
             Ready to get started?
           </h2>
-          <p className="mt-2 text-sm text-primary-foreground/70 md:text-base">
+          <p className="mt-2 text-sm text-primary-foreground/90 md:text-base">
             Sign in to your owner dashboard or access your assigned jobs.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link
               href={"/sign-in" as Route}
-              className="inline-flex h-11 items-center gap-2 rounded-full bg-primary-foreground px-6 text-sm font-semibold text-primary transition hover:opacity-90"
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-primary-foreground px-6 text-sm font-semibold text-[#16423c] transition hover:opacity-90"
             >
               Owner / Admin sign in <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>

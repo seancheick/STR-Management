@@ -216,6 +216,76 @@ export async function listAssignmentsForSchedule(
   return (data as AssignmentScheduleRecord[] | null) ?? [];
 }
 
+export type PropertyTodayStatus = {
+  propertyId: string;
+  name: string;
+  status: "unassigned" | "assigned" | "in_progress" | "pending_review" | "ready" | "quiet";
+  cleanerName: string | null;
+  dueAt: string | null;
+};
+
+export async function getPropertyTodayStatuses(): Promise<PropertyTodayStatus[]> {
+  const supabase = await createServerSupabaseClient();
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setUTCHours(23, 59, 59, 999);
+
+  const [propertiesRes, assignmentsRes] = await Promise.all([
+    supabase.from("properties").select("id, name").eq("active", true).order("name"),
+    supabase
+      .from("assignments")
+      .select("property_id, status, due_at, cleaners:cleaner_id ( full_name )")
+      .gte("due_at", todayStart.toISOString())
+      .lte("due_at", todayEnd.toISOString())
+      .not("status", "eq", "cancelled"),
+  ]);
+
+  const assignmentMap = new Map<string, { status: string; cleanerName: string | null; dueAt: string }>();
+  for (const a of (assignmentsRes.data ?? []) as Array<{
+    property_id: string;
+    status: string;
+    due_at: string;
+    cleaners: { full_name: string } | { full_name: string }[] | null;
+  }>) {
+    const existing = assignmentMap.get(a.property_id);
+    // Priority order: in_progress > unassigned > assigned > pending_review > approved
+    const priority: Record<string, number> = {
+      in_progress: 5, unassigned: 4, assigned: 3, confirmed: 3,
+      completed_pending_review: 2, approved: 1, needs_reclean: 4,
+    };
+    const newPriority = priority[a.status] ?? 0;
+    const existingPriority = existing ? (priority[existing.status] ?? 0) : -1;
+    if (newPriority > existingPriority) {
+      const cleanerName = Array.isArray(a.cleaners)
+        ? (a.cleaners[0]?.full_name ?? null)
+        : (a.cleaners as { full_name: string } | null)?.full_name ?? null;
+      assignmentMap.set(a.property_id, { status: a.status, cleanerName, dueAt: a.due_at });
+    }
+  }
+
+  const statusMapping: Record<string, PropertyTodayStatus["status"]> = {
+    unassigned: "unassigned",
+    assigned: "assigned",
+    confirmed: "assigned",
+    in_progress: "in_progress",
+    completed_pending_review: "pending_review",
+    approved: "ready",
+    needs_reclean: "unassigned",
+  };
+
+  return ((propertiesRes.data ?? []) as Array<{ id: string; name: string }>).map((p) => {
+    const a = assignmentMap.get(p.id);
+    return {
+      propertyId: p.id,
+      name: p.name,
+      status: a ? (statusMapping[a.status] ?? "quiet") : "quiet",
+      cleanerName: a?.cleanerName ?? null,
+      dueAt: a?.dueAt ?? null,
+    };
+  });
+}
+
 export async function getDashboardStats(): Promise<{
   checkoutsToday: number;
   cleaningsDueToday: number;

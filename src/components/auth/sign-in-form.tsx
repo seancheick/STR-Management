@@ -63,7 +63,7 @@ export function SignInForm({ redirectTo }: SignInFormProps) {
           id="email"
           type="email"
           autoComplete="email"
-          className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm transition"
+          className="h-12 w-full rounded-xl border border-input bg-muted/60 px-4 text-sm transition"
           {...form.register("email")}
         />
         {form.formState.errors.email ? (
@@ -79,7 +79,7 @@ export function SignInForm({ redirectTo }: SignInFormProps) {
           id="password"
           type="password"
           autoComplete="current-password"
-          className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm transition"
+          className="h-12 w-full rounded-xl border border-input bg-muted/60 px-4 text-sm transition"
           {...form.register("password")}
         />
         {form.formState.errors.password ? (
