@@ -35,7 +35,6 @@ export async function fetchAssignmentDetail(assignmentId: string) {
     priority: detail.priority,
     dueAt: detail.due_at,
     checkoutAt: detail.checkout_at,
-    nextCheckinAt: detail.next_checkin_at,
     expectedDurationMin: detail.expected_duration_min,
     fixedPayoutAmount: detail.fixed_payout_amount,
     assignmentType: detail.assignment_type,
@@ -80,7 +79,7 @@ export async function getCleanerSuggestionsAction(
   const [assignmentRes, cleanersRes] = await Promise.all([
     supabase
       .from("assignments")
-      .select("due_at, next_checkin_at, expected_duration_min, property_id, properties:property_id(default_cleaner_id)")
+      .select("due_at, expected_duration_min, property_id, properties:property_id(default_cleaner_id)")
       .eq("id", assignmentId)
       .maybeSingle(),
     supabase
@@ -95,7 +94,6 @@ export async function getCleanerSuggestionsAction(
 
   const a = assignmentRes.data as {
     due_at: string;
-    next_checkin_at: string | null;
     expected_duration_min: number | null;
     property_id: string;
     properties: { default_cleaner_id: string | null } | { default_cleaner_id: string | null }[] | null;
@@ -109,9 +107,7 @@ export async function getCleanerSuggestionsAction(
   // Determine cleaning window
   const windowStart = new Date(a.due_at);
   const expectedMs = (a.expected_duration_min ?? 120) * 60_000;
-  const windowEnd = a.next_checkin_at
-    ? new Date(a.next_checkin_at)
-    : new Date(windowStart.getTime() + expectedMs);
+  const windowEnd = new Date(windowStart.getTime() + expectedMs);
 
   // Check each cleaner for overlapping assignments
   const cleaners = cleanersRes.data as Array<{ id: string; full_name: string }>;

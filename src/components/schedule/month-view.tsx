@@ -157,12 +157,7 @@ function DetailPanel({
           <dt className="text-xs text-muted-foreground">Cleaning due</dt>
           <dd className="font-medium tabular-nums">{shortTime(assignment.due_at)}</dd>
         </div>
-        {assignment.next_checkin_at && (
-          <div>
-            <dt className="text-xs text-muted-foreground">Next check-in</dt>
-            <dd className="font-medium tabular-nums">{shortTime(assignment.next_checkin_at)}</dd>
-          </div>
-        )}
+
         {assignment.expected_duration_min && (
           <div>
             <dt className="text-xs text-muted-foreground">Duration</dt>

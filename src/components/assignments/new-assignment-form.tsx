@@ -90,7 +90,7 @@ export function NewAssignmentForm({
   const [dueVal, setDueVal] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    d.setHours(11, 0, 0, 0);
+    d.setHours(15, 0, 0, 0); // 3 PM — standard check-in time
     return toDatetimeLocal(d);
   });
 

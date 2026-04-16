@@ -148,7 +148,6 @@ async function importCandidate(
     ack_status: "pending",
     priority: "normal",
     checkout_at: candidate.checkoutAt,
-    next_checkin_at: candidate.nextCheckinAt ?? null,
     due_at: candidate.dueAt,
     source_type: "ical",
     source_reference: sourceRef,
