@@ -8,6 +8,7 @@ import { useCallback, useState, useTransition } from "react";
 import { fetchAssignmentDetail, type AssignmentDetailAction } from "@/app/actions/assignments";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
 import { AssignmentDrawer } from "./assignment-drawer";
+import { AssignCleanerModal } from "./assign-cleaner-modal";
 
 // ─── Status helpers ────────────────────────────────────────────────────────────
 
@@ -42,6 +43,7 @@ type Props = {
 
 export function TodayJobsTimeline({ jobs }: Props) {
   const [drawerDetail, setDrawerDetail] = useState<NonNullable<AssignmentDetailAction> | null>(null);
+  const [showAssignModal, setShowAssignModal] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
@@ -54,15 +56,19 @@ export function TodayJobsTimeline({ jobs }: Props) {
     });
   }, []);
 
-  const closeDrawer = useCallback(() => setDrawerDetail(null), []);
+  const closeDrawer = useCallback(() => {
+    setDrawerDetail(null);
+    setShowAssignModal(false);
+  }, []);
 
-  // Placeholder for assign modal (wired in T3)
-  const handleAssignClick = useCallback(() => {
-    // T3 will replace this with the modal
-    if (drawerDetail) {
-      window.location.href = `/dashboard/assignments/${drawerDetail.id}`;
-    }
-  }, [drawerDetail]);
+  const handleAssignClick = useCallback(() => setShowAssignModal(true), []);
+
+  const handleAssigned = useCallback(() => {
+    setShowAssignModal(false);
+    setDrawerDetail(null);
+    // Reload to reflect updated status
+    window.location.reload();
+  }, []);
 
   if (jobs.length === 0) {
     return (
@@ -164,12 +170,23 @@ export function TodayJobsTimeline({ jobs }: Props) {
       </ol>
 
       {/* Drawer */}
-      {drawerDetail && (
+      {drawerDetail && !showAssignModal && (
         <AssignmentDrawer
           detail={drawerDetail}
           nextCheckinAt={drawerDetail.nextCheckinAt}
           onClose={closeDrawer}
           onAssignClick={handleAssignClick}
+        />
+      )}
+
+      {/* Assign-cleaner modal */}
+      {drawerDetail && showAssignModal && (
+        <AssignCleanerModal
+          assignmentId={drawerDetail.id}
+          propertyName={drawerDetail.propertyName}
+          dueAt={drawerDetail.dueAt}
+          onClose={() => setShowAssignModal(false)}
+          onAssigned={handleAssigned}
         />
       )}
     </>
@@ -184,6 +201,7 @@ type AtRiskProps = {
 
 export function AtRiskSection({ jobs }: AtRiskProps) {
   const [drawerDetail, setDrawerDetail] = useState<NonNullable<AssignmentDetailAction> | null>(null);
+  const [showAssignModal, setShowAssignModal] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
@@ -194,6 +212,12 @@ export function AtRiskSection({ jobs }: AtRiskProps) {
       if (detail) setDrawerDetail(detail);
       setLoadingId(null);
     });
+  }, []);
+
+  const handleAssigned = useCallback(() => {
+    setShowAssignModal(false);
+    setDrawerDetail(null);
+    window.location.reload();
   }, []);
 
   if (jobs.length === 0) return null;
@@ -241,13 +265,22 @@ export function AtRiskSection({ jobs }: AtRiskProps) {
         </ol>
       </section>
 
-      {drawerDetail && (
+      {drawerDetail && !showAssignModal && (
         <AssignmentDrawer
           detail={drawerDetail}
-          onClose={() => setDrawerDetail(null)}
-          onAssignClick={() => {
-            if (drawerDetail) window.location.href = `/dashboard/assignments/${drawerDetail.id}`;
-          }}
+          nextCheckinAt={drawerDetail.nextCheckinAt}
+          onClose={() => { setDrawerDetail(null); setShowAssignModal(false); }}
+          onAssignClick={() => setShowAssignModal(true)}
+        />
+      )}
+
+      {drawerDetail && showAssignModal && (
+        <AssignCleanerModal
+          assignmentId={drawerDetail.id}
+          propertyName={drawerDetail.propertyName}
+          dueAt={drawerDetail.dueAt}
+          onClose={() => setShowAssignModal(false)}
+          onAssigned={handleAssigned}
         />
       )}
     </>
