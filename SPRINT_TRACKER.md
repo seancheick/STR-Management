@@ -25,6 +25,7 @@ Source: `Airbnb_Management_Plan.md`
 | Sprint 5: Payouts + Reports | [x] | Payout batches, statements, exports — complete |
 | Sprint 6: Templates + Supervisor | [x] | Reusable templates, visual checklists, review queue — complete |
 | Sprint 7: Intelligence | [x] | Reliability scores, property health, analytics — complete |
+| Sprint 8: Dashboard & UX Polish | [x] | Operational dashboard rebuild, UI contrast fixes, UX improvements — complete |
 
 ---
 
@@ -324,3 +325,46 @@ Use historical data to surface insights.
 - Owner can identify underperforming cleaners and problematic properties ✓
 - Workload issues are visible before quality drops ✓ (schedule + dashboard KPIs)
 - Scores are explainable and traceable to underlying data ✓ (methodology note on analytics page)
+
+---
+
+## Sprint 8: Dashboard & UX Polish
+
+### Goal
+
+Rebuild the admin dashboard into a real operational tool, fix color contrast issues across the app, and improve key scheduling workflows.
+
+### Comment Log
+
+- 2026-04-16: Rebuilt admin dashboard with full operational layout: property status rail, today's jobs timeline with click-to-open assignment drawer, at-risk/overdue section, week preview strip with job dots, right-side detail drawer, assign-cleaner modal with conflict detection, `next_checkin_at` turnover window support.
+- 2026-04-16: Added `next_checkin_at` column to assignments (migration `20260416050000_sprint_8_next_checkin.sql`). iCal parser now pairs consecutive events to compute `nextCheckinAt`. Sync service persists it.
+- 2026-04-16: Fixed sidebar active nav text: `text-primary-foreground` → `text-[#f7f5ef]` to resolve Tailwind v4 cascade issue on dark green active state.
+- 2026-04-16: Fixed assignment INSERT RLS error: `assignment-service.ts` now uses service-role client (auth gate is `requireRole` at action level — bypassing RLS is safe here).
+- 2026-04-16: Schedule a Job form UX overhaul: guest checkout field moved first, cleaning-due field replaced with quick chips (Same day / 24h / 48h) that auto-calculate `due_at` from `checkoutAt`.
+- 2026-04-16: Root-cause fix for color contrast: `globals.css @theme inline` replaced all `var()` chain references with literal hex values. Tailwind v4 `@theme inline` requires static values to bake colors into utilities — `var()` references prevent inlining and caused `text-primary-foreground` to render as dark text on dark green across ~35 components.
+- 2026-04-16: Added next guest check-in field (defaults 3 PM) and updated checkout default to 11 AM on the Schedule a Job form. `nextCheckinAt` threaded through form → action schema → service → DB insert.
+- 2026-04-16: Properties page: view toggle (grid / list) with `localStorage` persistence; archived properties collapsed into a separate section at the bottom.
+- 2026-04-16: Schedule page: weekly/monthly view toggle via `?view=week|month` URL param. Monthly view renders a full calendar grid with colored status dots, `+N more` overflow, day-click expansion panel, prev/next month navigation.
+- 2026-04-16: Full verification passes: typecheck (0 errors), build clean.
+
+### Tasks
+
+- [x] Rebuild dashboard with operational layout (property rail, timeline, week strip, drawer, modal)
+- [x] Add `next_checkin_at` to assignments + iCal pairing + sync persistence
+- [x] Fix sidebar active text color (Tailwind v4 cascade bug)
+- [x] Fix assignment INSERT RLS error
+- [x] Schedule a Job: checkout-first flow + quick-select chips for due time
+- [x] Fix color contrast root cause in `@theme inline`
+- [x] Guest checkout 11 AM default + next check-in 3 PM field
+- [x] Properties view toggle (grid / list) + archived section separation
+- [x] Schedule weekly/monthly toggle + full month calendar view
+
+### Definition of Done
+
+- Dashboard shows real operational state: today's jobs, overdue, week at a glance ✓
+- Clicking any job opens detail drawer with turnover window + assign-cleaner modal ✓
+- All `bg-primary` buttons render readable cream text in all browsers ✓
+- Creating an assignment works without RLS errors ✓
+- Schedule a Job prefills realistic checkout/check-in times and offers one-tap due-time selection ✓
+- Properties can be viewed as grid or list; archived properties are separated ✓
+- Schedule can be viewed weekly or as a full month calendar ✓

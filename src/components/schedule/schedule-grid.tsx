@@ -279,6 +279,7 @@ type ScheduleGridProps = {
   cleaners: TeamMemberRecord[];
   weekDays: string[]; // ISO date strings for the 7 days
   weekOffset: number;
+  view: "week" | "month";
 };
 
 export function ScheduleGrid({
@@ -287,6 +288,7 @@ export function ScheduleGrid({
   cleaners,
   weekDays,
   weekOffset,
+  view,
 }: ScheduleGridProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -330,12 +332,35 @@ export function ScheduleGrid({
             →
           </Link>
         </div>
-        <Link
-          href="/dashboard/assignments/new"
-          className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-        >
-          + New job
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <Link
+            href={`?week=${weekOffset}` as Route}
+            className={`inline-flex h-9 items-center rounded-full px-4 text-sm font-medium transition ${
+              view === "week"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border/70 bg-card text-foreground hover:bg-muted"
+            }`}
+          >
+            Week
+          </Link>
+          <Link
+            href="?view=month"
+            className={`inline-flex h-9 items-center rounded-full px-4 text-sm font-medium transition ${
+              view === "month"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border/70 bg-card text-foreground hover:bg-muted"
+            }`}
+          >
+            Month
+          </Link>
+          <Link
+            href="/dashboard/assignments/new"
+            className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+          >
+            + New job
+          </Link>
+        </div>
       </div>
 
       {/* Grid + detail panel side by side */}
