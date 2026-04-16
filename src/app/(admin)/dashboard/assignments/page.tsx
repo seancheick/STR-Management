@@ -1,8 +1,18 @@
 import type { Route } from "next";
 import Link from "next/link";
+import { CheckCircle, ClipboardList } from "lucide-react";
 
 import { requireRole } from "@/lib/auth/session";
 import { listAssignmentsForAdmin } from "@/lib/queries/assignments";
+
+function priorityBadgeClass(priority: string) {
+  const map: Record<string, string> = {
+    normal: "bg-gray-50 text-gray-600 border border-gray-200",
+    high: "bg-orange-50 text-orange-700 border border-orange-200",
+    urgent: "bg-red-50 text-red-700 border border-red-200",
+  };
+  return map[priority] ?? "bg-gray-50 text-gray-600 border border-gray-200";
+}
 
 function statusBadgeClass(status: string) {
   const map: Record<string, string> = {
@@ -63,28 +73,33 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
       </header>
 
       {banner ? (
-        <section className="rounded-2xl border border-border/70 bg-card px-4 py-3 text-sm">
+        <section className="flex items-center gap-2 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <CheckCircle className="h-4 w-4 shrink-0" />
           {banner}
         </section>
       ) : null}
 
       {assignments.length === 0 ? (
-        <section className="rounded-[1.5rem] border border-dashed border-border bg-card/70 p-8">
-          <h2 className="text-xl font-semibold">No assignments yet</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            Create your first assignment to start tracking cleaning jobs.
-          </p>
+        <section className="flex flex-col items-center gap-4 rounded-[1.75rem] border border-dashed border-border bg-card/70 px-6 py-12 text-center">
+          <ClipboardList className="h-10 w-10 text-muted-foreground/40" />
+          <div>
+            <h2 className="text-xl font-semibold">No assignments yet</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">Create your first assignment to start tracking cleaning jobs.</p>
+          </div>
+          <Link href="/dashboard/assignments/new" className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground">
+            New assignment
+          </Link>
         </section>
       ) : (
         <section className="flex flex-col gap-3">
           {assignments.map((a) => (
             <article
               key={a.id}
-              className="rounded-[1.5rem] border border-border/70 bg-card p-5 shadow-sm"
+              className="rounded-[1.5rem] border border-border/70 bg-card p-5 shadow-sm transition duration-200 hover:shadow-md"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold">
+                  <h2 className="text-xl font-bold tracking-tight">
                     {a.properties?.name ?? "Unknown property"}
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -102,7 +117,7 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
                 </span>
               </div>
 
-              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+              <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border/50 pt-4 text-sm md:grid-cols-4">
                 <div>
                   <dt className="text-muted-foreground">Cleaner</dt>
                   <dd className="mt-1 font-medium">
@@ -115,7 +130,11 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Priority</dt>
-                  <dd className="mt-1 font-medium capitalize">{a.priority}</dd>
+                  <dd className="mt-1">
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${priorityBadgeClass(a.priority)}`}>
+                      {a.priority}
+                    </span>
+                  </dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Payout</dt>

@@ -1,5 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
+import { AlertTriangle, Package, PackageSearch, CheckCircle2 } from "lucide-react";
 
 import { requireRole } from "@/lib/auth/session";
 import { listOpenIssues, listPendingRestockRequests, listLowInventory } from "@/lib/queries/issues";
@@ -7,10 +8,15 @@ import { IssueActionButtons } from "@/components/issues/issue-action-buttons";
 import { RestockActionButtons } from "@/components/issues/restock-action-buttons";
 
 const severityColors: Record<string, string> = {
-  low: "bg-slate-100 text-slate-700",
-  medium: "bg-amber-100 text-amber-700",
-  high: "bg-orange-100 text-orange-700",
-  critical: "bg-red-100 text-red-700",
+  low: "bg-slate-50 text-slate-600 border border-slate-200",
+  medium: "bg-amber-50 text-amber-700 border border-amber-200",
+  high: "bg-orange-50 text-orange-700 border border-orange-200",
+  critical: "bg-red-50 text-red-700 border border-red-200",
+};
+
+const severityAccent: Record<string, string> = {
+  critical: "border-l-2 border-l-red-400",
+  high: "border-l-2 border-l-orange-400",
 };
 
 const typeLabels: Record<string, string> = {
@@ -45,37 +51,45 @@ export default async function IssuesPage() {
       <div>
         <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Exceptions</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight">Issues & Inventory</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Track and resolve cleaning issues, restock needs, and inventory levels.
+        </p>
       </div>
 
       {/* Open Issues */}
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Open issues</h2>
-          <span className="rounded-full bg-muted px-3 py-1 text-sm font-medium">
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            Open issues
+          </h2>
+          <span className="rounded-full bg-muted px-3 py-1 text-sm font-semibold tabular-nums">
             {issues.length}
           </span>
         </div>
 
         {issues.length === 0 ? (
-          <div className="rounded-[1.75rem] border border-dashed border-border bg-card/70 p-6">
-            <p className="text-sm text-muted-foreground">No open issues.</p>
+          <div className="flex flex-col items-center gap-2 rounded-[1.75rem] border border-dashed border-border bg-card/70 p-10 text-center">
+            <CheckCircle2 className="h-8 w-8 text-green-500/60" />
+            <p className="font-medium">All clear</p>
+            <p className="text-sm text-muted-foreground">No open issues right now.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
             {issues.map((issue) => (
               <div
                 key={issue.id}
-                className="rounded-[1.5rem] border border-border/70 bg-card p-5 shadow-sm"
+                className={`rounded-2xl border border-border/70 bg-card p-5 shadow-sm ${severityAccent[issue.severity] ?? ""}`}
               >
                 <div className="flex flex-wrap items-start gap-3">
                   <div className="flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${severityColors[issue.severity] ?? "bg-muted text-muted-foreground"}`}
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${severityColors[issue.severity] ?? "bg-muted text-muted-foreground border border-border"}`}
                       >
                         {issue.severity}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                         {typeLabels[issue.issue_type] ?? issue.issue_type}
                       </span>
                       <span className="text-xs text-muted-foreground">·</span>
@@ -105,22 +119,29 @@ export default async function IssuesPage() {
       {/* Pending Restock Requests */}
       <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Restock requests</h2>
-          <span className="rounded-full bg-muted px-3 py-1 text-sm font-medium">
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <Package className="h-5 w-5 text-blue-500" />
+            Restock requests
+          </h2>
+          <span className="rounded-full bg-muted px-3 py-1 text-sm font-semibold tabular-nums">
             {restockRequests.length}
           </span>
         </div>
 
         {restockRequests.length === 0 ? (
-          <div className="rounded-[1.75rem] border border-dashed border-border bg-card/70 p-6">
-            <p className="text-sm text-muted-foreground">No pending restock requests.</p>
+          <div className="flex flex-col items-center gap-2 rounded-[1.75rem] border border-dashed border-border bg-card/70 p-10 text-center">
+            <Package className="h-8 w-8 text-muted-foreground/40" />
+            <p className="font-medium">Nothing pending</p>
+            <p className="text-sm text-muted-foreground">
+              Restock requests from cleaners appear here.
+            </p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
             {restockRequests.map((req) => (
               <div
                 key={req.id}
-                className="rounded-[1.5rem] border border-border/70 bg-card p-5 shadow-sm"
+                className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm"
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="space-y-0.5">
@@ -146,25 +167,28 @@ export default async function IssuesPage() {
       {/* Low inventory */}
       {lowInventory.length > 0 && (
         <section className="flex flex-col gap-4">
-          <h2 className="text-xl font-semibold">Low inventory</h2>
-          <div className="rounded-[1.75rem] border border-amber-200 bg-amber-50 p-5">
-            <ul className="divide-y divide-amber-100">
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <PackageSearch className="h-5 w-5 text-amber-500" />
+            Low inventory
+          </h2>
+          <div className="rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
+            <ul className="divide-y divide-border/60">
               {lowInventory.map((item) => (
                 <li key={item.id} className="flex items-center justify-between py-3 text-sm">
                   <div>
                     <span className="font-medium">{item.item_name}</span>
                     <span className="ml-2 text-muted-foreground">· {item.property_name}</span>
                   </div>
-                  <span className="font-semibold text-amber-700">
+                  <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 border border-amber-200 tabular-nums">
                     {item.current_quantity}/{item.reorder_threshold} {item.unit}
                   </span>
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-xs text-amber-700">
+            <p className="mt-3 text-xs text-muted-foreground">
               Manage inventory levels in each{" "}
               <Link
-                className="underline underline-offset-2"
+                className="underline underline-offset-2 text-foreground/70 hover:text-foreground transition-colors"
                 href={"/dashboard/properties" as Route}
               >
                 property
