@@ -52,6 +52,14 @@
   border-color: var(--border);
 }
 
+/* Safety net: any element with a solid primary background should default to
+   the primary-foreground (cream) text colour. This prevents cascade ordering
+   from ever letting a dark colour bleed in. Child elements that need a
+   different colour must still set their own text class explicitly. */
+.bg-primary {
+  color: #f7f5ef;
+}
+
 html {
   scroll-behavior: smooth;
   background:

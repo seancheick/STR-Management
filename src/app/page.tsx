@@ -136,23 +136,23 @@ export default function HomePage() {
 
       {/* CTA */}
       <section className="mx-auto w-full max-w-5xl px-6 pb-16">
-        <div className="rounded-[1.75rem] border border-primary/20 bg-primary p-8 text-center text-[#f7f5ef] md:p-12">
-          <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">
+        <div className="rounded-[1.75rem] border border-primary/20 bg-primary p-8 text-center md:p-12">
+          <h2 className="text-2xl font-semibold tracking-tight text-[#f7f5ef] md:text-3xl">
             Ready to get started?
           </h2>
-          <p className="mt-2 text-sm text-[#f7f5ef]/90 md:text-base">
+          <p className="mt-2 text-sm text-[#f7f5ef]/80 md:text-base">
             Sign in to your owner dashboard or access your assigned jobs.
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link
               href={"/sign-in" as Route}
-              className="inline-flex h-11 items-center gap-2 rounded-full bg-primary-foreground px-6 text-sm font-semibold text-[#16423c] transition hover:opacity-90"
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-[#f7f5ef] px-6 text-sm font-semibold text-[#16423c] transition hover:opacity-90"
             >
               Owner / Admin sign in <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
             <Link
               href={"/sign-in?redirectTo=/jobs" as Route}
-              className="inline-flex h-11 items-center rounded-full border border-primary-foreground/30 px-6 text-sm font-medium text-[#f7f5ef] transition hover:bg-primary-foreground/10"
+              className="inline-flex h-11 items-center rounded-full border border-[#f7f5ef]/30 px-6 text-sm font-medium text-[#f7f5ef] transition hover:bg-[#f7f5ef]/10"
             >
               Cleaner sign in
             </Link>
