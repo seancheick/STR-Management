@@ -1,6 +1,6 @@
 # Sprint Tracker
 
-Date: 2026-04-15
+Date: 2026-04-16 (updated)
 Source: `Airbnb_Management_Plan.md`
 
 ---
@@ -18,13 +18,13 @@ Source: `Airbnb_Management_Plan.md`
 
 | Sprint | Status | Goal |
 |--------|--------|------|
-| Sprint 1: MVP | [-] | Auth, properties, assignments, checklist proof, dashboard, cleaner mobile — blocked on Supabase migration apply |
-| Sprint 2: Exceptions | [-] | Issues, re-cleans, inventory — inspection baseline deferred to Sprint 6 |
+| Sprint 1: MVP | [x] | Auth, properties, assignments, checklist proof, dashboard, cleaner mobile — complete |
+| Sprint 2: Exceptions | [x] | Issues, re-cleans, inventory — complete (inspection baseline covered in Sprint 6) |
 | Sprint 3: iCal Sync | [x] | Calendar import, dedup, scheduling warnings — complete |
 | Sprint 4: Notifications | [x] | Push, SLA automation, notification history — complete |
 | Sprint 5: Payouts + Reports | [x] | Payout batches, statements, exports — complete |
 | Sprint 6: Templates + Supervisor | [x] | Reusable templates, visual checklists, review queue — complete |
-| Sprint 7: Intelligence | [x] | Reliability scores, property health, analytics |
+| Sprint 7: Intelligence | [x] | Reliability scores, property health, analytics — complete |
 
 ---
 
