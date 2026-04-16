@@ -167,7 +167,7 @@ export function AssignCleanerModal({
                       onClick={() => handleAssign(c.id)}
                       className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                         assigning === c.id
-                          ? "bg-primary/20 text-primary"
+                          ? "bg-primary/15 text-[#16423c]"
                           : c.isAvailable
                             ? "bg-primary text-primary-foreground hover:opacity-90"
                             : "border border-border/70 text-muted-foreground hover:bg-muted"

@@ -202,7 +202,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
       {state.message ? (
         <p
           className={
-            state.status === "error" ? "text-sm text-destructive" : "text-sm text-accent"
+            state.status === "error" ? "text-sm text-destructive" : "text-sm font-medium text-green-700"
           }
         >
           {state.message}

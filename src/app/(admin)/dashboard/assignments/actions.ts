@@ -14,6 +14,7 @@ const createAssignmentSchema = z.object({
   cleanerId: z.string().uuid().nullable(),
   dueAt: z.string().min(1, "Due date is required."),
   checkoutAt: z.string().nullable(),
+  nextCheckinAt: z.string().nullable(),
   priority: z.enum(["normal", "high", "urgent"]).default("normal"),
   expectedDurationMin: z.number().int().positive().nullable(),
   fixedPayoutAmount: z.number().positive().nullable(),
@@ -31,6 +32,7 @@ function parseAssignmentForm(formData: FormData) {
     cleanerId: formData.get("cleanerId") || null,
     dueAt: formData.get("dueAt"),
     checkoutAt: formData.get("checkoutAt") || null,
+    nextCheckinAt: formData.get("nextCheckinAt") || null,
     priority: formData.get("priority") ?? "normal",
     expectedDurationMin: formData.get("expectedDurationMin")
       ? Number(formData.get("expectedDurationMin"))
@@ -86,6 +88,7 @@ export async function createAssignmentAction(
     cleanerId: values.cleanerId,
     dueAt: values.dueAt,
     checkoutAt: values.checkoutAt,
+    nextCheckinAt: values.nextCheckinAt,
     priority: values.priority,
     expectedDurationMin: values.expectedDurationMin,
     fixedPayoutAmount: values.fixedPayoutAmount,

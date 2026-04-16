@@ -9,6 +9,7 @@ export type CreateAssignmentInput = {
   cleanerId: string | null;
   dueAt: string;
   checkoutAt: string | null;
+  nextCheckinAt: string | null;
   priority: "normal" | "high" | "urgent";
   expectedDurationMin: number | null;
   fixedPayoutAmount: number | null;
@@ -44,6 +45,7 @@ export async function createAssignment(
       priority: input.priority,
       due_at: input.dueAt,
       checkout_at: input.checkoutAt,
+      next_checkin_at: input.nextCheckinAt,
       expected_duration_min: input.expectedDurationMin,
       fixed_payout_amount: input.fixedPayoutAmount,
       source_type: "manual",

@@ -85,13 +85,25 @@ export function NewAssignmentForm({
 }: NewAssignmentFormProps) {
   const [state, formAction] = useActionState(action, initialState);
 
-  // Checkout drives due date via chips
-  const [checkoutVal, setCheckoutVal] = useState("");
+  // Default checkout: tomorrow at 11 AM (standard Airbnb checkout)
+  const [checkoutVal, setCheckoutVal] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(11, 0, 0, 0);
+    return toDatetimeLocal(d);
+  });
+  // Default next check-in: tomorrow at 3 PM (standard Airbnb check-in)
+  const [checkinVal, setCheckinVal] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(15, 0, 0, 0);
+    return toDatetimeLocal(d);
+  });
   const [activeChip, setActiveChip] = useState<ChipKey>(null);
   const [dueVal, setDueVal] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    d.setHours(14, 0, 0, 0);
+    d.setHours(11, 0, 0, 0);
     return toDatetimeLocal(d);
   });
 
@@ -134,11 +146,10 @@ export function NewAssignmentForm({
           <FieldError errors={state.fieldErrors?.propertyId} />
         </div>
 
-        {/* Guest checkout — shown first, drives due-at */}
-        <div className="space-y-2 md:col-span-2">
+        {/* Turnover window: checkout + check-in side by side */}
+        <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="checkoutAt">
-            Guest checkout{" "}
-            <span className="font-normal text-muted-foreground">(sets the cleaning window)</span>
+            Guest checkout
           </label>
           <input
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
@@ -148,6 +159,22 @@ export function NewAssignmentForm({
             value={checkoutVal}
             onChange={(e) => handleCheckoutChange(e.target.value)}
           />
+          <p className="text-xs text-muted-foreground">Typically 11 AM</p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium" htmlFor="nextCheckinAt">
+            Next guest check-in
+          </label>
+          <input
+            className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
+            id="nextCheckinAt"
+            name="nextCheckinAt"
+            type="datetime-local"
+            value={checkinVal}
+            onChange={(e) => setCheckinVal(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">Typically 3 PM</p>
         </div>
 
         {/* Cleaning due — with quick chips */}
@@ -294,7 +321,7 @@ export function NewAssignmentForm({
       {state.message ? (
         <p
           className={
-            state.status === "error" ? "text-sm text-destructive" : "text-sm text-accent"
+            state.status === "error" ? "text-sm text-destructive" : "text-sm font-medium text-green-700"
           }
         >
           {state.message}

@@ -22,23 +22,26 @@
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-ring: var(--ring);
+  /* Literal hex values — required for Tailwind v4 @theme inline to bake
+     static color values into utility classes instead of emitting var() chains
+     that break in some cascade contexts. Keep in sync with :root above. */
+  --color-background: #f4f1ea;
+  --color-foreground: #1d1b18;
+  --color-card: #fffdf8;
+  --color-card-foreground: #1d1b18;
+  --color-muted: #ebe4d7;
+  --color-muted-foreground: #61594f;
+  --color-border: rgba(29, 27, 24, 0.18);
+  --color-input: rgba(29, 27, 24, 0.26);
+  --color-primary: #16423c;
+  --color-primary-foreground: #f7f5ef;
+  --color-secondary: #d9c3a1;
+  --color-secondary-foreground: #2f2418;
+  --color-accent: #5f7a61;
+  --color-accent-foreground: #f7f5ef;
+  --color-destructive: #b43f33;
+  --color-destructive-foreground: #fff8f7;
+  --color-ring: rgba(22, 66, 60, 0.35);
   --radius-sm: calc(var(--radius) - 0.25rem);
   --radius-md: calc(var(--radius) - 0.1rem);
   --radius-lg: var(--radius);
