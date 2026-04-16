@@ -18,11 +18,13 @@ import {
   getDashboardStats,
   listTodaysAssignmentsForAdmin,
   listAtRiskAssignments,
+  listAssignmentsForSchedule,
   getPropertyTodayStatuses,
   type PropertyTodayStatus,
 } from "@/lib/queries/assignments";
 import { getExceptionCounts } from "@/lib/queries/issues";
 import { TodayJobsTimeline, AtRiskSection } from "@/components/dashboard/today-jobs-timeline";
+import { WeekPreviewStrip } from "@/components/dashboard/week-preview-strip";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -52,16 +54,31 @@ const PROPERTY_STATUS_CONFIG: Record<
 export default async function DashboardPage() {
   const profile = await requireRole(["owner", "admin", "supervisor"]);
 
-  const [stats, todaysJobs, exceptions, propertyStatuses, atRiskJobs] = await Promise.all([
-    getDashboardStats(),
-    listTodaysAssignmentsForAdmin(),
-    getExceptionCounts(),
-    getPropertyTodayStatuses(),
-    listAtRiskAssignments(),
-  ]);
+  const today = new Date();
+  const weekStart = new Date(today);
+  weekStart.setUTCHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setUTCDate(weekStart.getUTCDate() + 7);
+  weekEnd.setUTCHours(23, 59, 59, 999);
+
+  // 7 day ISO strings (midnight UTC) for the strip
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setUTCDate(weekStart.getUTCDate() + i);
+    return d.toISOString();
+  });
+
+  const [stats, todaysJobs, exceptions, propertyStatuses, atRiskJobs, weekAssignments] =
+    await Promise.all([
+      getDashboardStats(),
+      listTodaysAssignmentsForAdmin(),
+      getExceptionCounts(),
+      getPropertyTodayStatuses(),
+      listAtRiskAssignments(),
+      listAssignmentsForSchedule(weekStart.toISOString(), weekEnd.toISOString()),
+    ]);
 
   const firstName = profile.full_name.split(" ")[0];
-  const today = new Date();
   const hasExceptions =
     exceptions.open_issues > 0 ||
     exceptions.pending_recleans > 0 ||
@@ -367,6 +384,9 @@ export default async function DashboardPage() {
                 </div>
               </section>
             )}
+
+            {/* Week preview strip */}
+            <WeekPreviewStrip assignments={weekAssignments} days={weekDays} />
 
             {/* Quick links to other sections */}
             <section aria-label="Quick actions" className="grid gap-3 sm:grid-cols-3">
