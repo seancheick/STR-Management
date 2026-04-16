@@ -13,10 +13,12 @@
 export type TurnoverCandidate = {
   /** iCal UID — used as source_reference for dedup */
   uid: string;
-  /** ISO string: guest checkout / turnover trigger date */
+  /** ISO string: guest checkout / turnover trigger date (DTEND of this reservation) */
   checkoutAt: string;
-  /** ISO string: cleaning due by (same day, 2 PM local) */
+  /** ISO string: cleaning due by (same day, 2 PM UTC) */
   dueAt: string;
+  /** ISO string: next guest check-in (DTSTART of the following reservation). Null if no next booking. */
+  nextCheckinAt: string | null;
   summary: string | null;
   description: string | null;
 };
@@ -27,6 +29,11 @@ type RawEvent = {
   dtend?: string;
   summary?: string;
   description?: string;
+};
+
+type ParsedEvent = TurnoverCandidate & {
+  /** ISO string: guest check-in (DTSTART of this reservation) — used internally for pairing */
+  checkinAt: string;
 };
 
 const BLOCKED_PATTERNS = /not available|blocked|unavailable|maintenance|hold/i;
@@ -80,7 +87,7 @@ export function parseIcal(raw: string): TurnoverCandidate[] {
   const unfolded = unfold(raw);
   const lines = unfolded.split(/\r?\n/);
 
-  const candidates: TurnoverCandidate[] = [];
+  const parsed: ParsedEvent[] = [];
   let inEvent = false;
   let current: RawEvent = {};
 
@@ -104,19 +111,24 @@ export function parseIcal(raw: string): TurnoverCandidate[] {
       const uid = current.uid;
       if (!uid) continue;
 
+      // DTSTART = guest check-in; DTEND = guest checkout
+      if (!current.dtstart) continue;
+      const checkinDate = parseIcalDate(current.dtstart);
+      if (!checkinDate) continue;
+
       // Use DTEND as the checkout date (guest leaves), fall back to DTSTART
       const checkoutRaw = current.dtend ?? current.dtstart;
-      if (!checkoutRaw) continue;
-
       const checkoutDate = parseIcalDate(checkoutRaw);
       if (!checkoutDate) continue;
 
       const dueDate = computeDueAt(checkoutDate);
 
-      candidates.push({
+      parsed.push({
         uid,
+        checkinAt: checkinDate.toISOString(),
         checkoutAt: checkoutDate.toISOString(),
         dueAt: dueDate.toISOString(),
+        nextCheckinAt: null, // filled in after sorting
         summary: current.summary ?? null,
         description: current.description ?? null,
       });
@@ -140,5 +152,12 @@ export function parseIcal(raw: string): TurnoverCandidate[] {
     else if (key === "DESCRIPTION") current.description = value.replace(/\\n/g, "\n");
   }
 
-  return candidates;
+  // Sort events by check-in date, then pair each checkout with the next check-in
+  parsed.sort((a, b) => a.checkinAt.localeCompare(b.checkinAt));
+  for (let i = 0; i < parsed.length - 1; i++) {
+    parsed[i].nextCheckinAt = parsed[i + 1].checkinAt;
+  }
+
+  // Strip the internal checkinAt field before returning
+  return parsed.map(({ checkinAt: _checkinAt, ...rest }) => rest);
 }

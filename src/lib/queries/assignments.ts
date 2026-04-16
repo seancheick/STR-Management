@@ -12,6 +12,7 @@ export type AssignmentListRecord = {
   ack_status: string;
   priority: string;
   checkout_at: string | null;
+  next_checkin_at: string | null;
   due_at: string;
   expected_duration_min: number | null;
   fixed_payout_amount: number | null;
@@ -50,7 +51,7 @@ export type AssignmentPhotoRecord = {
 
 const ASSIGNMENT_LIST_SELECT = `
   id, owner_id, property_id, cleaner_id, assignment_type,
-  status, ack_status, priority, checkout_at, due_at,
+  status, ack_status, priority, checkout_at, next_checkin_at, due_at,
   expected_duration_min, fixed_payout_amount, created_at,
   properties:property_id ( name, address_line_1, city ),
   cleaners:cleaner_id ( full_name )
@@ -186,6 +187,7 @@ export type AssignmentScheduleRecord = {
   status: string;
   priority: string;
   checkout_at: string | null;
+  next_checkin_at: string | null;
   due_at: string;
   expected_duration_min: number | null;
   fixed_payout_amount: number | null;
@@ -195,7 +197,7 @@ export type AssignmentScheduleRecord = {
 
 const SCHEDULE_SELECT = `
   id, property_id, cleaner_id, status, priority,
-  checkout_at, due_at, expected_duration_min, fixed_payout_amount,
+  checkout_at, next_checkin_at, due_at, expected_duration_min, fixed_payout_amount,
   properties:property_id ( name, address_line_1, city ),
   cleaners:cleaner_id ( full_name )
 `.trim();

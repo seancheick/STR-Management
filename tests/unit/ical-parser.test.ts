@@ -133,6 +133,46 @@ describe("parseIcal", () => {
     expect(parseIcal(raw)).toHaveLength(3);
   });
 
+  it("pairs consecutive events: each checkout gets the next check-in as nextCheckinAt", () => {
+    const raw = makeIcal([
+      makeEvent({ UID: "r1", DTSTART: "20261201", DTEND: "20261205", SUMMARY: "Stay 1" }),
+      makeEvent({ UID: "r2", DTSTART: "20261208", DTEND: "20261212", SUMMARY: "Stay 2" }),
+      makeEvent({ UID: "r3", DTSTART: "20261215", DTEND: "20261220", SUMMARY: "Stay 3" }),
+    ]);
+    const result = parseIcal(raw);
+    // Sorted by checkin: r1 → r2 → r3
+    const r1 = result.find((r) => r.uid === "r1")!;
+    const r2 = result.find((r) => r.uid === "r2")!;
+    const r3 = result.find((r) => r.uid === "r3")!;
+    // r1's nextCheckinAt = r2's check-in (Dec 8)
+    expect(r1.nextCheckinAt).not.toBeNull();
+    expect(r1.nextCheckinAt).toContain("2026-12-08");
+    // r2's nextCheckinAt = r3's check-in (Dec 15)
+    expect(r2.nextCheckinAt).toContain("2026-12-15");
+    // Last event has no next booking
+    expect(r3.nextCheckinAt).toBeNull();
+  });
+
+  it("sets nextCheckinAt to null for a single event", () => {
+    const raw = makeIcal([
+      makeEvent({ UID: "solo", DTSTART: "20261201", DTEND: "20261205", SUMMARY: "Only stay" }),
+    ]);
+    const result = parseIcal(raw);
+    expect(result[0].nextCheckinAt).toBeNull();
+  });
+
+  it("correctly pairs events regardless of order in the iCal file", () => {
+    // Events listed in reverse order in the file — should still be sorted by check-in
+    const raw = makeIcal([
+      makeEvent({ UID: "last",  DTSTART: "20261220", DTEND: "20261225", SUMMARY: "Stay 3" }),
+      makeEvent({ UID: "first", DTSTART: "20261201", DTEND: "20261205", SUMMARY: "Stay 1" }),
+      makeEvent({ UID: "mid",   DTSTART: "20261208", DTEND: "20261212", SUMMARY: "Stay 2" }),
+    ]);
+    const result = parseIcal(raw);
+    const first = result.find((r) => r.uid === "first")!;
+    expect(first.nextCheckinAt).toContain("2026-12-08"); // mid's check-in
+  });
+
   it("handles CRLF line endings", () => {
     const raw =
       "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:crlf1\r\nDTSTART:20261201\r\nDTEND:20261203\r\nSUMMARY:CRLF test\r\nEND:VEVENT\r\nEND:VCALENDAR";

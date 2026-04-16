@@ -22,15 +22,9 @@ import {
   type PropertyTodayStatus,
 } from "@/lib/queries/assignments";
 import { getExceptionCounts } from "@/lib/queries/issues";
+import { TodayJobsTimeline, AtRiskSection } from "@/components/dashboard/today-jobs-timeline";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 function formatDate(d: Date) {
   return d.toLocaleDateString("en-US", {
@@ -40,22 +34,6 @@ function formatDate(d: Date) {
   });
 }
 
-function statusBadgeClass(status: string) {
-  const map: Record<string, string> = {
-    unassigned:                "bg-amber-50    text-amber-700  border-amber-200",
-    assigned:                  "bg-blue-50     text-blue-700   border-blue-200",
-    confirmed:                 "bg-indigo-50   text-indigo-700 border-indigo-200",
-    in_progress:               "bg-orange-50   text-orange-700 border-orange-200",
-    completed_pending_review:  "bg-purple-50   text-purple-700 border-purple-200",
-    approved:                  "bg-green-50    text-green-700  border-green-200",
-    needs_reclean:             "bg-red-50      text-red-700    border-red-200",
-  };
-  return map[status] ?? "bg-gray-50 text-gray-600 border-gray-200";
-}
-
-function formatStatus(s: string) {
-  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 const PROPERTY_STATUS_CONFIG: Record<
   PropertyTodayStatus["status"],
@@ -261,7 +239,7 @@ export default async function DashboardPage() {
                           </p>
                           {p.dueAt && (
                             <p className="text-[11px] text-muted-foreground/70">
-                              Due {formatTime(p.dueAt)}
+                              Due {new Date(p.dueAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                             </p>
                           )}
                         </div>
@@ -286,7 +264,7 @@ export default async function DashboardPage() {
         <main className="flex-1 overflow-y-auto px-6 py-6">
           <div className="mx-auto flex max-w-4xl flex-col gap-8">
 
-            {/* Today's jobs */}
+            {/* Today's jobs — interactive, drawer on click */}
             <section aria-label="Today's jobs">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-base font-semibold">Today&apos;s jobs</h2>
@@ -297,136 +275,11 @@ export default async function DashboardPage() {
                   Full schedule <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
-
-              {todaysJobs.length === 0 ? (
-                <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border/70 bg-card px-6 py-12 text-center">
-                  <CalendarDays className="h-8 w-8 text-muted-foreground/40" aria-hidden="true" />
-                  <div>
-                    <p className="font-medium text-muted-foreground">No cleanings scheduled for today</p>
-                    <p className="mt-1 text-sm text-muted-foreground/70">
-                      Check the schedule to see upcoming jobs or create a new assignment.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    <Link
-                      href={"/dashboard/schedule" as Route}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
-                    >
-                      <CalendarDays className="h-3.5 w-3.5" />
-                      View schedule
-                    </Link>
-                    <Link
-                      href={"/dashboard/assignments/new" as Route}
-                      className="inline-flex h-9 items-center rounded-full border border-border/70 bg-card px-4 text-sm font-medium transition hover:border-primary/30 hover:bg-muted"
-                    >
-                      + New assignment
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                <ol className="flex flex-col gap-2">
-                  {todaysJobs.map((a) => (
-                    <li
-                      key={a.id}
-                      className="flex items-center gap-4 rounded-2xl border border-border/70 bg-card px-5 py-4 transition hover:border-primary/25 hover:shadow-sm"
-                    >
-                      {/* Time */}
-                      <div className="w-16 shrink-0 text-right">
-                        <p className="text-xs font-medium tabular-nums text-muted-foreground">
-                          {formatTime(a.due_at)}
-                        </p>
-                      </div>
-
-                      {/* Divider dot */}
-                      <div className="flex shrink-0 flex-col items-center gap-1">
-                        <div
-                          className={`h-2.5 w-2.5 rounded-full ${
-                            a.status === "in_progress"
-                              ? "bg-orange-400"
-                              : a.status === "unassigned"
-                                ? "bg-amber-400"
-                                : a.status === "approved"
-                                  ? "bg-green-400"
-                                  : "bg-primary/40"
-                          }`}
-                        />
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex flex-1 flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold leading-snug">
-                            {a.properties?.name ?? "Property"}
-                          </p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {a.cleaners?.full_name ?? (
-                              <span className="font-medium text-amber-600">Unassigned</span>
-                            )}
-                            {a.expected_duration_min
-                              ? ` · ~${a.expected_duration_min} min`
-                              : ""}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass(a.status)}`}
-                          >
-                            {formatStatus(a.status)}
-                          </span>
-                          {a.status === "unassigned" && (
-                            <Link
-                              href={`/dashboard/assignments/${a.id}` as Route}
-                              className="inline-flex h-7 items-center rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground transition hover:opacity-90"
-                            >
-                              Assign
-                            </Link>
-                          )}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
+              <TodayJobsTimeline jobs={todaysJobs} />
             </section>
 
-            {/* At-risk / overdue */}
-            {atRiskJobs.length > 0 && (
-              <section aria-label="Overdue jobs">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="flex items-center gap-1.5 text-base font-semibold text-destructive">
-                    <AlertCircle className="h-4 w-4" aria-hidden="true" />
-                    Overdue
-                  </h2>
-                  <Link
-                    href={"/dashboard/assignments" as Route}
-                    className="flex items-center gap-1 text-xs font-medium text-destructive hover:underline underline-offset-2"
-                  >
-                    View all <ArrowRight className="h-3 w-3" />
-                  </Link>
-                </div>
-                <ol className="flex flex-col gap-2">
-                  {atRiskJobs.slice(0, 5).map((a) => (
-                    <li key={a.id}>
-                      <Link
-                        href={`/dashboard/assignments/${a.id}` as Route}
-                        className="flex items-center gap-4 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 transition hover:border-red-300 hover:shadow-sm"
-                      >
-                        <div className="flex-1">
-                          <p className="text-sm font-semibold">{a.properties?.name ?? "Property"}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            Due {formatTime(a.due_at)}
-                            {a.cleaners ? ` · ${a.cleaners.full_name}` : " · Unassigned"}
-                          </p>
-                        </div>
-                        <span className="rounded-full border border-red-200 bg-red-100 px-3 py-1 text-xs font-medium text-red-700">
-                          Overdue
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ol>
-              </section>
-            )}
+            {/* At-risk / overdue — interactive, drawer on click */}
+            <AtRiskSection jobs={atRiskJobs} />
 
             {/* Pending review */}
             {stats.pendingReview > 0 && (
