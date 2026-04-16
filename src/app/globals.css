@@ -48,67 +48,78 @@
   --radius-xl: calc(var(--radius) + 0.25rem);
 }
 
-* {
-  border-color: var(--border);
+/* ─── Base layer ─────────────────────────────────────────────────────────────
+   All reset/base rules go inside @layer base so that Tailwind's utility
+   classes (in @layer utilities) correctly override them. Unlayered CSS beats
+   layers regardless of specificity — so anything here that touches `color`
+   MUST be in @layer base or it will silently override text-* utility classes
+   on <a> and <button> elements.
+   ─────────────────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background:
+      radial-gradient(circle at top left, rgba(217, 195, 161, 0.25), transparent 32%),
+      linear-gradient(180deg, #faf7f1 0%, #f4f1ea 100%);
+  }
+
+  body {
+    min-height: 100vh;
+    color: var(--foreground);
+    background: transparent;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Remove browser default link styling — utility text-* classes override this
+     because @layer utilities has higher priority than @layer base. */
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Cursor pointer on all interactive elements */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+
+  /* Accessible focus rings — visible keyboard navigation */
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+
+  /* Inputs and selects use border-style focus instead of outline */
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+
+  /* Smooth transitions on interactive elements */
+  a,
+  button {
+    transition-property: color, background-color, border-color, opacity, box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: ease-out;
+  }
 }
 
-/* Safety net: any element with a solid primary background should default to
-   the primary-foreground (cream) text colour. This prevents cascade ordering
-   from ever letting a dark colour bleed in. Child elements that need a
-   different colour must still set their own text class explicitly. */
+/* ─── Safety net (unlayered = beats utilities intentionally) ─────────────────
+   .bg-primary sets a cream default text colour so child elements that don't
+   carry an explicit text-* class still look correct on dark green backgrounds.
+   ─────────────────────────────────────────────────────────────────────────── */
 .bg-primary {
   color: #f7f5ef;
-}
-
-html {
-  scroll-behavior: smooth;
-  background:
-    radial-gradient(circle at top left, rgba(217, 195, 161, 0.25), transparent 32%),
-    linear-gradient(180deg, #faf7f1 0%, #f4f1ea 100%);
-}
-
-body {
-  min-height: 100vh;
-  color: var(--foreground);
-  background: transparent;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* Cursor pointer on all interactive elements */
-button:not(:disabled),
-[role="button"]:not(:disabled),
-label[for],
-summary {
-  cursor: pointer;
-}
-
-/* Accessible focus rings — visible keyboard navigation */
-:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-  border-radius: 0.25rem;
-}
-
-/* Inputs and selects use border-style focus instead of outline */
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: none;
-  border-color: var(--primary) !important;
-  box-shadow: 0 0 0 3px var(--ring);
-}
-
-/* Smooth transitions on interactive elements */
-a,
-button {
-  transition-property: color, background-color, border-color, opacity, box-shadow;
-  transition-duration: 150ms;
-  transition-timing-function: ease-out;
 }
