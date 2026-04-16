@@ -44,6 +44,22 @@ export async function resolveIssueAction(
   return { error: error?.message ?? null };
 }
 
+export async function markInProgressAction(
+  issueId: string,
+): Promise<IssueAdminActionResult> {
+  await requireRole(["owner", "admin", "supervisor"]);
+  const supabase = await createServerSupabaseClient();
+
+  const { error } = await supabase
+    .from("issues")
+    .update({ status: "in_progress" })
+    .eq("id", issueId)
+    .eq("status", "acknowledged");
+
+  revalidatePath("/dashboard/issues");
+  return { error: error?.message ?? null };
+}
+
 export async function markNeedsRecleanAction(
   assignmentId: string,
   currentStatus: string,

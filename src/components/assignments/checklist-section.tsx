@@ -55,6 +55,20 @@ export function ChecklistSection({
                   <span className="ml-1 text-xs text-destructive">*</span>
                 )}
               </span>
+              {item.instruction_text && (
+                <span className="text-xs text-muted-foreground">{item.instruction_text}</span>
+              )}
+              {item.reference_media_url && (
+                <a
+                  className="text-xs text-primary underline underline-offset-2"
+                  href={item.reference_media_url}
+                  onClick={(e) => e.stopPropagation()}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  Reference image ↗
+                </a>
+              )}
               {item.photo_category && (
                 <span className="text-xs text-muted-foreground">
                   Photo required: {item.photo_category}

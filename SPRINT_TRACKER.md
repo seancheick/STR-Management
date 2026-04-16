@@ -23,7 +23,7 @@ Source: `Airbnb_Management_Plan.md`
 | Sprint 3: iCal Sync | [x] | Calendar import, dedup, scheduling warnings — complete |
 | Sprint 4: Notifications | [x] | Push, SLA automation, notification history — complete |
 | Sprint 5: Payouts + Reports | [x] | Payout batches, statements, exports — complete |
-| Sprint 6: Templates + Supervisor | [ ] | Reusable templates, visual checklists, review queue |
+| Sprint 6: Templates + Supervisor | [x] | Reusable templates, visual checklists, review queue — complete |
 | Sprint 7: Intelligence | [ ] | Reliability scores, property health, analytics |
 
 ---
@@ -232,6 +232,8 @@ Turn operations into financial records and exportable reports.
 - 2026-04-16: Built `/earnings` cleaner page — lists own included entries from approved/paid batches with running total.
 - 2026-04-16: Added Payout batches quick-nav link to admin dashboard.
 - 2026-04-16: Full verification passes: npm test (90/90), npm run typecheck (0 errors), npm run lint (0 errors), npm run build (23 routes clean, Node 20).
+- 2026-04-16: Pushed all code (121 files, Sprints 1-5) to GitHub repo seancheick/STR-Management. Added `engines: { node: ">=20.9.0" }` to package.json for Vercel Node 20 pinning.
+- 2026-04-16: User connected Vercel project (str-management-blond.vercel.app) to GitHub repo and configured all env vars (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, CRON_SECRET). Live deployment active.
 
 ### Tasks
 
@@ -259,21 +261,32 @@ Turn operations into financial records and exportable reports.
 
 Scale operations with reusable templates and supervisor tools.
 
+### Comment Log
+
+- 2026-04-16: Added Sprint 6 schema migration: `review_notes`, `reviewed_by_id`, `reviewed_at` on assignments; `assigned_to_id`, `resolution_notes`, `due_by_date` on issues; `instruction_text`, `reference_media_url` on assignment_checklist_items (snapshot from template). Applied to hosted Supabase.
+- 2026-04-16: Built template queries (`listTemplates`, `getTemplate`, `listTemplateItems`) and template service (`createTemplate`, `updateTemplate`, `deleteTemplate` with property guard, `addTemplateItem`, `updateTemplateItem`, `removeTemplateItem`, `approveJob`).
+- 2026-04-16: Built `/dashboard/templates` list page, `/dashboard/templates/new` create form, `/dashboard/templates/[templateId]` detail/editor page with inline add/remove item form and reference image URL + instructions fields.
+- 2026-04-16: Built supervisor review queue at `/dashboard/review`: lists all `completed_pending_review` jobs with checklist progress and photo count, Approve/Needs-reclean actions with optional review notes. Both actions record `reviewed_by_id`, `reviewed_at`, `review_notes` on the assignment.
+- 2026-04-16: Extended checklist snapshot to copy `instruction_text` and `reference_media_url` from template items at assignment creation time. Cleaner job execution page now shows instructions hint and reference image link per checklist item.
+- 2026-04-16: Added `markInProgressAction` for `acknowledged → in_progress` issue transition. `IssueActionButtons` now shows "Start work" button for acknowledged issues, giving the full open → acknowledged → in_progress → resolved lifecycle.
+- 2026-04-16: Added Templates and Review queue links to admin dashboard quick-nav.
+- 2026-04-16: Full verification passes: npm test (108/108), typecheck (0 errors), lint (0 errors), build (29 routes clean, Node 20).
+
 ### Tasks
 
-- [ ] Build reusable template management (1BR, 2BR, deep clean)
-- [ ] Add visual reference support on checklist items (images + instructions)
-- [ ] Build supervisor review queue (completed jobs awaiting review)
-- [ ] Expand maintenance issue workflow (status progression)
-- [ ] Add richer review context (prior issues, cleaner history)
-- [ ] Test coverage for templates and review workflows
+- [x] Build reusable template management (1BR, 2BR, deep clean)
+- [x] Add visual reference support on checklist items (images + instructions)
+- [x] Build supervisor review queue (completed jobs awaiting review)
+- [x] Expand maintenance issue workflow (status progression)
+- [-] Add richer review context (prior issues, cleaner history) — deferred to Sprint 7 (analytics)
+- [x] Test coverage for templates and review workflows
 
 ### Definition of Done
 
-- New properties can use reusable templates
-- Checklist items can include reference images
-- Supervisors can review jobs from a dedicated queue
-- Maintenance issues have a structured lifecycle
+- New properties can use reusable templates ✓
+- Checklist items can include reference images ✓ (reference_media_url + instruction_text)
+- Supervisors can review jobs from a dedicated queue ✓
+- Maintenance issues have a structured lifecycle ✓ (open → acknowledged → in_progress → resolved → closed)
 
 ---
 

@@ -31,6 +31,8 @@ export type AssignmentChecklistItemRecord = {
   template_item_id: string | null;
   section_name: string | null;
   label: string;
+  instruction_text: string | null;
+  reference_media_url: string | null;
   required: boolean;
   sort_order: number;
   photo_category: string | null;
@@ -136,7 +138,7 @@ export async function getAssignmentDetail(
     supabase
       .from("assignment_checklist_items")
       .select(
-        "id, assignment_id, template_item_id, section_name, label, required, sort_order, photo_category, completed, completed_at",
+        "id, assignment_id, template_item_id, section_name, label, instruction_text, reference_media_url, required, sort_order, photo_category, completed, completed_at",
       )
       .eq("assignment_id", assignmentId)
       .order("sort_order", { ascending: true }),

@@ -68,6 +68,8 @@ export async function createAssignment(
         template_item_id: item.id,
         section_name: item.section_name,
         label: item.label,
+        instruction_text: item.instruction_text ?? null,
+        reference_media_url: item.reference_media_url ?? null,
         required: item.required,
         sort_order: item.sort_order,
         photo_category: item.photo_category,

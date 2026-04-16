@@ -4,6 +4,7 @@ import { useTransition } from "react";
 
 import {
   acknowledgeIssueAction,
+  markInProgressAction,
   resolveIssueAction,
 } from "@/app/(admin)/dashboard/issues/actions";
 
@@ -25,6 +26,16 @@ export function IssueActionButtons({ issueId, currentStatus }: Props) {
           type="button"
         >
           Acknowledge
+        </button>
+      )}
+      {currentStatus === "acknowledged" && (
+        <button
+          className="rounded-full border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
+          disabled={isPending}
+          onClick={() => startTransition(async () => { await markInProgressAction(issueId); })}
+          type="button"
+        >
+          Start work
         </button>
       )}
       {["open", "acknowledged", "in_progress"].includes(currentStatus) && (

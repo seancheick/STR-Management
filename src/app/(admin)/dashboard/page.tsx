@@ -216,6 +216,22 @@ export default async function DashboardPage() {
           <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Finance</p>
           <h2 className="mt-3 text-xl font-semibold tracking-tight">Payout batches</h2>
         </Link>
+
+        <Link
+          className="rounded-[1.5rem] border border-border/70 bg-card p-5 shadow-sm transition hover:border-primary/30"
+          href={"/dashboard/templates" as Route}
+        >
+          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Checklists</p>
+          <h2 className="mt-3 text-xl font-semibold tracking-tight">Templates</h2>
+        </Link>
+
+        <Link
+          className="rounded-[1.5rem] border border-purple-200 bg-purple-50 p-5 shadow-sm transition hover:border-purple-400"
+          href={"/dashboard/review" as Route}
+        >
+          <p className="text-sm uppercase tracking-[0.2em] text-purple-600">Supervisor</p>
+          <h2 className="mt-3 text-xl font-semibold tracking-tight">Review queue</h2>
+        </Link>
       </section>
     </main>
   );
