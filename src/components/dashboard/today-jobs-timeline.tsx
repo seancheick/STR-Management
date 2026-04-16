@@ -173,7 +173,6 @@ export function TodayJobsTimeline({ jobs }: Props) {
       {drawerDetail && !showAssignModal && (
         <AssignmentDrawer
           detail={drawerDetail}
-          nextCheckinAt={drawerDetail.nextCheckinAt}
           onClose={closeDrawer}
           onAssignClick={handleAssignClick}
         />
@@ -268,7 +267,6 @@ export function AtRiskSection({ jobs }: AtRiskProps) {
       {drawerDetail && !showAssignModal && (
         <AssignmentDrawer
           detail={drawerDetail}
-          nextCheckinAt={drawerDetail.nextCheckinAt}
           onClose={() => { setDrawerDetail(null); setShowAssignModal(false); }}
           onAssignClick={() => setShowAssignModal(true)}
         />

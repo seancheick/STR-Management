@@ -5,7 +5,6 @@ import {
   ArrowRight,
   Calendar,
   CheckSquare2,
-  Clock,
   Image,
   User,
   X,
@@ -46,14 +45,13 @@ function formatDateTime(iso: string) {
 
 type Props = {
   detail: NonNullable<AssignmentDetailAction>;
-  nextCheckinAt?: string | null;
   onClose: () => void;
   onAssignClick: () => void;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AssignmentDrawer({ detail, nextCheckinAt, onClose, onAssignClick }: Props) {
+export function AssignmentDrawer({ detail, onClose, onAssignClick }: Props) {
   const status = STATUS_CONFIG[detail.status] ?? { label: detail.status, cls: "bg-muted text-muted-foreground border-border" };
 
   // Close on Escape
@@ -65,14 +63,7 @@ export function AssignmentDrawer({ detail, nextCheckinAt, onClose, onAssignClick
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Turnover window
-  const checkoutDate = detail.checkoutAt ? new Date(detail.checkoutAt) : null;
-  const checkinDate = nextCheckinAt ? new Date(nextCheckinAt) : null;
-  const turnoverMinutes =
-    checkoutDate && checkinDate
-      ? Math.round((checkinDate.getTime() - checkoutDate.getTime()) / 60_000)
-      : null;
-  const turnoverHours = turnoverMinutes ? `${Math.floor(turnoverMinutes / 60)}h ${turnoverMinutes % 60}m` : null;
+  // Turnover window (no next_checkin_at — column removed; show tight-window warning via expected duration only)
 
   // Checklist progress
   const checklistPct =
@@ -146,12 +137,6 @@ export function AssignmentDrawer({ detail, nextCheckinAt, onClose, onAssignClick
                   <p className="text-[11px] text-muted-foreground/70">Cleaning due</p>
                   <p className="mt-0.5 text-sm font-medium">{formatTime(detail.dueAt)}</p>
                 </div>
-                {nextCheckinAt && (
-                  <div>
-                    <p className="text-[11px] text-muted-foreground/70">Next check-in</p>
-                    <p className="mt-0.5 text-sm font-medium">{formatTime(nextCheckinAt)}</p>
-                  </div>
-                )}
                 {detail.expectedDurationMin && (
                   <div>
                     <p className="text-[11px] text-muted-foreground/70">Est. duration</p>
@@ -160,20 +145,6 @@ export function AssignmentDrawer({ detail, nextCheckinAt, onClose, onAssignClick
                 )}
               </div>
 
-              {/* Turnover window */}
-              {turnoverHours && (
-                <div className={`mt-3 rounded-xl px-3 py-2 text-xs ${
-                  turnoverMinutes && turnoverMinutes < 180
-                    ? "bg-amber-50 text-amber-700"
-                    : "bg-green-50 text-green-700"
-                }`}>
-                  <Clock className="mr-1 inline h-3 w-3" aria-hidden="true" />
-                  <span className="font-semibold">{turnoverHours} window</span>
-                  {turnoverMinutes && detail.expectedDurationMin && turnoverMinutes < detail.expectedDurationMin + 30 && (
-                    <span className="ml-1 font-medium text-amber-600">· Tight</span>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Cleaner */}
