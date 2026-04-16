@@ -176,3 +176,106 @@ export async function getDashboardCounts(): Promise<{
     unassigned: unassigned.length,
   };
 }
+
+// ─── Schedule view ────────────────────────────────────────────────────────────
+
+export type AssignmentScheduleRecord = {
+  id: string;
+  property_id: string;
+  cleaner_id: string | null;
+  status: string;
+  priority: string;
+  checkout_at: string | null;
+  due_at: string;
+  expected_duration_min: number | null;
+  fixed_payout_amount: number | null;
+  properties: { name: string; address_line_1: string | null; city: string | null } | null;
+  cleaners: { full_name: string } | null;
+};
+
+const SCHEDULE_SELECT = `
+  id, property_id, cleaner_id, status, priority,
+  checkout_at, due_at, expected_duration_min, fixed_payout_amount,
+  properties:property_id ( name, address_line_1, city ),
+  cleaners:cleaner_id ( full_name )
+`.trim();
+
+export async function listAssignmentsForSchedule(
+  weekStart: string,
+  weekEnd: string,
+): Promise<AssignmentScheduleRecord[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("assignments")
+    .select(SCHEDULE_SELECT)
+    .gte("due_at", weekStart)
+    .lte("due_at", weekEnd)
+    .not("status", "eq", "cancelled")
+    .order("due_at", { ascending: true });
+
+  return (data as AssignmentScheduleRecord[] | null) ?? [];
+}
+
+export async function getDashboardStats(): Promise<{
+  checkoutsToday: number;
+  cleaningsDueToday: number;
+  unassigned: number;
+  inProgress: number;
+  pendingReview: number;
+  atRisk: number;
+}> {
+  const supabase = await createServerSupabaseClient();
+  const todayStart = new Date();
+  todayStart.setUTCHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setUTCHours(23, 59, 59, 999);
+  const now = new Date().toISOString();
+
+  const [checkoutsRes, dueRes, unassignedRes, inProgressRes, reviewRes, atRiskRes] =
+    await Promise.all([
+      // Assignments whose checkout_at is today
+      supabase
+        .from("assignments")
+        .select("id", { count: "exact", head: true })
+        .gte("checkout_at", todayStart.toISOString())
+        .lte("checkout_at", todayEnd.toISOString())
+        .not("status", "in", '("cancelled")'),
+      // Cleanings due today
+      supabase
+        .from("assignments")
+        .select("id", { count: "exact", head: true })
+        .gte("due_at", todayStart.toISOString())
+        .lte("due_at", todayEnd.toISOString())
+        .not("status", "in", '("cancelled","approved")'),
+      // Unassigned (all time)
+      supabase
+        .from("assignments")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "unassigned"),
+      // In progress right now
+      supabase
+        .from("assignments")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "in_progress"),
+      // Pending review
+      supabase
+        .from("assignments")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "completed_pending_review"),
+      // At-risk: past due, not complete
+      supabase
+        .from("assignments")
+        .select("id", { count: "exact", head: true })
+        .lt("due_at", now)
+        .not("status", "in", '("cancelled","approved","completed_pending_review")'),
+    ]);
+
+  return {
+    checkoutsToday: checkoutsRes.count ?? 0,
+    cleaningsDueToday: dueRes.count ?? 0,
+    unassigned: unassignedRes.count ?? 0,
+    inProgress: inProgressRes.count ?? 0,
+    pendingReview: reviewRes.count ?? 0,
+    atRisk: atRiskRes.count ?? 0,
+  };
+}

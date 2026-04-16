@@ -11,6 +11,7 @@ import {
   FileText,
   LayoutDashboard,
   LogOut,
+  RefreshCw,
   Users,
 } from "lucide-react";
 import type { Route } from "next";
@@ -22,6 +23,7 @@ import { signOutAction } from "@/app/actions/auth";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { href: "/dashboard/schedule", label: "Schedule", icon: RefreshCw, exact: false },
   { href: "/dashboard/assignments", label: "Assignments", icon: ClipboardList, exact: false },
   { href: "/dashboard/properties", label: "Properties", icon: Building2, exact: false },
   { href: "/dashboard/team", label: "Team", icon: Users, exact: false },

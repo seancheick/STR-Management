@@ -1,16 +1,18 @@
 import type { Route } from "next";
 import {
   AlertCircle,
-  CalendarDays,
-  UserMinus,
   AlertTriangle,
-  RefreshCw,
+  CalendarDays,
+  CheckSquare2,
+  Clock,
   PackageSearch,
+  RefreshCw,
+  UserMinus,
 } from "lucide-react";
 import Link from "next/link";
 
 import { requireRole } from "@/lib/auth/session";
-import { getDashboardCounts, listTodaysAssignmentsForAdmin } from "@/lib/queries/assignments";
+import { getDashboardStats, listTodaysAssignmentsForAdmin } from "@/lib/queries/assignments";
 import { getExceptionCounts } from "@/lib/queries/issues";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 
@@ -23,7 +25,7 @@ function formatTime(iso: string) {
 
 function statusBadgeClass(status: string) {
   const map: Record<string, string> = {
-    unassigned: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    unassigned: "bg-amber-50 text-amber-700 border-amber-200",
     assigned: "bg-blue-50 text-blue-700 border-blue-200",
     confirmed: "bg-indigo-50 text-indigo-700 border-indigo-200",
     in_progress: "bg-orange-50 text-orange-700 border-orange-200",
@@ -41,25 +43,25 @@ function formatStatus(s: string) {
 export default async function DashboardPage() {
   const profile = await requireRole(["owner", "admin", "supervisor"]);
 
-  const [counts, todaysJobs, exceptions] = await Promise.all([
-    getDashboardCounts(),
+  const [stats, todaysJobs, exceptions] = await Promise.all([
+    getDashboardStats(),
     listTodaysAssignmentsForAdmin(),
     getExceptionCounts(),
   ]);
 
+  const firstName = profile.full_name.split(" ")[0];
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-6 py-10">
+    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-8 px-6 py-10">
+
       {/* Page header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
-            Overview
-          </p>
+          <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Overview</p>
           <h1 className="mt-1.5 text-3xl font-semibold tracking-tight">
-            Welcome back, {profile.full_name.split(" ")[0]}
+            Welcome back, {firstName}
           </h1>
         </div>
-        {/* Sign-out visible on mobile only; desktop uses sidebar */}
         <div className="flex items-center gap-3 lg:hidden">
           <span className="rounded-full border border-border/70 bg-card px-3 py-1.5 text-xs text-muted-foreground capitalize">
             {profile.role}
@@ -68,20 +70,44 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* KPI cards */}
-      <section className="grid gap-4 sm:grid-cols-3" aria-label="Key metrics">
+      {/* Primary KPI strip — 3 cols */}
+      <section aria-label="Key metrics" className="grid gap-4 sm:grid-cols-3">
         <Link
-          href={"/dashboard/assignments" as Route}
+          href={"/dashboard/schedule" as Route}
           className="group rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition duration-200 hover:border-primary/40 hover:shadow-md"
         >
           <div className="flex items-start justify-between">
-            <p className="text-sm text-muted-foreground">Today&apos;s jobs</p>
-            <CalendarDays className="h-4 w-4 text-muted-foreground/60 transition-colors group-hover:text-primary/60" aria-hidden="true" />
+            <p className="text-sm text-muted-foreground">Checkouts today</p>
+            <CalendarDays
+              className="h-4 w-4 text-muted-foreground/60 transition-colors group-hover:text-primary/60"
+              aria-hidden="true"
+            />
           </div>
           <p className="mt-3 text-4xl font-semibold tabular-nums tracking-tight">
-            {counts.todaysJobs}
+            {stats.checkoutsToday}
           </p>
-          <p className="mt-2 text-xs font-medium text-primary/70">View assignments →</p>
+          <p className="mt-2 text-xs font-medium text-primary/70">View schedule →</p>
+        </Link>
+
+        <Link
+          href={"/dashboard/assignments" as Route}
+          className="group rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition duration-200 hover:border-yellow-300/60 hover:shadow-md"
+        >
+          <div className="flex items-start justify-between">
+            <p className="text-sm text-muted-foreground">Unassigned jobs</p>
+            <UserMinus
+              className={`h-4 w-4 transition-colors ${stats.unassigned > 0 ? "text-amber-500/70" : "text-muted-foreground/60"}`}
+              aria-hidden="true"
+            />
+          </div>
+          <p
+            className={`mt-3 text-4xl font-semibold tabular-nums tracking-tight ${stats.unassigned > 0 ? "text-amber-600" : ""}`}
+          >
+            {stats.unassigned}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {stats.unassigned > 0 ? "Assign a cleaner →" : "All jobs assigned"}
+          </p>
         </Link>
 
         <Link
@@ -89,44 +115,67 @@ export default async function DashboardPage() {
           className="group rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition duration-200 hover:border-destructive/30 hover:shadow-md"
         >
           <div className="flex items-start justify-between">
-            <p className="text-sm text-muted-foreground">Overdue / at-risk</p>
+            <p className="text-sm text-muted-foreground">At risk / overdue</p>
             <AlertCircle
-              className={`h-4 w-4 transition-colors ${counts.atRisk > 0 ? "text-destructive/70" : "text-muted-foreground/60"}`}
+              className={`h-4 w-4 transition-colors ${stats.atRisk > 0 ? "text-destructive/70" : "text-muted-foreground/60"}`}
               aria-hidden="true"
             />
           </div>
           <p
-            className={`mt-3 text-4xl font-semibold tabular-nums tracking-tight ${counts.atRisk > 0 ? "text-destructive" : ""}`}
+            className={`mt-3 text-4xl font-semibold tabular-nums tracking-tight ${stats.atRisk > 0 ? "text-destructive" : ""}`}
           >
-            {counts.atRisk}
+            {stats.atRisk}
           </p>
-          <p className="mt-2 text-xs text-muted-foreground">Jobs past due date</p>
-        </Link>
-
-        <Link
-          href={"/dashboard/assignments/new" as Route}
-          className="group rounded-2xl border border-border/70 bg-card p-5 shadow-sm transition duration-200 hover:border-yellow-300 hover:shadow-md"
-        >
-          <div className="flex items-start justify-between">
-            <p className="text-sm text-muted-foreground">Unassigned</p>
-            <UserMinus
-              className={`h-4 w-4 transition-colors ${counts.unassigned > 0 ? "text-yellow-600/70" : "text-muted-foreground/60"}`}
-              aria-hidden="true"
-            />
-          </div>
-          <p
-            className={`mt-3 text-4xl font-semibold tabular-nums tracking-tight ${counts.unassigned > 0 ? "text-yellow-600" : ""}`}
-          >
-            {counts.unassigned}
-          </p>
-          <p className="mt-2 text-xs font-medium text-yellow-600/80">Assign a cleaner →</p>
+          <p className="mt-2 text-xs text-muted-foreground">Past due date</p>
         </Link>
       </section>
 
-      {/* Today's job feed */}
+      {/* Secondary status strip — 3 cols */}
+      <section aria-label="Live status" className="grid gap-3 sm:grid-cols-3">
+        <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3.5 shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50">
+            <Clock className="h-4 w-4 text-orange-500" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">In progress</p>
+            <p className="text-xl font-semibold tabular-nums">{stats.inProgress}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3.5 shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-50">
+            <CheckSquare2 className="h-4 w-4 text-purple-500" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Pending review</p>
+            <p className="text-xl font-semibold tabular-nums">{stats.pendingReview}</p>
+          </div>
+        </div>
+        <Link
+          href={"/dashboard/schedule" as Route}
+          className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3.5 shadow-sm transition hover:border-primary/30 hover:shadow-md"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+            <CalendarDays className="h-4 w-4 text-primary" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Cleanings due today</p>
+            <p className="text-xl font-semibold tabular-nums">{stats.cleaningsDueToday}</p>
+          </div>
+        </Link>
+      </section>
+
+      {/* Today's schedule */}
       {todaysJobs.length > 0 && (
-        <section className="flex flex-col gap-3" aria-label="Today's schedule">
-          <h2 className="text-base font-semibold">Today&apos;s schedule</h2>
+        <section aria-label="Today's schedule" className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold">Today&apos;s schedule</h2>
+            <Link
+              href={"/dashboard/schedule" as Route}
+              className="text-xs font-medium text-primary hover:underline underline-offset-2"
+            >
+              Open schedule →
+            </Link>
+          </div>
           <div className="flex flex-col gap-2">
             {todaysJobs.map((a) => (
               <article
@@ -152,63 +201,66 @@ export default async function DashboardPage() {
       )}
 
       {/* Exceptions */}
-      {(exceptions.open_issues > 0 || exceptions.pending_recleans > 0 || exceptions.low_inventory_items > 0) && (
-        <section className="grid gap-4 sm:grid-cols-3" aria-label="Exceptions requiring attention">
-          <h2 className="text-base font-semibold sm:col-span-3">Needs attention</h2>
-
-          <Link
-            href={"/dashboard/issues" as Route}
-            className={`group rounded-2xl border p-5 shadow-sm transition duration-200 hover:shadow-md ${
-              exceptions.critical_issues > 0
-                ? "border-red-200 bg-red-50 hover:border-red-300"
-                : "border-amber-200 bg-amber-50 hover:border-amber-300"
-            }`}
-          >
-            <div className="flex items-start justify-between">
-              <p className="text-sm text-muted-foreground">Open issues</p>
-              <AlertTriangle
-                className={`h-4 w-4 ${exceptions.critical_issues > 0 ? "text-red-500" : "text-amber-500"}`}
-                aria-hidden="true"
-              />
-            </div>
-            <p className="mt-3 text-4xl font-semibold tabular-nums tracking-tight text-amber-700">
-              {exceptions.open_issues}
-            </p>
-            {exceptions.critical_issues > 0 && (
-              <p className="mt-1 text-xs font-semibold text-red-600">
-                {exceptions.critical_issues} critical
+      {(exceptions.open_issues > 0 ||
+        exceptions.pending_recleans > 0 ||
+        exceptions.low_inventory_items > 0) && (
+        <section aria-label="Exceptions requiring attention" className="flex flex-col gap-3">
+          <h2 className="text-base font-semibold">Needs attention</h2>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Link
+              href={"/dashboard/issues" as Route}
+              className={`group rounded-2xl border p-5 shadow-sm transition duration-200 hover:shadow-md ${
+                exceptions.critical_issues > 0
+                  ? "border-red-200 bg-red-50 hover:border-red-300"
+                  : "border-amber-200 bg-amber-50 hover:border-amber-300"
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <p className="text-sm text-muted-foreground">Open issues</p>
+                <AlertTriangle
+                  className={`h-4 w-4 ${exceptions.critical_issues > 0 ? "text-red-500" : "text-amber-500"}`}
+                  aria-hidden="true"
+                />
+              </div>
+              <p className="mt-3 text-4xl font-semibold tabular-nums tracking-tight text-amber-700">
+                {exceptions.open_issues}
               </p>
-            )}
-            <p className="mt-2 text-xs text-muted-foreground">View issues →</p>
-          </Link>
+              {exceptions.critical_issues > 0 && (
+                <p className="mt-1 text-xs font-semibold text-red-600">
+                  {exceptions.critical_issues} critical
+                </p>
+              )}
+              <p className="mt-2 text-xs text-muted-foreground">View issues →</p>
+            </Link>
 
-          <Link
-            href={"/dashboard/review" as Route}
-            className="group rounded-2xl border border-purple-200 bg-purple-50 p-5 shadow-sm transition duration-200 hover:border-purple-300 hover:shadow-md"
-          >
-            <div className="flex items-start justify-between">
-              <p className="text-sm text-muted-foreground">Pending re-cleans</p>
-              <RefreshCw className="h-4 w-4 text-purple-400" aria-hidden="true" />
-            </div>
-            <p className="mt-3 text-4xl font-semibold tabular-nums tracking-tight text-purple-700">
-              {exceptions.pending_recleans}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">Unassigned re-cleans</p>
-          </Link>
+            <Link
+              href={"/dashboard/review" as Route}
+              className="group rounded-2xl border border-purple-200 bg-purple-50 p-5 shadow-sm transition duration-200 hover:border-purple-300 hover:shadow-md"
+            >
+              <div className="flex items-start justify-between">
+                <p className="text-sm text-muted-foreground">Pending re-cleans</p>
+                <RefreshCw className="h-4 w-4 text-purple-400" aria-hidden="true" />
+              </div>
+              <p className="mt-3 text-4xl font-semibold tabular-nums tracking-tight text-purple-700">
+                {exceptions.pending_recleans}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">Unassigned re-cleans</p>
+            </Link>
 
-          <Link
-            href={"/dashboard/issues" as Route}
-            className="group rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm transition duration-200 hover:border-amber-300 hover:shadow-md"
-          >
-            <div className="flex items-start justify-between">
-              <p className="text-sm text-muted-foreground">Low inventory</p>
-              <PackageSearch className="h-4 w-4 text-amber-500" aria-hidden="true" />
-            </div>
-            <p className="mt-3 text-4xl font-semibold tabular-nums tracking-tight text-amber-700">
-              {exceptions.low_inventory_items}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">Items below threshold →</p>
-          </Link>
+            <Link
+              href={"/dashboard/issues" as Route}
+              className="group rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm transition duration-200 hover:border-amber-300 hover:shadow-md"
+            >
+              <div className="flex items-start justify-between">
+                <p className="text-sm text-muted-foreground">Low inventory</p>
+                <PackageSearch className="h-4 w-4 text-amber-500" aria-hidden="true" />
+              </div>
+              <p className="mt-3 text-4xl font-semibold tabular-nums tracking-tight text-amber-700">
+                {exceptions.low_inventory_items}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">Items below threshold →</p>
+            </Link>
+          </div>
         </section>
       )}
     </main>
