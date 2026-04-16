@@ -101,7 +101,7 @@ export function TemplateEditor({ template, initialItems }: Props) {
           </label>
           <div className="flex flex-wrap gap-3">
             <button
-              className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+              className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
               disabled={isPending}
               type="submit"
             >
@@ -298,7 +298,7 @@ export function TemplateEditor({ template, initialItems }: Props) {
           </div>
 
           <button
-            className="self-start rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+            className="self-start rounded-full bg-primary px-5 py-2 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
             disabled={addPending}
             type="submit"
           >

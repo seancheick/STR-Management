@@ -169,7 +169,7 @@ export function AssignCleanerModal({
                         assigning === c.id
                           ? "bg-primary/15 text-[#16423c]"
                           : c.isAvailable
-                            ? "bg-primary text-primary-foreground hover:opacity-90"
+                            ? "bg-primary text-[#f7f5ef] hover:opacity-90"
                             : "border border-border/70 text-muted-foreground hover:bg-muted"
                       } disabled:cursor-not-allowed disabled:opacity-50`}
                     >

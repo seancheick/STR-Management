@@ -27,7 +27,7 @@ function SubmitButton({ label }: { label: string }) {
 
   return (
     <button
-      className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
+      className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-95 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >

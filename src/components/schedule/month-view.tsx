@@ -102,7 +102,7 @@ function DayCell({
       <span
         className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
           isToday
-            ? "bg-primary text-primary-foreground"
+            ? "bg-primary text-[#f7f5ef]"
             : "text-foreground"
         }`}
       >
@@ -158,7 +158,7 @@ function DayPanel({
         <p className="text-sm font-semibold">{label}</p>
         <Link
           href={`/dashboard/assignments/new?date=${date.toISOString().slice(0, 10)}` as Route}
-          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
         >
           + New job
         </Link>
@@ -273,7 +273,7 @@ export function MonthView({
             href="?week=0"
             className={`inline-flex h-9 items-center rounded-full px-4 text-sm font-medium transition ${
               view === "week"
-                ? "bg-primary text-primary-foreground"
+                ? "bg-primary text-[#f7f5ef]"
                 : "border border-border/70 bg-card text-foreground hover:bg-muted"
             }`}
           >
@@ -283,7 +283,7 @@ export function MonthView({
             href={`?view=month&month=${monthOffset}` as Route}
             className={`inline-flex h-9 items-center rounded-full px-4 text-sm font-medium transition ${
               view === "month"
-                ? "bg-primary text-primary-foreground"
+                ? "bg-primary text-[#f7f5ef]"
                 : "border border-border/70 bg-card text-foreground hover:bg-muted"
             }`}
           >
@@ -291,7 +291,7 @@ export function MonthView({
           </Link>
           <Link
             href="/dashboard/assignments/new"
-            className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+            className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90"
           >
             + New job
           </Link>

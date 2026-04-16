@@ -19,7 +19,7 @@ export default async function TemplatesPage() {
         </div>
         <Link
           href={"/dashboard/templates/new" as Route}
-          className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+          className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90"
         >
           New template
         </Link>
@@ -39,7 +39,7 @@ export default async function TemplatesPage() {
           <p className="text-muted-foreground">No templates yet.</p>
           <Link
             href={"/dashboard/templates/new" as Route}
-            className="mt-4 inline-block rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+            className="mt-4 inline-block rounded-full bg-primary px-5 py-2 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90"
           >
             Create your first template
           </Link>

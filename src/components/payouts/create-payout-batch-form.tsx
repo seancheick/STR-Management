@@ -103,7 +103,7 @@ export function CreatePayoutBatchForm({ cleaners }: Props) {
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+          className="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-50"
         >
           {isPending ? "Generating…" : "Generate batch"}
         </button>

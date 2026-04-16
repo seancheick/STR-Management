@@ -25,7 +25,7 @@ export function RestockActionButtons({ requestId }: Props) {
         Acknowledge
       </button>
       <button
-        className="rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+        className="rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
         disabled={isPending}
         onClick={() => startTransition(async () => { await fulfillRestockAction(requestId); })}
         type="button"

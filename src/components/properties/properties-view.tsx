@@ -171,7 +171,7 @@ export function PropertiesView({ activeProperties, archivedProperties }: Propert
             onClick={() => handleViewChange("grid")}
             className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${
               view === "grid"
-                ? "bg-primary text-primary-foreground"
+                ? "bg-primary text-[#f7f5ef]"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -183,7 +183,7 @@ export function PropertiesView({ activeProperties, archivedProperties }: Propert
             onClick={() => handleViewChange("list")}
             className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${
               view === "list"
-                ? "bg-primary text-primary-foreground"
+                ? "bg-primary text-[#f7f5ef]"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >

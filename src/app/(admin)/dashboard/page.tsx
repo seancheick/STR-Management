@@ -108,7 +108,7 @@ export default async function DashboardPage() {
             <p className="hidden text-sm text-muted-foreground sm:block">{formatDate(today)}</p>
             <Link
               href={"/dashboard/schedule" as Route}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
             >
               <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
               Schedule

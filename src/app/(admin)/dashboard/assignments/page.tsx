@@ -65,7 +65,7 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
           </p>
         </div>
         <Link
-          className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground"
+          className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef]"
           href={"/dashboard/assignments/new" as Route}
         >
           New assignment
@@ -86,7 +86,7 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
             <h2 className="text-xl font-semibold">No assignments yet</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">Create your first assignment to start tracking cleaning jobs.</p>
           </div>
-          <Link href="/dashboard/assignments/new" className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground">
+          <Link href="/dashboard/assignments/new" className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef]">
             New assignment
           </Link>
         </section>

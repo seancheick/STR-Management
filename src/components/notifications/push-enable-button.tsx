@@ -28,7 +28,7 @@ export function PushEnableButton() {
   return (
     <div className="flex flex-col items-end gap-1">
       <button
-        className="inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+        className="inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
         disabled={status === "pending" || status === "success"}
         onClick={handleEnable}
         type="button"

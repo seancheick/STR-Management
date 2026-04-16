@@ -66,7 +66,7 @@ export function InviteForm() {
       </div>
 
       <button
-        className="self-start rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+        className="self-start rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
         disabled={isPending}
         type="submit"
       >

@@ -202,7 +202,7 @@ export function AssignmentDrawer({ detail, nextCheckinAt, onClose, onAssignClick
                   <button
                     type="button"
                     onClick={onAssignClick}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
                   >
                     Assign cleaner
                   </button>

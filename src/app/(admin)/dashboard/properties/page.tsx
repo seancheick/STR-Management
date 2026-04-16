@@ -47,7 +47,7 @@ export default async function PropertiesPage({ searchParams }: PropertiesPagePro
           </p>
         </div>
         <Link
-          className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition-opacity hover:opacity-90"
           href="/dashboard/properties/new"
         >
           Add property
@@ -80,7 +80,7 @@ export default async function PropertiesPage({ searchParams }: PropertiesPagePro
             </p>
           </div>
           <Link
-            className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition-opacity hover:opacity-90"
             href="/dashboard/properties/new"
           >
             Add first property

@@ -72,7 +72,7 @@ export function CalendarSourceRow({ source }: Props) {
 
         <div className="flex shrink-0 gap-2">
           <button
-            className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-xs font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+            className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-xs font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
             disabled={isPending}
             onClick={handleSync}
             type="button"

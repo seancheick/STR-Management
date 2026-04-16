@@ -133,7 +133,7 @@ export function PhotoUploadSection({
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <button
-              className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground disabled:opacity-60"
+              className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] disabled:opacity-60"
               disabled={isPending}
               onClick={handleUpload}
               type="button"

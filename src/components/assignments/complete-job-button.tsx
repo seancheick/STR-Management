@@ -33,7 +33,7 @@ export function CompleteJobButton({ assignmentId }: CompleteJobButtonProps) {
         </p>
       )}
       <button
-        className="inline-flex h-12 w-full items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-60"
+        className="inline-flex h-12 w-full items-center justify-center rounded-full bg-primary text-sm font-semibold text-[#f7f5ef] disabled:opacity-60"
         disabled={isPending}
         onClick={handleComplete}
         type="button"

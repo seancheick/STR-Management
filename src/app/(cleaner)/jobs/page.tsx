@@ -113,7 +113,7 @@ export default async function CleanerJobsPage() {
                   {a.status === "assigned" && (
                     <form action={async () => { await acceptJobAction(a.id); }}>
                       <button
-                        className="w-full h-12 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+                        className="w-full h-12 rounded-xl bg-primary text-[#f7f5ef] text-sm font-semibold"
                         type="submit"
                       >
                         Accept
@@ -124,7 +124,7 @@ export default async function CleanerJobsPage() {
                   {a.status === "confirmed" && (
                     <form action={async () => { await startJobAction(a.id); }}>
                       <button
-                        className="w-full h-12 rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+                        className="w-full h-12 rounded-xl bg-primary text-[#f7f5ef] text-sm font-semibold"
                         type="submit"
                       >
                         Start job
@@ -134,7 +134,7 @@ export default async function CleanerJobsPage() {
 
                   {a.status === "in_progress" && (
                     <Link
-                      className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-primary-foreground text-sm font-semibold"
+                      className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-[#f7f5ef] text-sm font-semibold"
                       href={`/jobs/${a.id}` as Route}
                     >
                       Execute checklist
