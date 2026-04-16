@@ -20,36 +20,30 @@ type NewAssignmentFormProps = {
 
 const initialState: AssignmentActionState = { status: "idle", message: null };
 
-// Chips: label → offset function from checkout ISO string
+// Chips: how many hours after checkout until next guest checks in
 const DUE_CHIPS = [
-  {
-    label: "Same day",
-    key: "same_day",
-    compute: (checkout: string) => {
-      const d = new Date(checkout);
-      d.setHours(15, 0, 0, 0); // 3 PM same day — standard check-in
-      return d;
-    },
-  },
   {
     label: "24 hours",
     key: "24h",
-    compute: (checkout: string) => {
-      const d = new Date(checkout);
-      d.setTime(d.getTime() + 24 * 60 * 60 * 1000);
-      return d;
-    },
+    hours: 24,
   },
   {
     label: "48 hours",
     key: "48h",
-    compute: (checkout: string) => {
-      const d = new Date(checkout);
-      d.setTime(d.getTime() + 48 * 60 * 60 * 1000);
-      return d;
-    },
+    hours: 48,
+  },
+  {
+    label: "72 hours",
+    key: "72h",
+    hours: 72,
   },
 ] as const;
+
+function addHours(isoString: string, hours: number): Date {
+  const d = new Date(isoString);
+  d.setTime(d.getTime() + hours * 60 * 60 * 1000);
+  return d;
+}
 
 type ChipKey = (typeof DUE_CHIPS)[number]["key"] | null;
 
@@ -104,14 +98,14 @@ export function NewAssignmentForm({
     setCheckoutVal(val);
     if (activeChip && val) {
       const chip = DUE_CHIPS.find((c) => c.key === activeChip);
-      if (chip) setDueVal(toDatetimeLocal(chip.compute(val)));
+      if (chip) setDueVal(toDatetimeLocal(addHours(val, chip.hours)));
     }
   }
 
   function handleChipClick(chip: (typeof DUE_CHIPS)[number]) {
-    if (!checkoutVal) return; // chips are no-op without checkout
+    if (!checkoutVal) return;
     setActiveChip(chip.key);
-    setDueVal(toDatetimeLocal(chip.compute(checkoutVal)));
+    setDueVal(toDatetimeLocal(addHours(checkoutVal, chip.hours)));
   }
 
   return (
