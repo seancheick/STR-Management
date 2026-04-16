@@ -49,10 +49,7 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-6 py-10">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
-            Sprint 1
-          </p>
-          <h1 className="mt-2 text-4xl font-semibold tracking-tight">Assignments</h1>
+          <h1 className="text-4xl font-semibold tracking-tight">Assignments</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             All cleaning jobs across your portfolio.
           </p>

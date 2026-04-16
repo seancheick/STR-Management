@@ -50,6 +50,7 @@
 }
 
 html {
+  scroll-behavior: smooth;
   background:
     radial-gradient(circle at top left, rgba(217, 195, 161, 0.25), transparent 32%),
     linear-gradient(180deg, #faf7f1 0%, #f4f1ea 100%);
@@ -60,6 +61,8 @@ body {
   color: var(--foreground);
   background: transparent;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -67,3 +70,34 @@ a {
   text-decoration: none;
 }
 
+/* Cursor pointer on all interactive elements */
+button:not(:disabled),
+[role="button"]:not(:disabled),
+label[for],
+summary {
+  cursor: pointer;
+}
+
+/* Accessible focus rings — visible keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* Inputs and selects use border-style focus instead of outline */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+/* Smooth transitions on interactive elements */
+a,
+button {
+  transition-property: color, background-color, border-color, opacity, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
