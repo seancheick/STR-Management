@@ -4,6 +4,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { listAssignmentsForCleaner } from "@/lib/queries/assignments";
 import { acceptJobAction, startJobAction } from "@/app/(cleaner)/jobs/actions";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 
 function statusLabel(status: string) {
   const map: Record<string, string> = {
@@ -41,13 +42,16 @@ export default async function CleanerJobsPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-5 py-8">
-      <header className="space-y-2">
-        <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
-          Cleaner
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Your jobs, {profile.full_name.split(" ")[0]}
-        </h1>
+      <header className="flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">
+            Cleaner
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Your jobs, {profile.full_name.split(" ")[0]}
+          </h1>
+        </div>
+        <SignOutButton />
       </header>
 
       {assignments.length === 0 ? (

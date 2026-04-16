@@ -4,6 +4,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { getDashboardCounts, listTodaysAssignmentsForAdmin } from "@/lib/queries/assignments";
 import { getExceptionCounts } from "@/lib/queries/issues";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("en-US", {
@@ -43,8 +44,11 @@ export default async function DashboardPage() {
             Welcome back, {profile.full_name}
           </h1>
         </div>
-        <div className="rounded-full border border-border/70 bg-card px-4 py-2 text-sm text-muted-foreground">
-          {profile.role}
+        <div className="flex items-center gap-3">
+          <span className="rounded-full border border-border/70 bg-card px-4 py-2 text-sm text-muted-foreground">
+            {profile.role}
+          </span>
+          <SignOutButton />
         </div>
       </div>
 
@@ -167,6 +171,14 @@ export default async function DashboardPage() {
         >
           <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Properties</p>
           <h2 className="mt-3 text-xl font-semibold tracking-tight">Manage listings</h2>
+        </Link>
+
+        <Link
+          className="rounded-[1.5rem] border border-border/70 bg-card p-5 shadow-sm transition hover:border-primary/30"
+          href={"/dashboard/team" as Route}
+        >
+          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">People</p>
+          <h2 className="mt-3 text-xl font-semibold tracking-tight">Team</h2>
         </Link>
 
         <Link

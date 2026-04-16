@@ -64,17 +64,20 @@ Ship the minimum product that enforces proof-based completion. An owner can mana
 - 2026-04-16: Updated admin dashboard with real getDashboardCounts() (today's jobs, at-risk, unassigned) and a live today's job feed. Quick-nav links to properties, assignments, and new assignment.
 - 2026-04-16: Full verification passes: npm test (16/16), npm run typecheck, npm run lint (0 errors), npm run build — all routes render correctly on Node 20.
 - 2026-04-16: Remaining blocker unchanged: Sprint 1 migration must be applied to the hosted Supabase project before any live auth/data flows work end-to-end.
+- 2026-04-16 (revisit): Added sign-out server action + SignOutButton component — shown in admin dashboard header and cleaner jobs header. Sign-in/sign-out flows now complete.
+- 2026-04-16 (revisit): Built team management at /dashboard/team — lists active/inactive members, inline role change, activate/deactivate toggle, invite form using Supabase Auth admin.inviteUserByEmail (pre-creates public.users row). Team link added to dashboard quick-nav.
+- 2026-04-16 (revisit): Checklist template management built in Sprint 6 (/dashboard/templates). Sprint 1 task marked complete retroactively.
 
 ### Tasks
 
-- [-] Scaffold Next.js app + Supabase project + Tailwind + shadcn/ui
+- [x] Scaffold Next.js app + Supabase project + Tailwind + shadcn/ui
 - [x] Create core schema migration (users, properties, checklist_templates, assignments, assignment_events, audit_logs)
-- [-] Set up Supabase Auth + sign-in/sign-out flows
+- [x] Set up Supabase Auth + sign-in/sign-out flows
 - [x] Implement role-based route guards (owner/admin vs cleaner vs supervisor)
 - [x] Add RLS policies on all tables
 - [x] Build properties CRUD (list, create, edit, archive)
-- [ ] Build team management (invite cleaners, assign roles, manage status)
-- [ ] Build checklist template management (create templates, add items with required flags)
+- [x] Build team management (invite cleaners, assign roles, manage status)
+- [x] Build checklist template management (create templates, add items with required flags)
 - [x] Implement assignment status engine (centralized state machine with all transitions)
 - [x] Build assignment creation + schedule views
 - [x] Implement checklist instantiation on assignment creation (snapshot template items)
@@ -84,7 +87,7 @@ Ship the minimum product that enforces proof-based completion. An owner can mana
 - [x] Build cleaner mobile home (today's jobs, accept/start actions)
 - [x] Build cleaner assignment execution page (checklist, photos, notes, complete)
 - [x] Add seed data (demo owner, supervisor, cleaner, properties, templates)
-- [-] Add test coverage (status engine unit tests, completion validator unit tests, property form unit tests, RLS integration tests, E2E smoke)
+- [-] Add test coverage (unit tests done: status engine, completion validator, property form; RLS integration + E2E smoke deferred)
 
 ### Definition of Done
 
