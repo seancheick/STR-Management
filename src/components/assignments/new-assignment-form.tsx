@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import type { AssignmentActionState } from "@/app/(admin)/dashboard/assignments/actions";
@@ -20,11 +20,50 @@ type NewAssignmentFormProps = {
 
 const initialState: AssignmentActionState = { status: "idle", message: null };
 
+// Chips: label → offset function from checkout ISO string
+const DUE_CHIPS = [
+  {
+    label: "Same day",
+    key: "same_day",
+    compute: (checkout: string) => {
+      const d = new Date(checkout);
+      d.setHours(14, 0, 0, 0); // 2 PM same day
+      return d;
+    },
+  },
+  {
+    label: "24 hours",
+    key: "24h",
+    compute: (checkout: string) => {
+      const d = new Date(checkout);
+      d.setTime(d.getTime() + 24 * 60 * 60 * 1000);
+      return d;
+    },
+  },
+  {
+    label: "48 hours",
+    key: "48h",
+    compute: (checkout: string) => {
+      const d = new Date(checkout);
+      d.setTime(d.getTime() + 48 * 60 * 60 * 1000);
+      return d;
+    },
+  },
+] as const;
+
+type ChipKey = (typeof DUE_CHIPS)[number]["key"] | null;
+
+function toDatetimeLocal(d: Date) {
+  // yyyy-MM-ddTHH:mm in local time
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
+      className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-95 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -46,11 +85,29 @@ export function NewAssignmentForm({
 }: NewAssignmentFormProps) {
   const [state, formAction] = useActionState(action, initialState);
 
-  // Default due_at to tomorrow at noon local time
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(12, 0, 0, 0);
-  const defaultDue = tomorrow.toISOString().slice(0, 16); // yyyy-MM-ddTHH:mm
+  // Checkout drives due date via chips
+  const [checkoutVal, setCheckoutVal] = useState("");
+  const [activeChip, setActiveChip] = useState<ChipKey>(null);
+  const [dueVal, setDueVal] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(14, 0, 0, 0);
+    return toDatetimeLocal(d);
+  });
+
+  function handleCheckoutChange(val: string) {
+    setCheckoutVal(val);
+    if (activeChip && val) {
+      const chip = DUE_CHIPS.find((c) => c.key === activeChip);
+      if (chip) setDueVal(toDatetimeLocal(chip.compute(val)));
+    }
+  }
+
+  function handleChipClick(chip: (typeof DUE_CHIPS)[number]) {
+    if (!checkoutVal) return; // chips are no-op without checkout
+    setActiveChip(chip.key);
+    setDueVal(toDatetimeLocal(chip.compute(checkoutVal)));
+  }
 
   return (
     <form action={formAction} className="space-y-8">
@@ -75,6 +132,71 @@ export function NewAssignmentForm({
             ))}
           </select>
           <FieldError errors={state.fieldErrors?.propertyId} />
+        </div>
+
+        {/* Guest checkout — shown first, drives due-at */}
+        <div className="space-y-2 md:col-span-2">
+          <label className="text-sm font-medium" htmlFor="checkoutAt">
+            Guest checkout{" "}
+            <span className="font-normal text-muted-foreground">(sets the cleaning window)</span>
+          </label>
+          <input
+            className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
+            id="checkoutAt"
+            name="checkoutAt"
+            type="datetime-local"
+            value={checkoutVal}
+            onChange={(e) => handleCheckoutChange(e.target.value)}
+          />
+        </div>
+
+        {/* Cleaning due — with quick chips */}
+        <div className="space-y-2 md:col-span-2">
+          <label className="text-sm font-medium" htmlFor="dueAt">
+            Cleaning due <span className="text-destructive">*</span>
+          </label>
+
+          {/* Quick chips */}
+          <div className="flex flex-wrap gap-2">
+            {DUE_CHIPS.map((chip) => {
+              const isActive = activeChip === chip.key;
+              const disabled = !checkoutVal;
+              return (
+                <button
+                  key={chip.key}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => handleChipClick(chip)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                    isActive
+                      ? "border-primary bg-primary text-[#f7f5ef]"
+                      : disabled
+                        ? "border-border/50 bg-muted/40 text-muted-foreground/50 cursor-not-allowed"
+                        : "border-border/70 bg-card text-foreground hover:border-primary/40 hover:bg-primary/5"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+            <span className="self-center text-xs text-muted-foreground">
+              {checkoutVal ? "or pick manually below" : "— enter guest checkout first"}
+            </span>
+          </div>
+
+          <input
+            className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
+            id="dueAt"
+            name="dueAt"
+            required
+            type="datetime-local"
+            value={dueVal}
+            onChange={(e) => {
+              setDueVal(e.target.value);
+              setActiveChip(null); // manual override clears chip
+            }}
+          />
+          <FieldError errors={state.fieldErrors?.dueAt} />
         </div>
 
         {/* Cleaner (optional) */}
@@ -117,36 +239,6 @@ export function NewAssignmentForm({
               </option>
             ))}
           </select>
-        </div>
-
-        {/* Due at */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="dueAt">
-            Due at <span className="text-destructive">*</span>
-          </label>
-          <input
-            className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={defaultDue}
-            id="dueAt"
-            name="dueAt"
-            required
-            type="datetime-local"
-          />
-          <FieldError errors={state.fieldErrors?.dueAt} />
-        </div>
-
-        {/* Checkout at */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium" htmlFor="checkoutAt">
-            Guest checkout{" "}
-            <span className="font-normal text-muted-foreground">(optional)</span>
-          </label>
-          <input
-            className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            id="checkoutAt"
-            name="checkoutAt"
-            type="datetime-local"
-          />
         </div>
 
         {/* Priority */}

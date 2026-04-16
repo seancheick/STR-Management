@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getChecklistTemplateItems } from "@/lib/queries/checklist";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 export type CreateAssignmentInput = {
   ownerId: string;
@@ -29,7 +29,7 @@ export type CreateAssignmentResult =
 export async function createAssignment(
   input: CreateAssignmentInput,
 ): Promise<CreateAssignmentResult> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = createServiceSupabaseClient();
 
   const hasClean = input.cleanerId !== null;
 
