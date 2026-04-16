@@ -8,6 +8,7 @@ import {
   deleteTemplateAction,
   addTemplateItemAction,
   removeTemplateItemAction,
+  cloneTemplateAction,
 } from "@/app/(admin)/dashboard/templates/actions";
 
 const TEMPLATE_TYPES = ["cleaning", "deep_clean", "inspection", "turnover", "reclean", "other"];
@@ -39,6 +40,12 @@ export function TemplateEditor({ template, initialItems }: Props) {
     startTransition(async () => {
       const result = await deleteTemplateAction(template.id);
       if (result.error) setDeleteError(result.error);
+    });
+  }
+
+  function handleClone() {
+    startTransition(async () => {
+      await cloneTemplateAction(template.id);
     });
   }
 
@@ -92,7 +99,7 @@ export function TemplateEditor({ template, initialItems }: Props) {
             />
             <span className="text-sm">Default template for new properties</span>
           </label>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button
               className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
               disabled={isPending}
@@ -101,12 +108,20 @@ export function TemplateEditor({ template, initialItems }: Props) {
               Save changes
             </button>
             <button
+              className="rounded-full border border-border px-5 py-2 text-sm font-medium transition hover:bg-muted disabled:opacity-60"
+              disabled={isPending}
+              onClick={handleClone}
+              type="button"
+            >
+              Clone template
+            </button>
+            <button
               className="rounded-full border border-destructive/40 px-5 py-2 text-sm font-medium text-destructive transition hover:bg-destructive/5 disabled:opacity-60"
               disabled={isPending}
               onClick={handleDelete}
               type="button"
             >
-              Delete template
+              Delete
             </button>
           </div>
           {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}

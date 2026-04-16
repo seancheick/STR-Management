@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 import type { AssignmentActionState } from "@/app/(admin)/dashboard/assignments/actions";
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
+import type { TemplateRecord } from "@/lib/queries/templates";
 
 type NewAssignmentFormProps = {
   action: (
@@ -14,6 +15,7 @@ type NewAssignmentFormProps = {
   ) => Promise<AssignmentActionState>;
   properties: PropertyRecord[];
   cleaners: TeamMemberRecord[];
+  templates: TemplateRecord[];
 };
 
 const initialState: AssignmentActionState = { status: "idle", message: null };
@@ -40,6 +42,7 @@ export function NewAssignmentForm({
   action,
   properties,
   cleaners,
+  templates,
 }: NewAssignmentFormProps) {
   const [state, formAction] = useActionState(action, initialState);
 
@@ -93,6 +96,27 @@ export function NewAssignmentForm({
             ))}
           </select>
           <FieldError errors={state.fieldErrors?.cleanerId} />
+        </div>
+
+        {/* Checklist template */}
+        <div className="space-y-2 md:col-span-2">
+          <label className="text-sm font-medium" htmlFor="templateId">
+            Checklist template{" "}
+            <span className="font-normal text-muted-foreground">(optional — defaults to property template)</span>
+          </label>
+          <select
+            className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
+            id="templateId"
+            name="templateId"
+          >
+            <option value="">Use property default</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.template_type ? ` (${t.template_type.replace(/_/g, " ")})` : ""}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Due at */}

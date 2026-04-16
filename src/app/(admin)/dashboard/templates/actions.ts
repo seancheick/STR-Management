@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireRole } from "@/lib/auth/session";
+import { getPreset } from "@/lib/data/preset-templates";
+import { listTemplateItems } from "@/lib/queries/templates";
 import {
   createTemplate,
   updateTemplate,
@@ -140,4 +142,76 @@ export async function removeTemplateItemAction(
 
   revalidatePath(`/dashboard/templates/${templateId}`);
   return { error: null };
+}
+
+// ─── Clone a built-in preset into a new saved template ───────────────────────
+export async function clonePresetAction(
+  presetKey: string,
+  customName?: string,
+): Promise<TemplateActionResult & { id?: string }> {
+  await requireRole(["owner", "admin", "supervisor"]);
+
+  const preset = getPreset(presetKey);
+  if (!preset) return { error: "Preset not found." };
+
+  const name = customName?.trim() || preset.name;
+  const createResult = await createTemplate(name, preset.template_type, false);
+  if (!createResult.success) return { error: createResult.error };
+
+  const templateId = createResult.id;
+
+  // Insert all preset items
+  for (const item of preset.items) {
+    await addTemplateItem(templateId, {
+      sectionName: item.section_name,
+      label: item.label,
+      instructionText: item.instruction_text,
+      referenceMediaUrl: null,
+      required: item.required,
+      sortOrder: item.sort_order,
+      photoCategory: item.photo_category,
+    });
+  }
+
+  revalidatePath("/dashboard/templates");
+  return { error: null, id: templateId };
+}
+
+// ─── Clone an existing saved template ────────────────────────────────────────
+export async function cloneTemplateAction(
+  sourceTemplateId: string,
+): Promise<TemplateActionResult & { id?: string }> {
+  await requireRole(["owner", "admin", "supervisor"]);
+
+  const items = await listTemplateItems(sourceTemplateId);
+
+  // We need the source template name — fetch via the service client
+  const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+  const supabase = await createServerSupabaseClient();
+  const { data: src } = await supabase
+    .from("checklist_templates")
+    .select("name, template_type")
+    .eq("id", sourceTemplateId)
+    .single();
+
+  if (!src) return { error: "Template not found." };
+
+  const createResult = await createTemplate(`Copy of ${src.name}`, src.template_type ?? null, false);
+  if (!createResult.success) return { error: createResult.error };
+
+  const newId = createResult.id;
+  for (const item of items) {
+    await addTemplateItem(newId, {
+      sectionName: item.section_name,
+      label: item.label,
+      instructionText: item.instruction_text,
+      referenceMediaUrl: item.reference_media_url,
+      required: item.required,
+      sortOrder: item.sort_order,
+      photoCategory: item.photo_category,
+    });
+  }
+
+  revalidatePath("/dashboard/templates");
+  redirect(`/dashboard/templates/${newId}` as never);
 }

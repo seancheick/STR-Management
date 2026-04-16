@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { requireRole } from "@/lib/auth/session";
 import { listTemplates } from "@/lib/queries/templates";
+import { PresetCards } from "@/components/templates/preset-cards";
 
 export default async function TemplatesPage() {
   await requireRole(["owner", "admin"]);
@@ -22,6 +23,15 @@ export default async function TemplatesPage() {
         >
           New template
         </Link>
+      </div>
+
+      <PresetCards />
+
+      <div>
+        <h2 className="text-lg font-semibold">Your saved templates</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Templates you create here can be assigned to any job.
+        </p>
       </div>
 
       {templates.length === 0 ? (

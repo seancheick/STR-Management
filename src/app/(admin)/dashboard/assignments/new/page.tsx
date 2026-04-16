@@ -6,13 +6,15 @@ import { NewAssignmentForm } from "@/components/assignments/new-assignment-form"
 import { requireRole } from "@/lib/auth/session";
 import { listProperties } from "@/lib/queries/properties";
 import { listActiveCleaners } from "@/lib/queries/team";
+import { listTemplates } from "@/lib/queries/templates";
 
 export default async function NewAssignmentPage() {
   await requireRole(["owner", "admin"]);
 
-  const [propertiesResult, cleaners] = await Promise.all([
+  const [propertiesResult, cleaners, templates] = await Promise.all([
     listProperties(),
     listActiveCleaners(),
+    listTemplates(),
   ]);
 
   return (
@@ -34,6 +36,7 @@ export default async function NewAssignmentPage() {
           action={createAssignmentAction}
           properties={propertiesResult.data}
           cleaners={cleaners}
+          templates={templates}
         />
       </section>
     </main>

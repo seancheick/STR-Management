@@ -63,13 +63,20 @@ export async function createAssignmentAction(
     return { status: "error", message: "Invalid form data." };
   }
 
-  // Resolve the property to get its primary template
   const supabase = await createServerSupabaseClient();
-  const { data: property } = await supabase
-    .from("properties")
-    .select("primary_checklist_template_id")
-    .eq("id", values.propertyId)
-    .maybeSingle();
+
+  // Explicit template selection overrides the property default
+  const explicitTemplateId = (formData.get("templateId") as string | null) || null;
+  let resolvedTemplateId = explicitTemplateId;
+
+  if (!resolvedTemplateId) {
+    const { data: property } = await supabase
+      .from("properties")
+      .select("primary_checklist_template_id")
+      .eq("id", values.propertyId)
+      .maybeSingle();
+    resolvedTemplateId = property?.primary_checklist_template_id ?? null;
+  }
 
   const ownerId = await resolveOwnerId();
 
@@ -82,8 +89,7 @@ export async function createAssignmentAction(
     priority: values.priority,
     expectedDurationMin: values.expectedDurationMin,
     fixedPayoutAmount: values.fixedPayoutAmount,
-    primaryChecklistTemplateId:
-      property?.primary_checklist_template_id ?? null,
+    primaryChecklistTemplateId: resolvedTemplateId,
     createdByUserId: profile.id,
   });
 
