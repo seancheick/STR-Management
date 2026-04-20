@@ -39,7 +39,7 @@ export function BatchActionButtons({
   }
 
   function handleCancel() {
-    if (!confirm("Cancel this batch? This cannot be undone.")) return;
+    if (!confirm("Cancel this report? This cannot be undone.")) return;
     startTransition(async () => {
       const res = await cancelBatchAction(batchId);
       if (res.error) setError(res.error);
@@ -59,7 +59,7 @@ export function BatchActionButtons({
           disabled={isPending}
           className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
         >
-          {isPending ? "Saving…" : "Approve batch"}
+          {isPending ? "Saving…" : "Approve report"}
         </button>
       )}
       {canPay && (
@@ -77,7 +77,7 @@ export function BatchActionButtons({
           disabled={isPending}
           className="rounded-lg border border-destructive/40 px-5 py-2 text-sm font-medium text-destructive transition hover:bg-destructive/10 disabled:opacity-50"
         >
-          Cancel batch
+          Cancel report
         </button>
       )}
     </div>

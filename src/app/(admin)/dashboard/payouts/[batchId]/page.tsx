@@ -70,7 +70,7 @@ export default async function PayoutBatchDetailPage({
           href={"/dashboard/payouts" as Route}
           className="text-sm text-muted-foreground hover:text-foreground"
         >
-          ← Payout Batches
+          ← Payout reports
         </Link>
         <div className="mt-3 flex items-start justify-between gap-4">
           <div>
@@ -152,8 +152,8 @@ export default async function PayoutBatchDetailPage({
       {/* Entries by cleaner */}
       {statements.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No entries in this batch.
-          {isDraft ? " Generate again or add assignments manually." : ""}
+          No jobs in this report.
+          {isDraft ? " Regenerate after more cleanings are approved." : ""}
         </p>
       ) : (
         statements.map((stmt) => (

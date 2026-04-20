@@ -37,23 +37,27 @@ export default async function PayoutsPage() {
             Finance
           </p>
           <h1 className="mt-2 text-4xl font-semibold tracking-tight">
-            Payout Batches
+            Payout reports
           </h1>
         </div>
       </div>
 
-      {/* Create new batch */}
+      {/* Create new report */}
       <section className="rounded-2xl border border-border/70 bg-card p-6">
-        <h2 className="mb-4 text-lg font-semibold">Generate New Batch</h2>
+        <h2 className="mb-1 text-lg font-semibold">Generate a payout report</h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          Pick a cleaner and date range. We&apos;ll pull approved jobs, total
+          the payouts, and let you review, mark paid, or export.
+        </p>
         <CreatePayoutBatchForm cleaners={cleaners} />
       </section>
 
-      {/* Batch list */}
+      {/* Report list */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">All Batches</h2>
+        <h2 className="text-lg font-semibold">Recent reports</h2>
         {batches.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No batches yet. Generate one above.
+            No reports yet. Generate one above.
           </p>
         ) : (
           batches.map((b) => (
