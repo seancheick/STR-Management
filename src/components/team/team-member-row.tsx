@@ -4,8 +4,14 @@ import { useTransition } from "react";
 
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { toggleMemberActiveAction, updateMemberRoleAction } from "@/app/(admin)/dashboard/team/actions";
+import { showToast } from "@/components/ui/toast";
 
 const ROLES = ["cleaner", "supervisor", "admin"];
+const ROLE_LANDING: Record<string, string> = {
+  cleaner: "/jobs",
+  supervisor: "/dashboard",
+  admin: "/dashboard",
+};
 
 type Props = { member: TeamMemberRecord };
 
@@ -14,13 +20,26 @@ export function TeamMemberRow({ member }: Props) {
 
   function handleToggleActive() {
     startTransition(async () => {
-      await toggleMemberActiveAction(member.id, !member.active);
+      const result = await toggleMemberActiveAction(member.id, !member.active);
+      if (result.error) {
+        showToast(result.error, "error");
+      } else {
+        showToast(
+          member.active ? `${member.full_name} deactivated.` : `${member.full_name} reactivated.`,
+        );
+      }
     });
   }
 
   function handleRoleChange(role: string) {
+    const landing = ROLE_LANDING[role] ?? "/dashboard";
     startTransition(async () => {
-      await updateMemberRoleAction(member.id, role);
+      const result = await updateMemberRoleAction(member.id, role);
+      if (result.error) {
+        showToast(result.error, "error");
+      } else {
+        showToast(`${member.full_name} is now ${role}. They'll land on ${landing}.`);
+      }
     });
   }
 
