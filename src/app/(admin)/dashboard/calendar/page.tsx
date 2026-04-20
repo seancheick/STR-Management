@@ -13,9 +13,15 @@ const platformLabels: Record<string, string> = {
 };
 
 const resultColors: Record<string, string> = {
-  success: "text-green-600",
-  partial: "text-amber-600",
-  failed: "text-red-600",
+  success: "text-green-700 bg-green-50 border-green-200",
+  partial: "text-amber-700 bg-amber-50 border-amber-200",
+  failed: "text-red-700 bg-red-50 border-red-200",
+};
+
+const resultLabels: Record<string, string> = {
+  success: "Up to date",
+  partial: "Synced with conflicts",
+  failed: "Sync failed",
 };
 
 function formatDate(iso: string) {
@@ -106,46 +112,66 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
       {syncLogs.length > 0 && (
         <section className="flex flex-col gap-4">
           <h2 className="text-xl font-semibold">Sync history</h2>
-          <div className="rounded-[1.75rem] border border-border/70 bg-card shadow-sm">
+          <div className="overflow-x-auto rounded-[1.75rem] border border-border/70 bg-card shadow-sm">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <th className="px-5 py-3 font-medium">Source</th>
                   <th className="px-5 py-3 font-medium">Property</th>
                   <th className="px-5 py-3 font-medium">Result</th>
-                  <th className="px-5 py-3 font-medium">Created</th>
-                  <th className="px-5 py-3 font-medium">Conflicts</th>
-                  <th className="px-5 py-3 font-medium">Time</th>
+                  <th className="px-5 py-3 font-medium">Breakdown</th>
+                  <th className="px-5 py-3 font-medium">When</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {syncLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="px-5 py-3 font-medium">
-                      {log.calendar_source?.name ?? "—"}
-                      <span className="ml-1.5 text-xs text-muted-foreground">
-                        {platformLabels[log.calendar_source?.platform ?? ""] ?? ""}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {log.properties?.name ?? "—"}
-                    </td>
-                    <td className={`px-5 py-3 font-medium ${resultColors[log.result] ?? ""}`}>
-                      {log.result}
-                    </td>
-                    <td className="px-5 py-3">{log.assignments_created}</td>
-                    <td className="px-5 py-3">
-                      {log.conflict_count > 0 ? (
-                        <span className="font-medium text-amber-600">{log.conflict_count}</span>
-                      ) : (
-                        "0"
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">
-                      {formatDate(log.synced_at)}
-                    </td>
-                  </tr>
-                ))}
+                {syncLogs.map((log) => {
+                  const resultLabel = resultLabels[log.result] ?? log.result;
+                  const resultColor =
+                    resultColors[log.result] ??
+                    "text-gray-700 bg-gray-50 border-gray-200";
+                  return (
+                    <tr key={log.id}>
+                      <td className="px-5 py-3 font-medium">
+                        {log.calendar_source?.name ?? "—"}
+                        <span className="ml-1.5 text-xs text-muted-foreground">
+                          {platformLabels[log.calendar_source?.platform ?? ""] ?? ""}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {log.properties?.name ?? "—"}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${resultColor}`}
+                        >
+                          {resultLabel}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">
+                        <span className="font-medium text-foreground">
+                          {log.assignments_created}
+                        </span>{" "}
+                        new
+                        {log.assignments_skipped > 0 && (
+                          <> · {log.assignments_skipped} already scheduled</>
+                        )}
+                        {log.conflict_count > 0 && (
+                          <>
+                            {" "}
+                            ·{" "}
+                            <span className="font-medium text-amber-700">
+                              {log.conflict_count} conflict
+                              {log.conflict_count === 1 ? "" : "s"}
+                            </span>
+                          </>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {formatDate(log.synced_at)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -1,9 +1,13 @@
+import type { Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CalendarDays } from "lucide-react";
 
 import { updatePropertyAction } from "@/app/(admin)/dashboard/properties/actions";
+import { CalendarSourceRow } from "@/components/calendar/calendar-source-row";
 import { PropertyForm } from "@/components/properties/property-form";
 import { requireRole } from "@/lib/auth/session";
+import { listCalendarSourcesForProperty } from "@/lib/queries/calendar";
 import { getProperty } from "@/lib/queries/properties";
 
 type EditPropertyPageProps = {
@@ -15,7 +19,10 @@ type EditPropertyPageProps = {
 export default async function EditPropertyPage({ params }: EditPropertyPageProps) {
   await requireRole(["owner", "admin"]);
   const { propertyId } = await params;
-  const propertyResult = await getProperty(propertyId);
+  const [propertyResult, calendarSources] = await Promise.all([
+    getProperty(propertyId),
+    listCalendarSourcesForProperty(propertyId),
+  ]);
 
   if (!propertyResult.data) {
     notFound();
@@ -52,6 +59,34 @@ export default async function EditPropertyPage({ params }: EditPropertyPageProps
           />
         </section>
       )}
+
+      {/* Calendar sync — inline on property edit */}
+      <section className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            Calendar sync
+          </h2>
+          <Link
+            className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
+            href={`/dashboard/calendar?propertyId=${propertyId}#add-source` as Route}
+          >
+            + Add iCal
+          </Link>
+        </div>
+        {calendarSources.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card/70 p-5 text-sm text-muted-foreground">
+            No calendar sources connected. Add the iCal URL from Airbnb / VRBO to
+            auto-create cleaning jobs from bookings.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {calendarSources.map((source) => (
+              <CalendarSourceRow key={source.id} source={source} />
+            ))}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
