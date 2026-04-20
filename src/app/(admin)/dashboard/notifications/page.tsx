@@ -38,8 +38,17 @@ export default async function NotificationsPage() {
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-8 px-6 py-10">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Operations</p>
-          <h1 className="mt-2 text-4xl font-semibold tracking-tight">Notifications</h1>
+          <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Diagnostics</p>
+          <h1 className="mt-2 text-4xl font-semibold tracking-tight">Notification log</h1>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            Push notifications the system sent to cleaners and supervisors
+            (new-job alerts, reminders, overdue warnings). Check here if someone
+            says they didn&apos;t get an alert — <span className="font-medium">Delivered</span>
+            {" "}means the cleaner&apos;s device acknowledged it,
+            {" "}<span className="font-medium">Failed</span> usually means push is disabled on
+            their browser, and <span className="font-medium">Pending</span> means it&apos;s queued
+            for the next cron run.
+          </p>
         </div>
         <PushEnableButton />
       </div>

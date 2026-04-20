@@ -34,7 +34,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/calendar", label: "Calendar Sync", icon: CalendarDays, exact: false },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3, exact: false },
   { href: "/dashboard/payouts", label: "Payouts", icon: Banknote, exact: false },
-  { href: "/dashboard/notifications", label: "Notifications", icon: Bell, exact: false },
+  { href: "/dashboard/notifications", label: "Notification log", icon: Bell, exact: false },
 ];
 
 export function SidebarNav() {
