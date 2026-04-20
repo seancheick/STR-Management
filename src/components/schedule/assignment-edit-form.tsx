@@ -9,9 +9,23 @@ import {
   type CancelState,
   type RescheduleState,
 } from "@/app/(admin)/dashboard/schedule/actions";
-import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { showToast } from "@/components/ui/toast";
+
+/**
+ * Minimal shape an assignment needs to be editable.
+ * Both AssignmentScheduleRecord and AssignmentListRecord satisfy this.
+ */
+export type EditableAssignment = {
+  id: string;
+  status: string;
+  priority: string;
+  checkout_at: string | null;
+  due_at: string;
+  cleaner_id: string | null;
+  expected_duration_min: number | null;
+  fixed_payout_amount: number | null;
+};
 
 const rescheduleInitial: RescheduleState = { status: "idle", message: null };
 const cancelInitial: CancelState = { status: "idle", message: null };
@@ -25,7 +39,7 @@ function toDatetimeLocal(iso: string | null): string {
 }
 
 type AssignmentEditFormProps = {
-  assignment: AssignmentScheduleRecord;
+  assignment: EditableAssignment;
   cleaners: TeamMemberRecord[];
   onCancel: () => void;
   onSaved: () => void;

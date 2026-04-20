@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { parseIcal } from "@/lib/ical/parser";
+import { zonedTimeToUtc } from "@/lib/ical/timezone";
+
+// Tests run with DEFAULT_TIMEZONE ("America/New_York") unless specified.
+function nyIso(y: number, m: number, d: number, h: number): string {
+  return zonedTimeToUtc(y, m, d, h, 0, "America/New_York").toISOString();
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -62,30 +68,69 @@ describe("parseIcal", () => {
     expect(result[0].checkoutAt).toContain("2026-06-13");
   });
 
-  it("sets dueAt to 14:00 UTC on checkout day for morning checkouts", () => {
+  it("snaps DATE-only checkout to 11:00 property-local time", () => {
     const raw = makeIcal([
       makeEvent({
-        UID: "due001",
+        UID: "ck001",
         DTSTART: "20260701",
-        DTEND: "20260703",  // DATE = midnight UTC
+        DTEND: "20260703",
         SUMMARY: "Stay",
       }),
     ]);
     const result = parseIcal(raw);
-    expect(result[0].dueAt).toContain("T14:00:00");
+    expect(result[0].checkoutAt).toBe(nyIso(2026, 7, 3, 11));
   });
 
-  it("sets dueAt to 15:00 UTC when checkout is at or after 14:00 UTC", () => {
+  it("falls back to 15:00 property-local on checkout day when there is no next booking", () => {
+    const raw = makeIcal([
+      makeEvent({
+        UID: "solo001",
+        DTSTART: "20260701",
+        DTEND: "20260703",
+        SUMMARY: "Stay",
+      }),
+    ]);
+    const result = parseIcal(raw);
+    expect(result[0].dueAt).toBe(nyIso(2026, 7, 3, 15));
+  });
+
+  it("keeps explicit DATETIME checkout time instead of snapping", () => {
     const raw = makeIcal([
       makeEvent({
         UID: "late001",
         DTSTART: "20260801T120000Z",
-        DTEND: "20260804T150000Z",  // checkout at 15:00 UTC
+        DTEND: "20260804T150000Z",
         SUMMARY: "Late checkout",
       }),
     ]);
     const result = parseIcal(raw);
-    expect(result[0].dueAt).toContain("T15:00:00");
+    expect(result[0].checkoutAt).toBe("2026-08-04T15:00:00.000Z");
+  });
+
+  it("sets dueAt to the next booking's check-in when consecutive events exist", () => {
+    const raw = makeIcal([
+      makeEvent({ UID: "a", DTSTART: "20260501", DTEND: "20260503", SUMMARY: "First" }),
+      makeEvent({ UID: "b", DTSTART: "20260506", DTEND: "20260510", SUMMARY: "Second" }),
+    ]);
+    const result = parseIcal(raw);
+    const a = result.find((r) => r.uid === "a")!;
+    // dueAt of first event equals next event's check-in (15:00 local)
+    expect(a.dueAt).toBe(nyIso(2026, 5, 6, 15));
+    expect(a.nextCheckinAt).toBe(nyIso(2026, 5, 6, 15));
+  });
+
+  it("honours custom timezone and hour options", () => {
+    const raw = makeIcal([
+      makeEvent({ UID: "opts1", DTSTART: "20260601", DTEND: "20260603", SUMMARY: "Stay" }),
+    ]);
+    const result = parseIcal(raw, {
+      timeZone: "America/Los_Angeles",
+      checkoutHour: 10,
+      checkinHour: 16,
+    });
+    expect(result[0].checkoutAt).toBe(
+      zonedTimeToUtc(2026, 6, 3, 10, 0, "America/Los_Angeles").toISOString(),
+    );
   });
 
   it("skips blocked / unavailable events", () => {

@@ -21,6 +21,18 @@ function formatDate(iso: string) {
   });
 }
 
+function relativeTime(iso: string | null): string | null {
+  if (!iso) return null;
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diffMs / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
 function statusBadgeClass(status: string) {
   const map: Record<string, string> = {
     unassigned: "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -52,13 +64,24 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
   if (!propertyResult.data) notFound();
 
   const property = propertyResult.data;
-  const assignments = allAssignments
-    .filter((a) => a.property_id === propertyId)
-    .slice(0, 10);
+  const propertyAssignments = allAssignments.filter((a) => a.property_id === propertyId);
+  const assignments = propertyAssignments.slice(0, 10);
 
   const activeAssignments = assignments.filter(
     (a) => !["approved", "cancelled"].includes(a.status),
   );
+
+  const now = Date.now();
+  const upcomingCount = propertyAssignments.filter(
+    (a) =>
+      !["approved", "cancelled"].includes(a.status) &&
+      new Date(a.due_at).getTime() >= now,
+  ).length;
+  const lastSyncedAt = calendarSources
+    .map((s) => s.last_synced_at)
+    .filter((v): v is string => typeof v === "string")
+    .sort()
+    .pop() ?? null;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-10">
@@ -142,9 +165,11 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
             icon: CalendarDays,
             label: calendarSources.length > 0 ? "Calendar sync" : "Add iCal",
             sub:
-              calendarSources.length > 0
-                ? `${calendarSources.length} source${calendarSources.length === 1 ? "" : "s"} connected`
-                : "Auto-create from bookings",
+              calendarSources.length === 0
+                ? "Auto-create from bookings"
+                : lastSyncedAt
+                  ? `Synced ${relativeTime(lastSyncedAt)} · ${upcomingCount} upcoming`
+                  : "Connected — not synced yet",
             badge:
               calendarSources.length > 0 ? String(calendarSources.length) : null,
           },
