@@ -150,66 +150,96 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
         </dl>
       </section>
 
-      {/* Quick links */}
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          {
-            href: `/dashboard/assignments/new?propertyId=${propertyId}`,
-            icon: ClipboardList,
-            label: "New assignment",
-            sub: "Schedule a cleaning",
-            badge: null as string | null,
-          },
-          {
-            href: `/dashboard/calendar?propertyId=${propertyId}#add-source`,
-            icon: CalendarDays,
-            label: calendarSources.length > 0 ? "Calendar sync" : "Add iCal",
-            sub:
-              calendarSources.length === 0
-                ? "Auto-create from bookings"
-                : lastSyncedAt
-                  ? `Synced ${relativeTime(lastSyncedAt)} · ${upcomingCount} upcoming`
-                  : "Connected — not synced yet",
-            badge:
-              calendarSources.length > 0 ? String(calendarSources.length) : null,
-          },
-          {
-            href: `/dashboard/properties/${propertyId}/inventory`,
-            icon: Package,
-            label: "Inventory",
-            sub: "Manage supplies",
-            badge: null,
-          },
-          {
-            href: `/dashboard/properties/${propertyId}/edit`,
-            icon: Pencil,
-            label: "Edit property",
-            sub: "Update details",
-            badge: null,
-          },
-        ].map(({ href, icon: Icon, label, sub, badge }) => (
-          <Link
-            key={href}
-            href={href as Route}
-            className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-4 transition hover:border-primary/30 hover:shadow-sm"
-          >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-              <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <p className="flex items-center gap-2 text-sm font-medium">
-                {label}
-                {badge && (
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                    {badge}
-                  </span>
-                )}
-              </p>
-              <p className="text-xs text-muted-foreground">{sub}</p>
-            </div>
-            <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/40" />
-          </Link>
-        ))}
+      {/* Concierge — only surfaces rows that have something to act on */}
+      {(() => {
+        const rows: Array<{ href: Route; headline: string; tail: string }> = [];
+        if (calendarSources.length === 0) {
+          rows.push({
+            href: `/dashboard/calendar?propertyId=${propertyId}#add-source` as Route,
+            headline: "No iCal connected yet",
+            tail: "Add iCal →",
+          });
+        } else if (!lastSyncedAt) {
+          rows.push({
+            href: `/dashboard/calendar?propertyId=${propertyId}` as Route,
+            headline: `${calendarSources.length} source${calendarSources.length === 1 ? "" : "s"} connected — not synced yet`,
+            tail: "Sync now →",
+          });
+        } else if (upcomingCount > 0) {
+          rows.push({
+            href: `/dashboard/schedule?view=month` as Route,
+            headline: `Synced ${relativeTime(lastSyncedAt)} · ${upcomingCount} upcoming`,
+            tail: "View schedule →",
+          });
+        }
+        if (activeAssignments.length > 0) {
+          rows.push({
+            href: `/dashboard/assignments` as Route,
+            headline: `${activeAssignments.length} active assignment${activeAssignments.length === 1 ? "" : "s"}`,
+            tail: "Manage →",
+          });
+        }
+        if (rows.length === 0) {
+          return null;
+        }
+        return (
+          <section className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              At a glance
+            </p>
+            <ul className="flex flex-col">
+              {rows.map((row, i) => (
+                <li
+                  className={`${i > 0 ? "border-t border-border/40" : ""}`}
+                  key={row.headline}
+                >
+                  <Link
+                    className="flex items-center justify-between gap-4 py-3 text-sm transition hover:text-primary"
+                    href={row.href}
+                  >
+                    <span className="text-foreground">{row.headline}</span>
+                    <span className="shrink-0 text-xs font-medium text-primary">
+                      {row.tail}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })()}
+
+      {/* Quick shortcuts — smaller pill row, secondary rhythm */}
+      <section className="flex flex-wrap gap-2">
+        <Link
+          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
+          href={`/dashboard/assignments/new?propertyId=${propertyId}` as Route}
+        >
+          <ClipboardList className="h-3.5 w-3.5" /> New assignment
+        </Link>
+        <Link
+          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-4 text-xs font-medium transition hover:bg-muted"
+          href={`/dashboard/calendar?propertyId=${propertyId}#add-source` as Route}
+        >
+          <CalendarDays className="h-3.5 w-3.5" /> Calendar sync
+          {calendarSources.length > 0 && (
+            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+              {calendarSources.length}
+            </span>
+          )}
+        </Link>
+        <Link
+          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-4 text-xs font-medium transition hover:bg-muted"
+          href={`/dashboard/properties/${propertyId}/inventory` as Route}
+        >
+          <Package className="h-3.5 w-3.5" /> Inventory
+        </Link>
+        <Link
+          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-4 text-xs font-medium transition hover:bg-muted"
+          href={`/dashboard/properties/${propertyId}/edit` as Route}
+        >
+          <Pencil className="h-3.5 w-3.5" /> Edit
+        </Link>
       </section>
 
       {/* Recent assignments */}

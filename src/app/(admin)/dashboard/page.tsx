@@ -27,6 +27,10 @@ import { listProperties } from "@/lib/queries/properties";
 import { listActiveCleaners } from "@/lib/queries/team";
 import { TodayJobsTimeline, AtRiskSection } from "@/components/dashboard/today-jobs-timeline";
 import { DashboardWeekCalendar } from "@/components/dashboard/dashboard-week-calendar";
+import { FirstRunWizard } from "@/components/dashboard/first-run-wizard";
+import { RightNowHero } from "@/components/dashboard/right-now-hero";
+import { listCalendarSources } from "@/lib/queries/calendar";
+import { listAllTeamMembers } from "@/lib/queries/team";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -79,6 +83,8 @@ export default async function DashboardPage() {
     weekAssignments,
     propertiesResult,
     cleaners,
+    calendarSources,
+    allTeamMembers,
   ] = await Promise.all([
     getDashboardStats(),
     listTodaysAssignmentsForAdmin(),
@@ -88,9 +94,27 @@ export default async function DashboardPage() {
     listAssignmentsForSchedule(weekStart.toISOString(), weekEnd.toISOString()),
     listProperties(),
     listActiveCleaners(),
+    listCalendarSources(),
+    listAllTeamMembers(),
   ]);
 
   const firstName = profile.full_name.split(" ")[0];
+  const hasProperty = propertiesResult.data.length > 0;
+  const hasCalendarSource = calendarSources.length > 0;
+  const hasCleaner = allTeamMembers.some(
+    (m) => m.role === "cleaner" && m.id !== profile.id,
+  );
+
+  // First-run: short-circuit the dashboard when nothing is set up yet.
+  if (!hasProperty) {
+    return (
+      <FirstRunWizard
+        firstName={firstName}
+        steps={{ hasProperty, hasCalendarSource, hasCleaner }}
+      />
+    );
+  }
+
   const hasExceptions =
     exceptions.open_issues > 0 ||
     exceptions.pending_recleans > 0 ||
@@ -128,67 +152,78 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* KPI strip */}
-        <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
-          {[
-            {
-              label: "Checkouts today",
-              value: stats.checkoutsToday,
-              href: "/dashboard/schedule",
-              color: stats.checkoutsToday > 0 ? "text-primary" : "",
-              urgent: false,
-            },
-            {
-              label: "Cleanings due",
-              value: stats.cleaningsDueToday,
-              href: "/dashboard/schedule",
-              color: "",
-              urgent: false,
-            },
-            {
-              label: "Unassigned",
-              value: stats.unassigned,
-              href: "/dashboard/assignments",
-              color: stats.unassigned > 0 ? "text-amber-600" : "",
-              urgent: stats.unassigned > 0,
-            },
-            {
-              label: "In progress",
-              value: stats.inProgress,
-              href: "/dashboard/assignments",
-              color: stats.inProgress > 0 ? "text-orange-600" : "",
-              urgent: false,
-            },
-            {
-              label: "Pending review",
-              value: stats.pendingReview,
-              href: "/dashboard/review",
-              color: stats.pendingReview > 0 ? "text-purple-600" : "",
-              urgent: false,
-            },
-            {
-              label: "At risk",
-              value: stats.atRisk,
-              href: "/dashboard/assignments",
-              color: stats.atRisk > 0 ? "text-destructive" : "",
-              urgent: stats.atRisk > 0,
-            },
-          ].map(({ label, value, href, color, urgent }) => (
-            <Link
-              key={label}
-              href={href as Route}
-              className={`flex flex-col rounded-xl border px-4 py-3 transition hover:shadow-sm ${
-                urgent
-                  ? "border-amber-200 bg-amber-50 hover:border-amber-300"
-                  : "border-border/70 bg-background/60 hover:border-primary/30"
-              }`}
-            >
-              <span className="text-xs text-muted-foreground">{label}</span>
-              <span className={`mt-1 text-2xl font-semibold tabular-nums tracking-tight ${color}`}>
-                {value}
-              </span>
-            </Link>
-          ))}
+        {/* KPI strip — 3 calm tiles, no six-number wall */}
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {(() => {
+            const needsAction = stats.unassigned + stats.atRisk;
+            const inFlight = stats.inProgress;
+            const pending = stats.pendingReview;
+            const tiles: Array<{
+              label: string;
+              value: number;
+              sub: string;
+              href: Route;
+              tone: "urgent" | "neutral" | "attention";
+            }> = [
+              {
+                label: "Needs action",
+                value: needsAction,
+                sub:
+                  stats.unassigned > 0 && stats.atRisk > 0
+                    ? `${stats.unassigned} unassigned · ${stats.atRisk} overdue`
+                    : stats.unassigned > 0
+                      ? `${stats.unassigned} unassigned`
+                      : stats.atRisk > 0
+                        ? `${stats.atRisk} overdue`
+                        : "Nothing urgent",
+                href: "/dashboard/assignments" as Route,
+                tone: needsAction > 0 ? "urgent" : "neutral",
+              },
+              {
+                label: "In flight",
+                value: inFlight,
+                sub: inFlight > 0 ? "Cleaners currently on-site" : "Quiet day",
+                href: "/dashboard/schedule" as Route,
+                tone: "neutral",
+              },
+              {
+                label: "Awaiting approval",
+                value: pending,
+                sub: pending > 0 ? "Review photos & mark ready" : "No reviews pending",
+                href: "/dashboard/review" as Route,
+                tone: pending > 0 ? "attention" : "neutral",
+              },
+            ];
+            return tiles.map((t) => (
+              <Link
+                className={`group flex flex-col gap-1 rounded-2xl border px-5 py-4 transition hover:shadow-sm ${
+                  t.tone === "urgent"
+                    ? "border-amber-300 bg-amber-50 hover:border-amber-400"
+                    : t.tone === "attention"
+                      ? "border-purple-200 bg-purple-50 hover:border-purple-300"
+                      : "border-border/70 bg-background/60 hover:border-primary/30"
+                }`}
+                href={t.href}
+                key={t.label}
+              >
+                <span className="text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">
+                  {t.label}
+                </span>
+                <span
+                  className={`text-4xl font-semibold leading-tight tabular-nums tracking-tight ${
+                    t.tone === "urgent"
+                      ? "text-amber-800"
+                      : t.tone === "attention"
+                        ? "text-purple-800"
+                        : "text-foreground"
+                  }`}
+                >
+                  {t.value}
+                </span>
+                <span className="text-xs text-muted-foreground">{t.sub}</span>
+              </Link>
+            ));
+          })()}
         </div>
       </div>
 
@@ -292,6 +327,15 @@ export default async function DashboardPage() {
         {/* Main content */}
         <main className="flex-1 overflow-y-auto px-6 py-6">
           <div className="mx-auto flex max-w-6xl flex-col gap-8">
+
+            {/* Right now — one calm sentence answering "what matters most?" */}
+            <RightNowHero
+              atRiskJobs={atRiskJobs}
+              pendingReviewCount={stats.pendingReview}
+              todaysJobs={todaysJobs}
+              unassignedCount={stats.unassigned}
+              weekAssignments={weekAssignments}
+            />
 
             {/* Week calendar — first thing host sees */}
             <DashboardWeekCalendar
