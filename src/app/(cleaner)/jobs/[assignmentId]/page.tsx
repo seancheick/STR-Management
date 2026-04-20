@@ -5,7 +5,10 @@ import { Info } from "lucide-react";
 import { requireRole } from "@/lib/auth/session";
 import { getAssignmentDetail } from "@/lib/queries/assignments";
 import { listInventoryForProperty } from "@/lib/queries/issues";
+import { listJobMessages } from "@/lib/queries/job-messages";
 import { getProperty } from "@/lib/queries/properties";
+import { JobMessageThread } from "@/components/chat/job-message-thread";
+import { JobQuickActions } from "@/components/cleaner/job-quick-actions";
 import { addCleanerNoteAction, reportIssueAction, requestRestockAction } from "@/app/(cleaner)/jobs/actions";
 import { summarizeReviewEvidence } from "@/lib/services/review-evidence";
 import { ChecklistSection } from "@/components/assignments/checklist-section";
@@ -39,9 +42,10 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
     notFound();
   }
 
-  const [inventoryItems, propertyResult] = await Promise.all([
+  const [inventoryItems, propertyResult, messages] = await Promise.all([
     listInventoryForProperty(assignment.property_id),
     getProperty(assignment.property_id),
+    listJobMessages(assignmentId),
   ]);
   const cleanerNotes = propertyResult.data?.cleaner_notes ?? null;
 
@@ -95,6 +99,18 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
         </h1>
         <p className="text-sm text-muted-foreground">Due: {formatDate(assignment.due_at)}</p>
       </div>
+
+      {/* Quick actions — maps, running late, decline */}
+      <JobQuickActions
+        address={[
+          assignment.properties?.address_line_1,
+          assignment.properties?.city,
+        ]
+          .filter(Boolean)
+          .join(", ") || null}
+        assignmentId={assignmentId}
+        status={assignment.status}
+      />
 
       {/* Cleaner notes — property-specific instructions */}
       {cleanerNotes && (
@@ -202,6 +218,13 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
           Unit marked ready. The manager dashboard now shows this unit as ready.
         </section>
       )}
+
+      {/* Per-job chat thread */}
+      <JobMessageThread
+        assignmentId={assignmentId}
+        currentUserId={profile.id}
+        messages={messages}
+      />
     </main>
   );
 }

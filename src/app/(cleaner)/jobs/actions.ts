@@ -48,6 +48,122 @@ export async function acceptJobAction(
   return { success: true };
 }
 
+const declineReasonLabels: Record<string, string> = {
+  sick: "called out sick",
+  conflict: "has a conflict",
+  distance: "is too far away",
+  other: "declined the job",
+};
+
+/**
+ * Cleaner declines an assigned job. Unassigns on the DB, appends a system
+ * message to the job thread explaining why, so the owner sees the reason next
+ * time they open the assignment.
+ */
+export async function declineJobAction(
+  assignmentId: string,
+  reason: string,
+): Promise<CleanerActionResult & { suggestedCleanerId?: string | null }> {
+  const profile = await requireRole(["cleaner", "owner", "admin", "supervisor"]);
+  const supabase = await createServerSupabaseClient();
+
+  const { data: current } = await supabase
+    .from("assignments")
+    .select("id, cleaner_id, status, property_id, due_at")
+    .eq("id", assignmentId)
+    .maybeSingle();
+
+  if (!current) {
+    return { success: false, error: "Assignment not found." };
+  }
+
+  if (profile.role === "cleaner" && current.cleaner_id !== profile.id) {
+    return { success: false, error: "You can only decline your own jobs." };
+  }
+
+  if (current.status !== "assigned" && current.status !== "confirmed") {
+    return { success: false, error: "Only assigned or confirmed jobs can be declined." };
+  }
+
+  const { error: updateError } = await supabase
+    .from("assignments")
+    .update({
+      cleaner_id: null,
+      status: "unassigned",
+      ack_status: "declined",
+    })
+    .eq("id", assignmentId);
+
+  if (updateError) {
+    return { success: false, error: updateError.message };
+  }
+
+  const reasonLabel = declineReasonLabels[reason] ?? declineReasonLabels.other;
+  await supabase.from("job_messages").insert({
+    assignment_id: assignmentId,
+    author_id: profile.id,
+    author_role: profile.role,
+    body: reasonLabel,
+    message_type: "decline",
+    metadata: { reason },
+  });
+
+  // Auto-suggest the next cleaner: the property's default cleaner if set,
+  // otherwise the first active cleaner. This is a hint — owner still confirms.
+  const { data: property } = await supabase
+    .from("properties")
+    .select("default_cleaner_id")
+    .eq("id", current.property_id)
+    .maybeSingle();
+
+  let suggested: string | null = property?.default_cleaner_id ?? null;
+  if (suggested === profile.id) suggested = null; // don't suggest the decliner
+
+  if (!suggested) {
+    const { data: firstActive } = await supabase
+      .from("users")
+      .select("id")
+      .eq("role", "cleaner")
+      .eq("active", true)
+      .neq("id", profile.id)
+      .limit(1)
+      .maybeSingle();
+    suggested = firstActive?.id ?? null;
+  }
+
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${assignmentId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/assignments");
+  revalidatePath("/dashboard/schedule");
+  return { success: true, suggestedCleanerId: suggested };
+}
+
+/** Cleaner signals they're running late. Posts a system message for the owner. */
+export async function runningLateAction(
+  assignmentId: string,
+  etaMinutes: number,
+): Promise<CleanerActionResult> {
+  const profile = await requireRole(["cleaner", "owner", "admin", "supervisor"]);
+  const supabase = await createServerSupabaseClient();
+
+  const body = `running late — ETA ${etaMinutes} min`;
+  const { error } = await supabase.from("job_messages").insert({
+    assignment_id: assignmentId,
+    author_id: profile.id,
+    author_role: profile.role,
+    body,
+    message_type: "running_late",
+    metadata: { eta_minutes: etaMinutes },
+  });
+
+  if (error) return { success: false, error: error.message };
+
+  revalidatePath(`/jobs/${assignmentId}`);
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
 export async function startJobAction(
   assignmentId: string,
 ): Promise<CleanerActionResult> {
