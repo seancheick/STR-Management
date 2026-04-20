@@ -1,3 +1,5 @@
+import { AlertTriangle } from "lucide-react";
+
 import { SignInForm } from "@/components/auth/sign-in-form";
 
 type SignInPageProps = {
@@ -8,6 +10,8 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = (await searchParams) ?? {};
   const redirectTo =
     typeof params.redirectTo === "string" ? params.redirectTo : undefined;
+  const authError =
+    typeof params.authError === "string" ? params.authError : undefined;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md items-center px-6 py-12">
@@ -21,6 +25,12 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             Use your team credentials to access the admin dashboard or cleaner jobs.
           </p>
         </div>
+        {authError && (
+          <div className="mb-5 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+            <span>{authError}</span>
+          </div>
+        )}
         <SignInForm redirectTo={redirectTo} />
       </div>
     </main>

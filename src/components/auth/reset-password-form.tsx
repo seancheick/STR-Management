@@ -1,9 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LoaderCircle } from "lucide-react";
+import { AlertTriangle, LoaderCircle } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import type { Route } from "next";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -22,11 +23,14 @@ const resetPasswordSchema = z
 
 type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
 
+type SessionState = "checking" | "ready" | "missing";
+
 export function ResetPasswordForm() {
   const [status, setStatus] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [sessionState, setSessionState] = useState<SessionState>("checking");
   const form = useForm<ResetPasswordValues>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
@@ -34,6 +38,28 @@ export function ResetPasswordForm() {
       confirmPassword: "",
     },
   });
+
+  useEffect(() => {
+    const supabase = createBrowserSupabaseClient();
+    let cancelled = false;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      setSessionState(data.session ? "ready" : "missing");
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      if (event === "PASSWORD_RECOVERY" || session) {
+        setSessionState("ready");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
 
   const onSubmit = form.handleSubmit(async (values) => {
     setStatus(null);
@@ -54,6 +80,44 @@ export function ResetPasswordForm() {
       message: "Password updated. You can sign in with the new password.",
     });
   });
+
+  if (sessionState === "checking") {
+    return (
+      <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+        <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+        Verifying reset link…
+      </div>
+    );
+  }
+
+  if (sessionState === "missing") {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="font-medium">Reset link expired or already used.</p>
+            <p className="text-xs text-amber-800/80">
+              Password reset links can only be opened once, in the same browser that
+              requested them. Request a fresh link to continue.
+            </p>
+          </div>
+        </div>
+        <Link
+          className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary text-sm font-semibold text-[#f7f5ef]"
+          href={"/forgot-password" as Route}
+        >
+          Request a new reset link
+        </Link>
+        <Link
+          className="block text-center text-sm font-medium text-primary underline-offset-2 hover:underline"
+          href="/sign-in"
+        >
+          Back to sign in
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <form className="space-y-5" onSubmit={onSubmit}>
