@@ -200,6 +200,82 @@ export type CleanerStatement = {
   subtotal: number;
 };
 
+/**
+ * Total dollars owed but not yet paid: sum of included entries with no paid_at
+ * plus approved assignments with a fixed_payout_amount that are not yet in any
+ * included entry. Used for the dashboard pending-payout tile.
+ */
+export async function getPendingPayoutTotal(): Promise<{
+  amount: number;
+  unpaidEntries: number;
+  orphanAssignments: number;
+}> {
+  const supabase = await createServerSupabaseClient();
+
+  const [entriesRes, orphansRes] = await Promise.all([
+    supabase
+      .from("payout_entries")
+      .select("amount")
+      .eq("status", "included")
+      .is("paid_at", null),
+    supabase
+      .from("assignments")
+      .select("fixed_payout_amount")
+      .eq("status", "approved")
+      .not("fixed_payout_amount", "is", null)
+      .not(
+        "id",
+        "in",
+        `(select assignment_id from payout_entries where status = 'included')`,
+      ),
+  ]);
+
+  const entries = (entriesRes.data as Array<{ amount: number }> | null) ?? [];
+  const orphans =
+    (orphansRes.data as Array<{ fixed_payout_amount: number | null }> | null) ??
+    [];
+
+  const entriesTotal = entries.reduce((sum, e) => sum + Number(e.amount), 0);
+  const orphansTotal = orphans.reduce(
+    (sum, a) => sum + Number(a.fixed_payout_amount ?? 0),
+    0,
+  );
+
+  return {
+    amount: entriesTotal + orphansTotal,
+    unpaidEntries: entries.length,
+    orphanAssignments: orphans.length,
+  };
+}
+
+/**
+ * All payout entries for a given cleaner in a given year, for tax/1099
+ * preparation. Includes property name and due date from the assignment.
+ */
+export async function listCleanerPayoutsForYear(
+  cleanerId: string,
+  year: number,
+): Promise<PayoutEntryRecord[]> {
+  const supabase = await createServerSupabaseClient();
+  const start = new Date(Date.UTC(year, 0, 1)).toISOString();
+  const end = new Date(Date.UTC(year + 1, 0, 1)).toISOString();
+
+  const { data } = await supabase
+    .from("payout_entries")
+    .select(
+      `*,
+       properties(name),
+       assignments(due_at, assignment_type, expected_duration_min)`,
+    )
+    .eq("cleaner_id", cleanerId)
+    .eq("status", "included")
+    .gte("created_at", start)
+    .lt("created_at", end)
+    .order("created_at", { ascending: true });
+
+  return (data as unknown as PayoutEntryRecord[] | null) ?? [];
+}
+
 export function groupEntriesByClean(
   entries: PayoutEntryRecord[],
 ): CleanerStatement[] {

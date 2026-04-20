@@ -1,9 +1,16 @@
 "use client";
 
+import { FileText } from "lucide-react";
+import type { Route } from "next";
+import Link from "next/link";
 import { useTransition } from "react";
 
 import type { TeamMemberRecord } from "@/lib/queries/team";
-import { toggleMemberActiveAction, updateMemberRoleAction } from "@/app/(admin)/dashboard/team/actions";
+import {
+  toggleContractorFlagAction,
+  toggleMemberActiveAction,
+  updateMemberRoleAction,
+} from "@/app/(admin)/dashboard/team/actions";
 import { showToast } from "@/components/ui/toast";
 
 const ROLES = ["cleaner", "supervisor", "admin"];
@@ -28,6 +35,15 @@ export function TeamMemberRow({ member }: Props) {
           member.active ? `${member.full_name} deactivated.` : `${member.full_name} reactivated.`,
         );
       }
+    });
+  }
+
+  function handleToggleContractor() {
+    const next = !member.is_1099_contractor;
+    startTransition(async () => {
+      const result = await toggleContractorFlagAction(member.id, next);
+      if (result.error) showToast(result.error, "error");
+      else showToast(next ? "Marked as 1099 contractor." : "Cleared contractor flag.");
     });
   }
 
@@ -69,6 +85,34 @@ export function TeamMemberRow({ member }: Props) {
           <option key={r} value={r}>{r}</option>
         ))}
       </select>
+
+      {member.role === "cleaner" && (
+        <>
+          <button
+            aria-pressed={member.is_1099_contractor ?? false}
+            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition hover:opacity-80 disabled:opacity-60 ${
+              member.is_1099_contractor
+                ? "border-amber-300 bg-amber-50 text-amber-800"
+                : "border-border text-muted-foreground"
+            }`}
+            disabled={isPending}
+            onClick={handleToggleContractor}
+            type="button"
+          >
+            1099
+          </button>
+          <Link
+            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+            href={
+              `/dashboard/payouts/export/${member.id}/${new Date().getFullYear()}` as Route
+            }
+            target="_blank"
+          >
+            <FileText className="h-3 w-3" />
+            Annual export
+          </Link>
+        </>
+      )}
 
       <button
         className={`rounded-full border px-3 py-1.5 text-xs font-medium transition hover:opacity-80 disabled:opacity-60 ${

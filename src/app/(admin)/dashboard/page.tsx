@@ -31,6 +31,7 @@ import { FirstRunWizard } from "@/components/dashboard/first-run-wizard";
 import { RightNowHero } from "@/components/dashboard/right-now-hero";
 import { WeeklyRecapCard } from "@/components/dashboard/weekly-recap-card";
 import { getWeeklyRecap } from "@/lib/queries/recap";
+import { getPendingPayoutTotal } from "@/lib/queries/payouts";
 import { listCalendarSources } from "@/lib/queries/calendar";
 import { listAllTeamMembers } from "@/lib/queries/team";
 
@@ -100,7 +101,10 @@ export default async function DashboardPage() {
     listAllTeamMembers(),
   ]);
 
-  const recap = await getWeeklyRecap();
+  const [recap, pendingPayout] = await Promise.all([
+    getWeeklyRecap(),
+    getPendingPayoutTotal(),
+  ]);
 
   const firstName = profile.full_name.split(" ")[0];
   const hasProperty = propertiesResult.data.length > 0;
@@ -349,8 +353,28 @@ export default async function DashboardPage() {
               properties={propertiesResult.data}
             />
 
-            {/* Last 7 days recap */}
-            <WeeklyRecapCard recap={recap} />
+            {/* Last 7 days recap + Pending payout */}
+            <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+              <WeeklyRecapCard recap={recap} />
+              {pendingPayout.amount > 0 && (
+                <Link
+                  className="flex min-w-[220px] flex-col justify-center gap-1 rounded-2xl border border-amber-200 bg-amber-50 px-6 py-5 transition hover:border-amber-300 hover:shadow-sm"
+                  href={"/dashboard/payouts" as Route}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-amber-700">
+                    Pending payout
+                  </p>
+                  <p className="text-3xl font-semibold tabular-nums text-amber-900">
+                    ${pendingPayout.amount.toFixed(2)}
+                  </p>
+                  <p className="text-xs text-amber-800/80">
+                    {pendingPayout.unpaidEntries} unpaid
+                    {pendingPayout.orphanAssignments > 0 &&
+                      ` · ${pendingPayout.orphanAssignments} un-batched`}
+                  </p>
+                </Link>
+              )}
+            </div>
 
             {/* Today's jobs — interactive, drawer on click */}
             <section aria-label="Today's jobs">

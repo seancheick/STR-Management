@@ -70,6 +70,21 @@ export async function toggleMemberActiveAction(
   return { error: error?.message ?? null };
 }
 
+// ─── Toggle 1099 contractor flag ──────────────────────────────────────────────
+export async function toggleContractorFlagAction(
+  memberId: string,
+  is1099: boolean,
+): Promise<TeamActionResult> {
+  await requireRole(["owner", "admin"]);
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("users")
+    .update({ is_1099_contractor: is1099 })
+    .eq("id", memberId);
+  revalidatePath("/dashboard/team");
+  return { error: error?.message ?? null };
+}
+
 // ─── Update role ──────────────────────────────────────────────────────────────
 export async function updateMemberRoleAction(
   memberId: string,

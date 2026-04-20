@@ -10,6 +10,7 @@ export type TeamMemberRecord = {
   phone: string | null;
   active: boolean;
   availability: string | null;
+  is_1099_contractor?: boolean;
   created_at: string;
 };
 
@@ -17,7 +18,7 @@ export async function listCleaners(): Promise<TeamMemberRecord[]> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("users")
-    .select("id, email, full_name, role, phone, active, availability, created_at")
+    .select("id, email, full_name, role, phone, active, availability, is_1099_contractor, created_at")
     .eq("role", "cleaner")
     .order("full_name");
 
@@ -28,7 +29,7 @@ export async function listActiveCleaners(): Promise<TeamMemberRecord[]> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("users")
-    .select("id, email, full_name, role, phone, active, availability, created_at")
+    .select("id, email, full_name, role, phone, active, availability, is_1099_contractor, created_at")
     .eq("role", "cleaner")
     .eq("active", true)
     .order("full_name");
@@ -40,7 +41,7 @@ export async function listAllTeamMembers(): Promise<TeamMemberRecord[]> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("users")
-    .select("id, email, full_name, role, phone, active, availability, created_at")
+    .select("id, email, full_name, role, phone, active, availability, is_1099_contractor, created_at")
     .order("role")
     .order("full_name");
 
