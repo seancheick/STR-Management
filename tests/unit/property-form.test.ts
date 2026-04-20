@@ -44,6 +44,7 @@ describe("parsePropertyFormData", () => {
       active: true,
       timezone: null,
       cleanerNotes: null,
+      guestWelcomeTemplate: null,
     });
   });
 

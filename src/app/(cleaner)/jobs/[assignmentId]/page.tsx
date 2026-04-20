@@ -9,6 +9,7 @@ import { listJobMessages } from "@/lib/queries/job-messages";
 import { getProperty } from "@/lib/queries/properties";
 import { JobMessageThread } from "@/components/chat/job-message-thread";
 import { JobQuickActions } from "@/components/cleaner/job-quick-actions";
+import { AccessCodeCard } from "@/components/cleaner/access-code-card";
 import { addCleanerNoteAction, reportIssueAction, requestRestockAction } from "@/app/(cleaner)/jobs/actions";
 import { summarizeReviewEvidence } from "@/lib/services/review-evidence";
 import { ChecklistSection } from "@/components/assignments/checklist-section";
@@ -111,6 +112,11 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
         assignmentId={assignmentId}
         status={assignment.status}
       />
+
+      {/* Access code — door / gate code for this booking */}
+      {assignment.access_code && (
+        <AccessCodeCard accessCode={assignment.access_code} />
+      )}
 
       {/* Cleaner notes — property-specific instructions */}
       {cleanerNotes && (

@@ -30,6 +30,7 @@ export type EditableAssignment = {
   cleaner_id: string | null;
   expected_duration_min: number | null;
   fixed_payout_amount: number | null;
+  access_code?: string | null;
 };
 
 const rescheduleInitial: RescheduleState = { status: "idle", message: null };
@@ -206,6 +207,20 @@ export function AssignmentEditForm({
             />
           </label>
         </div>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Door / gate code <span className="opacity-60">(visible to cleaner only)</span>
+          </span>
+          <input
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-mono"
+            defaultValue={assignment.access_code ?? ""}
+            maxLength={64}
+            name="accessCode"
+            placeholder="e.g. 4287 or #1234"
+            type="text"
+          />
+        </label>
 
         <div className="mt-1 flex items-center gap-2">
           <button

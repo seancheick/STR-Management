@@ -230,6 +230,24 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           />
           <FieldError errors={state.fieldErrors?.cleanerNotes} />
         </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <label className="text-sm font-medium" htmlFor="guestWelcomeTemplate">
+            Guest welcome template
+            <span className="ml-2 font-normal text-muted-foreground">
+              (for the arrival message you send guests — WiFi, gate code, quiet hours)
+            </span>
+          </label>
+          <textarea
+            className="min-h-28 w-full rounded-xl border border-input bg-background px-4 py-3 text-sm"
+            defaultValue={property?.guest_welcome_template ?? ""}
+            id="guestWelcomeTemplate"
+            name="guestWelcomeTemplate"
+            placeholder={`Hi [guest name]! Welcome to [property]. Your check-in is any time after 3pm.\n\nGate code: 1234\nWiFi: Lakeview-Guest / PW: 55Lake!\nQuiet hours: 10pm – 8am\n\nText me at [phone] if anything comes up.`}
+            rows={5}
+          />
+          <FieldError errors={state.fieldErrors?.guestWelcomeTemplate} />
+        </div>
       </section>
 
       <label className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3">

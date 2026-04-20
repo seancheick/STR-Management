@@ -15,6 +15,7 @@ export type AssignmentListRecord = {
   due_at: string;
   expected_duration_min: number | null;
   fixed_payout_amount: number | null;
+  access_code: string | null;
   created_at: string;
   properties: { name: string; address_line_1: string | null; city: string | null } | null;
   cleaners: { full_name: string } | null;
@@ -73,7 +74,7 @@ export type AssignmentDetailIssueRecord = {
 const ASSIGNMENT_LIST_SELECT = `
   id, owner_id, property_id, cleaner_id, assignment_type,
   status, ack_status, priority, checkout_at, due_at,
-  expected_duration_min, fixed_payout_amount, created_at,
+  expected_duration_min, fixed_payout_amount, access_code, created_at,
   properties:property_id ( name, address_line_1, city ),
   cleaners:cleaner_id ( full_name )
 `.trim();
@@ -252,6 +253,7 @@ export type AssignmentScheduleRecord = {
   due_at: string;
   expected_duration_min: number | null;
   fixed_payout_amount: number | null;
+  access_code: string | null;
   properties: { name: string; address_line_1: string | null; city: string | null } | null;
   cleaners: { full_name: string } | null;
 };
@@ -259,6 +261,7 @@ export type AssignmentScheduleRecord = {
 const SCHEDULE_SELECT = `
   id, property_id, cleaner_id, status, priority,
   checkout_at, due_at, expected_duration_min, fixed_payout_amount,
+  access_code,
   properties:property_id ( name, address_line_1, city ),
   cleaners:cleaner_id ( full_name )
 `.trim();

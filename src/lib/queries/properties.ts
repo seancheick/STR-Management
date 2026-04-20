@@ -21,6 +21,7 @@ export type PropertyRecord = {
   active: boolean;
   timezone: string | null;
   cleaner_notes: string | null;
+  guest_welcome_template: string | null;
   created_at: string;
 };
 
@@ -50,6 +51,7 @@ export const listProperties = cache(async (): Promise<PropertiesQueryResult> => 
         "active",
         "timezone",
         "cleaner_notes",
+        "guest_welcome_template",
         "created_at",
       ].join(","),
     )
@@ -82,6 +84,7 @@ export async function getProperty(propertyId: string) {
         "active",
         "timezone",
         "cleaner_notes",
+        "guest_welcome_template",
         "created_at",
       ].join(","),
     )

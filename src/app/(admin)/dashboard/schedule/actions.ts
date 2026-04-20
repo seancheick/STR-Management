@@ -84,6 +84,12 @@ const rescheduleSchema = z.object({
     .refine((v) => v === null || (Number.isFinite(v) && v > 0), {
       message: "Payout must be positive.",
     }),
+  accessCode: z
+    .string()
+    .trim()
+    .max(64)
+    .transform((v) => (v.length > 0 ? v : null))
+    .nullable(),
 });
 
 export type RescheduleState = {
@@ -105,6 +111,7 @@ export async function rescheduleAssignmentAction(
     priority: formData.get("priority") ?? "normal",
     expectedDurationMin: formData.get("expectedDurationMin") ?? "",
     fixedPayoutAmount: formData.get("fixedPayoutAmount") ?? "",
+    accessCode: formData.get("accessCode") ?? "",
   });
 
   if (!parsed.success) {
@@ -149,6 +156,7 @@ export async function rescheduleAssignmentAction(
     priority: data.priority,
     expected_duration_min: data.expectedDurationMin,
     fixed_payout_amount: data.fixedPayoutAmount,
+    access_code: data.accessCode,
   };
 
   if (data.cleanerId === null && current.cleaner_id !== null) {

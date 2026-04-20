@@ -57,6 +57,7 @@ export async function createPropertyAction(
       active: values.active,
       timezone: values.timezone,
       cleaner_notes: values.cleanerNotes,
+      guest_welcome_template: values.guestWelcomeTemplate,
     });
 
     if (error) {

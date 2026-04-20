@@ -15,6 +15,7 @@ export function parsePropertyFormData(formData: FormData) {
     active: formData.get("active") === "on",
     timezone: formData.get("timezone"),
     cleanerNotes: formData.get("cleanerNotes"),
+    guestWelcomeTemplate: formData.get("guestWelcomeTemplate"),
   });
 }
 
