@@ -84,7 +84,7 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
     .pop() ?? null;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-10">
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-6 py-10">
       {/* Breadcrumb + header */}
       <div className="flex flex-col gap-3">
         <Link className="text-sm text-muted-foreground hover:text-foreground" href="/dashboard/properties">

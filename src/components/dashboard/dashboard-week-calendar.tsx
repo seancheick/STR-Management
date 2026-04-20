@@ -1,13 +1,13 @@
 "use client";
 
-import { AlertTriangle, LogOut, LogIn, Sparkles, X } from "lucide-react";
+import { AlertTriangle, LogOut, LogIn, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { isTightTurnover } from "@/lib/domain/assignments";
-import { AssignmentEditForm } from "@/components/schedule/assignment-edit-form";
+import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
 
 type Pill =
   | {
@@ -239,50 +239,12 @@ export function DashboardWeekCalendar({
         </table>
       </div>
 
-      {/* Edit drawer */}
-      {selected && (
-        <>
-          <div
-            aria-hidden="true"
-            className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-[2px]"
-            onClick={() => setSelectedId(null)}
-          />
-          <aside
-            aria-label="Edit assignment"
-            aria-modal="true"
-            className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-y-auto bg-card shadow-2xl"
-            role="dialog"
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-border/60 px-5 py-4">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                  Edit assignment
-                </p>
-                <h2 className="mt-0.5 text-lg font-semibold">
-                  {selected.properties?.name ?? "Assignment"}
-                </h2>
-              </div>
-              <button
-                aria-label="Close"
-                className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted"
-                onClick={() => setSelectedId(null)}
-                type="button"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex-1 px-5 py-5">
-              <AssignmentEditForm
-                assignment={selected}
-                cleaners={cleaners}
-                onCancel={() => setSelectedId(null)}
-                onDeleted={() => setSelectedId(null)}
-                onSaved={() => setSelectedId(null)}
-              />
-            </div>
-          </aside>
-        </>
-      )}
+      {/* Slide-in edit sheet */}
+      <AssignmentDrawerSheet
+        assignment={selected}
+        cleaners={cleaners}
+        onClose={() => setSelectedId(null)}
+      />
     </section>
   );
 }

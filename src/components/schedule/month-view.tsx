@@ -9,6 +9,7 @@ import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { AssignmentEditForm } from "@/components/schedule/assignment-edit-form";
+import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
 import {
   unassignCleanerAction,
   type QuickAssignState,
@@ -456,14 +457,12 @@ export function MonthView({
         </table>
       </div>
 
-      {/* Selected assignment detail panel */}
-      {selectedAssignment && (
-        <DetailPanel
-          assignment={selectedAssignment}
-          cleaners={cleaners}
-          onClose={() => setSelectedId(null)}
-        />
-      )}
+      {/* Slide-in edit sheet */}
+      <AssignmentDrawerSheet
+        assignment={selectedAssignment}
+        cleaners={cleaners}
+        onClose={() => setSelectedId(null)}
+      />
 
       {/* Status legend */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">

@@ -20,20 +20,21 @@ type NewAssignmentFormProps = {
 
 const initialState: AssignmentActionState = { status: "idle", message: null };
 
-// Chips: how many hours after checkout until next guest checks in
+// Chips: which day the next guest checks in on. All land at 3 PM local (standard
+// Airbnb check-in time) so clicking "Next day" never produces a weird 11 AM check-in.
 const DUE_CHIPS = [
   {
-    label: "24 hours",
+    label: "Next day 3 PM",
     key: "24h",
     hours: 24,
   },
   {
-    label: "48 hours",
+    label: "+2 days 3 PM",
     key: "48h",
     hours: 48,
   },
   {
-    label: "72 hours",
+    label: "+3 days 3 PM",
     key: "72h",
     hours: 72,
   },
@@ -43,6 +44,17 @@ function addHours(isoString: string, hours: number): Date {
   const d = new Date(isoString);
   d.setTime(d.getTime() + hours * 60 * 60 * 1000);
   return d;
+}
+
+/**
+ * Chips compute "next guest check-in N hours after checkout" but the target
+ * should land on the *next check-in standard time* (3 PM local), not blindly
+ * `checkout + N hours` which would land on 11 AM again.
+ */
+function snapToCheckinHour(d: Date): Date {
+  const out = new Date(d);
+  out.setHours(15, 0, 0, 0);
+  return out;
 }
 
 type ChipKey = (typeof DUE_CHIPS)[number]["key"] | null;
@@ -98,14 +110,14 @@ export function NewAssignmentForm({
     setCheckoutVal(val);
     if (activeChip && val) {
       const chip = DUE_CHIPS.find((c) => c.key === activeChip);
-      if (chip) setDueVal(toDatetimeLocal(addHours(val, chip.hours)));
+      if (chip) setDueVal(toDatetimeLocal(snapToCheckinHour(addHours(val, chip.hours))));
     }
   }
 
   function handleChipClick(chip: (typeof DUE_CHIPS)[number]) {
     if (!checkoutVal) return;
     setActiveChip(chip.key);
-    setDueVal(toDatetimeLocal(addHours(checkoutVal, chip.hours)));
+    setDueVal(toDatetimeLocal(snapToCheckinHour(addHours(checkoutVal, chip.hours))));
   }
 
   return (

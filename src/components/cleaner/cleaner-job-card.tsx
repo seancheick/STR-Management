@@ -86,10 +86,31 @@ export function CleanerJobCard({
         </div>
 
         <div className="mt-4 grid gap-2">
-          <div className="flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2">
-            <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="text-sm font-medium">{formatDateTime(assignment.due_at)}</span>
-          </div>
+          {assignment.checkout_at ? (
+            <div className="flex flex-col gap-0.5 rounded-xl bg-muted/60 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Window
+                </span>
+              </div>
+              <p className="text-xs leading-5 text-foreground">
+                <span className="text-muted-foreground">Start after</span>{" "}
+                <span className="font-semibold">{formatDateTime(assignment.checkout_at)}</span>
+              </p>
+              <p className="text-xs leading-5 text-foreground">
+                <span className="text-muted-foreground">Done by</span>{" "}
+                <span className="font-semibold">{formatDateTime(assignment.due_at)}</span>
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2">
+              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="text-sm font-medium">
+                Done by {formatDateTime(assignment.due_at)}
+              </span>
+            </div>
+          )}
           {showPayout && assignment.fixed_payout_amount !== null && (
             <div className="flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2">
               <DollarSign className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

@@ -24,6 +24,7 @@ import {
   type QuickAssignState,
 } from "@/app/(admin)/dashboard/schedule/actions";
 import { AssignmentEditForm } from "@/components/schedule/assignment-edit-form";
+import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
 import { showToast } from "@/components/ui/toast";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -537,16 +538,14 @@ export function ScheduleGrid({
         </div>
 
         {/* Detail panel */}
-        {selectedAssignment && (
-          <div className="w-72 shrink-0 rounded-2xl border border-border/70 bg-card p-5 shadow-sm">
-            <AssignmentDetailPanel
-              assignment={selectedAssignment}
-              cleaners={cleaners}
-              onClose={() => setSelectedId(null)}
-            />
-          </div>
-        )}
       </div>
+
+      {/* Slide-in edit sheet */}
+      <AssignmentDrawerSheet
+        assignment={selectedAssignment}
+        cleaners={cleaners}
+        onClose={() => setSelectedId(null)}
+      />
 
       {/* Status legend */}
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">

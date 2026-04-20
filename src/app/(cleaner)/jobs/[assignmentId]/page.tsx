@@ -98,7 +98,26 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
         <h1 className="text-3xl font-semibold tracking-tight">
           {assignment.properties?.name ?? "Job"}
         </h1>
-        <p className="text-sm text-muted-foreground">Due: {formatDate(assignment.due_at)}</p>
+        {assignment.checkout_at ? (
+          <div className="mt-1 rounded-2xl border border-border/70 bg-card px-4 py-3 text-sm">
+            <p className="text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">
+              Cleaning window
+            </p>
+            <p className="mt-1 leading-6">
+              <span className="font-semibold text-foreground">Start anytime after</span>{" "}
+              {formatDate(assignment.checkout_at)}
+            </p>
+            <p className="leading-6">
+              <span className="font-semibold text-foreground">Must be done by</span>{" "}
+              {formatDate(assignment.due_at)}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Must be done by</span>{" "}
+            {formatDate(assignment.due_at)}
+          </p>
+        )}
       </div>
 
       {/* Quick actions — maps, running late, decline */}
