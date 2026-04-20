@@ -26,17 +26,24 @@ export async function acknowledgeIssueAction(
 
 export async function resolveIssueAction(
   issueId: string,
+  notes?: string,
 ): Promise<IssueAdminActionResult> {
   const profile = await requireRole(["owner", "admin", "supervisor"]);
   const supabase = await createServerSupabaseClient();
 
+  const trimmed = notes?.trim() ?? "";
+  const payload: Record<string, unknown> = {
+    status: "resolved",
+    resolved_at: new Date().toISOString(),
+    resolved_by_id: profile.id,
+  };
+  if (trimmed.length > 0) {
+    payload.resolution_notes = trimmed;
+  }
+
   const { error } = await supabase
     .from("issues")
-    .update({
-      status: "resolved",
-      resolved_at: new Date().toISOString(),
-      resolved_by_id: profile.id,
-    })
+    .update(payload)
     .eq("id", issueId)
     .in("status", ["open", "acknowledged", "in_progress"]);
 

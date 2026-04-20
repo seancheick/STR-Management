@@ -3,7 +3,12 @@ import Link from "next/link";
 import { AlertTriangle, Package, PackageSearch, CheckCircle2 } from "lucide-react";
 
 import { requireRole } from "@/lib/auth/session";
-import { listOpenIssues, listPendingRestockRequests, listLowInventory } from "@/lib/queries/issues";
+import {
+  listLowInventory,
+  listOpenIssues,
+  listPendingRestockRequests,
+  listResolvedIssues,
+} from "@/lib/queries/issues";
 import { IssueActionButtons } from "@/components/issues/issue-action-buttons";
 import { RestockActionButtons } from "@/components/issues/restock-action-buttons";
 
@@ -40,10 +45,11 @@ function formatDate(iso: string) {
 export default async function IssuesPage() {
   await requireRole(["owner", "admin", "supervisor"]);
 
-  const [issues, restockRequests, lowInventory] = await Promise.all([
+  const [issues, restockRequests, lowInventory, resolvedIssues] = await Promise.all([
     listOpenIssues(),
     listPendingRestockRequests(),
     listLowInventory(),
+    listResolvedIssues(25),
   ]);
 
   return (
@@ -157,6 +163,75 @@ export default async function IssuesPage() {
                     </p>
                   </div>
                   <RestockActionButtons requestId={req.id} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Resolved history */}
+      <section className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-xl font-semibold">
+            <CheckCircle2 className="h-5 w-5 text-green-500" />
+            Resolved
+          </h2>
+          <span className="rounded-full bg-muted px-3 py-1 text-sm font-semibold tabular-nums">
+            {resolvedIssues.length}
+          </span>
+        </div>
+
+        {resolvedIssues.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card/70 p-6 text-center text-sm text-muted-foreground">
+            Resolved issues will appear here.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {resolvedIssues.map((issue) => (
+              <div
+                className="rounded-2xl border border-border/70 bg-card/60 p-5 shadow-sm"
+                key={issue.id}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${severityColors[issue.severity] ?? "bg-muted text-muted-foreground border border-border"}`}
+                      >
+                        {issue.severity}
+                      </span>
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                        {typeLabels[issue.issue_type] ?? issue.issue_type}
+                      </span>
+                      <span className="text-xs text-muted-foreground">·</span>
+                      <span className="text-xs text-muted-foreground">
+                        {issue.properties?.name ?? "Unknown property"}
+                      </span>
+                    </div>
+                    <p className="font-medium">{issue.title}</p>
+                    {issue.description && (
+                      <p className="text-sm text-muted-foreground">{issue.description}</p>
+                    )}
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 pt-1 text-xs text-muted-foreground">
+                      <span>
+                        Reported by {issue.reported_by?.full_name ?? "Unknown"} ·{" "}
+                        {formatDate(issue.created_at)}
+                      </span>
+                      {issue.resolved_at && (
+                        <span>
+                          Resolved by {issue.resolved_by?.full_name ?? "Unknown"} ·{" "}
+                          {formatDate(issue.resolved_at)}
+                        </span>
+                      )}
+                    </div>
+                    {issue.resolution_notes && (
+                      <p className="mt-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
+                        <span className="font-semibold">Resolution:</span>{" "}
+                        {issue.resolution_notes}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

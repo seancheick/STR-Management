@@ -14,6 +14,8 @@ export type IssueRecord = {
   title: string;
   description: string | null;
   resolved_at: string | null;
+  resolution_notes?: string | null;
+  resolved_by?: { full_name: string } | null;
   created_at: string;
   updated_at: string;
   properties: { name: string; city: string | null } | null;
@@ -75,6 +77,24 @@ export async function listOpenIssues(propertyId?: string): Promise<IssueRecord[]
   }
 
   const { data } = await query;
+  return (data as unknown as IssueRecord[]) ?? [];
+}
+
+export async function listResolvedIssues(limit = 25): Promise<IssueRecord[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("issues")
+    .select(`
+      id, owner_id, assignment_id, property_id, reported_by_id,
+      issue_type, severity, status, title, description,
+      resolved_at, resolution_notes, created_at, updated_at,
+      properties:property_id ( name, city ),
+      reported_by:reported_by_id ( full_name ),
+      resolved_by:resolved_by_id ( full_name )
+    `)
+    .eq("status", "resolved")
+    .order("resolved_at", { ascending: false })
+    .limit(limit);
   return (data as unknown as IssueRecord[]) ?? [];
 }
 
