@@ -1,4 +1,5 @@
 import { HeaderBell } from "@/components/dashboard/header-bell";
+import { KeyboardShortcuts } from "@/components/dashboard/keyboard-shortcuts";
 import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { getDashboardStats } from "@/lib/queries/assignments";
 import { getExceptionCounts } from "@/lib/queries/issues";
@@ -38,6 +39,9 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
       <div className="fixed right-6 top-4 z-30 hidden lg:block">
         <HeaderBell counts={bellCounts} />
       </div>
+
+      {/* Global keyboard shortcuts — "g then x" chords + ? overlay */}
+      <KeyboardShortcuts />
 
       {/* Content — offset for desktop sidebar, padded for mobile top bar */}
       <div className="flex w-full flex-col pt-14 lg:pl-60 lg:pt-0">

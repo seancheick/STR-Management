@@ -48,6 +48,10 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
   const view = params.view === "month" ? "month" : "week";
   const weekOffset = typeof params.week === "string" ? parseInt(params.week, 10) || 0 : 0;
   const monthOffset = typeof params.month === "string" ? parseInt(params.month, 10) || 0 : 0;
+  const cleanerFilter =
+    typeof params.cleaner === "string" && params.cleaner.length > 0
+      ? params.cleaner
+      : null;
 
   let rangeStart: Date;
   let rangeEnd: Date;
@@ -70,13 +74,38 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
     weekDayISOs = weekDays.map((d) => d.toISOString());
   }
 
-  const [propertiesResult, assignments, cleaners] = await Promise.all([
+  const [propertiesResult, allAssignments, cleaners] = await Promise.all([
     listProperties(),
     listAssignmentsForSchedule(rangeStart.toISOString(), rangeEnd.toISOString()),
     listActiveCleaners(),
   ]);
 
   const activeProperties = propertiesResult.data.filter((p) => p.active);
+  const assignments = cleanerFilter
+    ? allAssignments.filter((a) =>
+        cleanerFilter === "unassigned"
+          ? a.cleaner_id === null
+          : a.cleaner_id === cleanerFilter,
+      )
+    : allAssignments;
+
+  const preserveParams = (over: Record<string, string | null>) => {
+    const entries: Array<[string, string]> = [];
+    if (view) entries.push(["view", view]);
+    if (weekOffset) entries.push(["week", String(weekOffset)]);
+    if (monthOffset) entries.push(["month", String(monthOffset)]);
+    if (cleanerFilter) entries.push(["cleaner", cleanerFilter]);
+    for (const [k, v] of Object.entries(over)) {
+      const idx = entries.findIndex(([ek]) => ek === k);
+      if (idx >= 0) entries.splice(idx, 1);
+      if (v !== null) entries.push([k, v]);
+    }
+    return entries.length > 0
+      ? `?${entries.map(([k, v]) => `${k}=${v}`).join("&")}`
+      : "";
+  };
+
+  const unassignedCount = allAssignments.filter((a) => a.cleaner_id === null).length;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-[1400px] flex-col gap-6 px-6 py-10">
@@ -86,6 +115,46 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
         <p className="mt-1 text-sm text-muted-foreground">
           Click any assignment to view details and assign a cleaner.
         </p>
+      </div>
+
+      {/* Cleaner filter chips */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="mr-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Filter
+        </span>
+        {[
+          { key: null, label: "All", count: allAssignments.length },
+          { key: "unassigned", label: "Unassigned", count: unassignedCount },
+          ...cleaners.map((c) => ({
+            key: c.id,
+            label: c.full_name,
+            count: allAssignments.filter((a) => a.cleaner_id === c.id).length,
+          })),
+        ].map(({ key, label, count }) => {
+          const active = cleanerFilter === key || (key === null && !cleanerFilter);
+          return (
+            <a
+              className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition ${
+                active
+                  ? "bg-primary text-[#f7f5ef]"
+                  : "border border-border/70 bg-card text-foreground hover:bg-muted"
+              }`}
+              href={preserveParams({ cleaner: key })}
+              key={key ?? "all"}
+            >
+              {label}
+              {count > 0 && (
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                    active ? "bg-white/20" : "bg-muted"
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </a>
+          );
+        })}
       </div>
 
       {view === "month" ? (

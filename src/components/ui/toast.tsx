@@ -43,12 +43,12 @@ export function ToastHost() {
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 top-6 z-[100] flex flex-col items-center gap-2 px-4"
+      className="pointer-events-none fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-2"
     >
       {toasts.map((t) => (
         <div
           key={t.id}
-          className={`pointer-events-auto flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-medium shadow-lg transition-all ${
+          className={`pointer-events-auto flex animate-in slide-in-from-right-4 items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-medium shadow-xl duration-200 ${
             t.variant === "success"
               ? "border-green-200 bg-green-50 text-green-800"
               : "border-red-200 bg-red-50 text-red-800"

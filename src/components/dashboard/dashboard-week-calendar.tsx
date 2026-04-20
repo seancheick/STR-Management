@@ -49,6 +49,8 @@ type DashboardWeekCalendarProps = {
   days: string[]; // 7 ISO strings at midnight UTC
 };
 
+const FOCUS_STORAGE_KEY = "dashboard-focus-today";
+
 export function DashboardWeekCalendar({
   properties,
   assignments,
@@ -56,6 +58,28 @@ export function DashboardWeekCalendar({
   days,
 }: DashboardWeekCalendarProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusToday, setFocusToday] = useState<boolean>(false);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(FOCUS_STORAGE_KEY);
+      if (stored === "1") setFocusToday(true);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  function toggleFocus() {
+    setFocusToday((v) => {
+      const next = !v;
+      try {
+        window.localStorage.setItem(FOCUS_STORAGE_KEY, next ? "1" : "0");
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }
   const selected = assignments.find((a) => a.id === selectedId) ?? null;
 
   useEffect(() => {
@@ -67,7 +91,12 @@ export function DashboardWeekCalendar({
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedId]);
 
-  const dayDates = useMemo(() => days.map((d) => new Date(d)), [days]);
+  const dayDates = useMemo(() => {
+    const all = days.map((d) => new Date(d));
+    if (!focusToday) return all;
+    const todayOnly = all.filter((d) => isToday(d));
+    return todayOnly.length > 0 ? todayOnly : all.slice(0, 1);
+  }, [days, focusToday]);
 
   /** Map "propertyId|dayIdx" → pills (checkout + cleaning) for that cell. */
   const cellMap = useMemo(() => {
@@ -102,6 +131,18 @@ export function DashboardWeekCalendar({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+          <button
+            aria-pressed={focusToday}
+            className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition ${
+              focusToday
+                ? "border-primary bg-primary text-[#f7f5ef]"
+                : "border-border/70 bg-card text-foreground hover:bg-muted"
+            }`}
+            onClick={toggleFocus}
+            type="button"
+          >
+            {focusToday ? "Showing: Today" : "Focus: Today"}
+          </button>
           <Legend color="bg-orange-400" label="Checkout" />
           <Legend color="bg-green-400" label="Cleaning due" />
         </div>
