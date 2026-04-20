@@ -1,6 +1,6 @@
 # Sprint Tracker
 
-Date: 2026-04-16 (updated)
+Date: 2026-04-20 (updated)
 Source: `Airbnb_Management_Plan.md`
 
 ---
@@ -26,6 +26,15 @@ Source: `Airbnb_Management_Plan.md`
 | Sprint 6: Templates + Supervisor | [x] | Reusable templates, visual checklists, review queue — complete |
 | Sprint 7: Intelligence | [x] | Reliability scores, property health, analytics — complete |
 | Sprint 8: Dashboard & UX Polish | [x] | Operational dashboard rebuild, UI contrast fixes, UX improvements — complete |
+| Sprint 9: UX Audit Fixes | [x] | Codex completion: cleaner portal, schedule drawer edit/delete, hardening, iCal quick-link |
+| Sprint 10: Trust & Clarity | [x] | Property cleaner notes, tight-turnover warning, bulk assign, evidence gate |
+| Sprint 11: Cleaner Empowerment | [x] | Per-job chat, decline + auto-reassign, on-site quick actions |
+| Sprint 12: Host Command Surface | [x] | Focus Today, keyboard shortcuts, cleaner filter, toast polish |
+| Sprint 13: Brand Rhythm | [x] | Hero module, consolidated KPIs, concierge list, first-run wizard |
+| Sprint 14: Beyond iCal | [x] | Recurring tasks, ICS subscription feed, weekly recap card |
+| Sprint 15: Revenue Awareness | [x] | Pending payout tile, annual tax export, 1099 flag |
+| Sprint 16: Smart Devices (MVP) | [x] | Per-booking access code, guest welcome template, bugfix round (time drift, iCal auto-sync, delete cancelled) |
+| Sprint 17: Smart Lock Integration (Yale/August/Schlage) | [ ] | OAuth flow, auto-provision per-booking PINs, revoke after checkout — blocked on Yale Dev API credentials |
 
 ---
 
@@ -368,3 +377,265 @@ Rebuild the admin dashboard into a real operational tool, fix color contrast iss
 - Schedule a Job prefills realistic checkout/check-in times and offers one-tap due-time selection ✓
 - Properties can be viewed as grid or list; archived properties are separated ✓
 - Schedule can be viewed weekly or as a full month calendar ✓
+
+---
+
+## Sprint 9: UX Audit Fixes (Codex completion)
+
+### Goal
+
+Close out every task the user flagged during the initial UX walkthrough: cleaner portal completeness, edit/delete on the schedule drawer, iCal quick-link on property, hardening of opaque server errors, forgot-password UX, toasts, etc.
+
+### Comment Log
+
+- 2026-04-20: Verified cleaner portal (Jobs, Schedule, History, Pay, Settings) was already scaffolded by codex; wired remaining pieces, bottom nav, profile form.
+- 2026-04-20: Schedule drawer (week + month views) gained Edit and Delete actions reusing a shared `AssignmentEditForm`. Added `rescheduleAssignmentAction` + `cancelAssignmentAction` (soft-delete to `cancelled`) with full cleaner-side revalidation.
+- 2026-04-20: Hardened `createPropertyAction` + `createAssignmentAction` with outer try/catch + `isRedirectError` bypass so uncaught exceptions surface as user-visible banners instead of Next.js error digests. Traced the reported "ERROR 1905450698" to likely uncaught server-action throws.
+- 2026-04-20: Dedicated `/forgot-password` route + `ForgotPasswordForm` — replaced inline expansion on sign-in. Reset-password form gates on session state (`PASSWORD_RECOVERY` event) and shows "link expired" card with one-click shortcut to request a new link.
+- 2026-04-20: Global `ToastHost` with `showToast(msg, variant)` helper. Wired into save/delete/quick-assign/unassign across all drawers.
+- 2026-04-20: Esc-to-close drawers; deep-link "Details →" goes to `/jobs/[id]` instead of list; Unassign pill on cleaner row when assigned/confirmed.
+- 2026-04-20: iCal quick-link card on property detail — shows "Synced X ago · N upcoming" when sources exist. Calendar page accepts `?propertyId=` to preselect when added via deep link.
+- 2026-04-20: Sync history table rewritten with plain-English labels ("Up to date" / "Synced with conflicts" / "Sync failed") and Breakdown column: "3 new · 1 already scheduled · 1 conflict".
+- 2026-04-20: Inline iCal sources block on property edit page (reuses `CalendarSourceRow`).
+- 2026-04-20: Notifications → renamed "Notification log" with diagnostic framing explaining sent/delivered/failed/pending.
+- 2026-04-20: Follow-ups round: per-property IANA timezone override, per-entry paid toggle (`paid_at`/`paid_by_id`), header bell with actionable-items badge, payout reports date-range filter.
+
+### Tickets (all ✓)
+
+- [x] Cleaner portal verification + gap fill
+- [x] Schedule drawer Edit/Delete with cleaner-side sync
+- [x] Hardened opaque server errors in property + assignment create
+- [x] Dedicated forgot-password page
+- [x] Toast system + Esc/deep-link/unassign polish
+- [x] iCal quick-link + freshness pill on property
+- [x] Plain-English sync history + inline iCal on property edit
+- [x] Notifications reframed as diagnostic log
+- [x] Per-property timezone + per-entry paid + header bell + reports date filter
+
+### Migrations
+
+- `20260420000000_property_timezone_and_entry_paid.sql` — applied ✓
+
+---
+
+## Sprint 10: Trust & Clarity
+
+### Goal
+
+Eliminate anxious moments: missing instructions, missed turnovers, evidence-less resolutions.
+
+### Comment Log
+
+- 2026-04-20: `properties.cleaner_notes` column + large textarea on property form + yellow "Read first" card at the top of the cleaner's job detail.
+- 2026-04-20: Tight-turnover logic in `src/lib/domain/assignments.ts` (`tightTurnoverMinutes`, `isTightTurnover`, `formatTurnoverWindow`) with 10 new tests. Dashboard calendar pills turn red with warning icon when turn window ≤6h. Edit drawer banner.
+- 2026-04-20: Bulk assign on Assignments page — sticky selection bar with "Select all unassigned" + cleaner dropdown + "Assign N" button. `bulkAssignCleanerAction` silently skips drifted statuses.
+- 2026-04-20: Evidence gate on issue resolution — severity ≥ medium requires photo OR 10+ char resolution note, enforced server-side.
+
+### Tickets
+
+- [x] A-1 Property operating notes
+- [x] A-2 Tight-turnover visual warning
+- [x] A-3 Bulk assign on Assignments
+- [x] A-4 Evidence gate on issue resolution
+
+### Migrations
+
+- `20260420010000_property_cleaner_notes.sql` — applied ✓
+
+### Commit
+
+[85f640d](https://github.com/seancheick/STR-Management/commit/85f640d)
+
+---
+
+## Sprint 11: Cleaner Empowerment
+
+### Goal
+
+Cleaner can say "I can't" or "I'm running late" without texting. On-site quick actions. Per-job communication.
+
+### Comment Log
+
+- 2026-04-20: `job_messages` table with RLS (linked cleaner + owner + admins can read/post). `JobMessageThread` component renders the conversation on the cleaner's job detail. System messages (decline, running_late) show as coloured rows with icons.
+- 2026-04-20: `declineJobAction` clears `cleaner_id`, flips to unassigned + `ack_status=declined`, auto-picks the next suggested cleaner (property default → first active cleaner), appends a decline message to the thread.
+- 2026-04-20: `JobQuickActions` card on cleaner job page — Open in Maps, Running late (ETA chips 15/30/45/60), Decline (reason chips). Quick actions at top so photo upload is one scroll away.
+
+### Tickets
+
+- [x] B-1 Decline + auto-suggest reassign
+- [x] B-2 On-site quick actions (maps, running late)
+- [x] B-3 Per-job chat thread
+- [x] B-4 Photo upload surfacing
+
+### Migrations
+
+- `20260420020000_job_messages.sql` — applied ✓
+
+### Commit
+
+[e350502](https://github.com/seancheick/STR-Management/commit/e350502)
+
+---
+
+## Sprint 12: Host Command Surface
+
+### Goal
+
+Dashboard is a command center; keyboard and filters make morning triage a 5-second check.
+
+### Comment Log
+
+- 2026-04-20: `KeyboardShortcuts` global listener — Linear-style "g, then x" chords. `?` toggles a styled overlay listing all shortcuts with `<kbd>` elements. Respects form-focus.
+- 2026-04-20: Cleaner filter chips above the schedule grid: All / Unassigned / per-cleaner, each with a count badge. URL-driven (`?cleaner=<uuid>`).
+- 2026-04-20: "Focus: Today" toggle on the dashboard week calendar — persists in localStorage, collapses the grid to just today's column.
+- 2026-04-20: Toasts slide in from bottom-right with `animate-in slide-in-from-right-4` instead of top-center drop.
+
+### Tickets
+
+- [x] C-1 Focus: Today toggle
+- [x] C-2 Keyboard shortcuts
+- [x] C-3 Cleaner filter on schedule
+- [x] C-4 Toast repositioning
+
+### Commit
+
+[33f7bb9](https://github.com/seancheick/STR-Management/commit/33f7bb9)
+
+---
+
+## Sprint 13: Brand Rhythm
+
+### Goal
+
+Strip the "generic SaaS" tells; restore calm + warm visual rhythm.
+
+### Comment Log
+
+- 2026-04-20: `FirstRunWizard` short-circuits the dashboard when no property exists — three warm steps (add property → connect iCal → invite cleaner) with done-state + primary CTA on the next uncompleted step.
+- 2026-04-20: Dashboard KPI strip consolidated from six small tiles to three: "Needs action" (amber), "In flight" (neutral), "Awaiting approval" (purple). Larger type, fewer eye-moves.
+- 2026-04-20: `RightNowHero` — single calm sentence answering "what matters most?" via priority ladder: overdue → tight turn today → in-progress → pending review → next upcoming → calm state. Coloured by tone with a matching CTA pill.
+- 2026-04-20: Property detail's icon-card grid → concierge list. "At a glance" rows only render when actionable.
+
+### Tickets
+
+- [x] D-1 KPI consolidation
+- [x] D-2 Concierge list
+- [x] D-3 "Right now" hero
+- [x] D-4 First-run wizard
+
+### Commit
+
+[e5a92dd](https://github.com/seancheick/STR-Management/commit/e5a92dd)
+
+---
+
+## Sprint 14: Beyond iCal
+
+### Goal
+
+Scheduled work that isn't tied to a guest booking; outbound calendar feed; weekly operator recap.
+
+### Comment Log
+
+- 2026-04-20: `recurring_tasks` table with RLS + `runRecurringTaskSweep` service. Daily cron at `/api/cron/recurring-tasks` materialises a fresh assignment from any active recurring task whose `next_run_at` has passed, rolls forward by cadence.
+- 2026-04-20: `advanceNextRun` extracted to `src/lib/domain/recurring.ts` so it's unit-testable without `server-only` (4 new tests cover weekly/monthly/quarterly/annual).
+- 2026-04-20: Recurring work section on property edit — lists active tasks, inline delete, add form (title, cadence, date, cleaner, payout).
+- 2026-04-20: `GET /api/ical/owner/[token].ics` — public-by-token ICS feed. Subscribe in Google Calendar → Add from URL.
+- 2026-04-20: `WeeklyRecapCard` on dashboard — last 7 days: turnovers, on-time %, re-cleans, total paid, upcoming unassigned. Email delivery deferred until SMTP is configured.
+
+### Tickets
+
+- [x] E-1 Recurring tasks schema + cron
+- [x] E-2 Property UI for recurring
+- [x] E-3 ICS subscription feed
+- [x] E-4 Weekly recap card (email deferred)
+
+### Migrations
+
+- `20260420030000_recurring_tasks.sql` — applied ✓
+
+### Commit
+
+[c5fb34d](https://github.com/seancheick/STR-Management/commit/c5fb34d)
+
+---
+
+## Sprint 15: Revenue Awareness
+
+### Goal
+
+Make cash flow visible: pending payouts, annual tax-time export, 1099 prep.
+
+### Comment Log
+
+- 2026-04-20: Pending-payout tile on dashboard next to weekly recap. `getPendingPayoutTotal` sums unpaid included entries + orphan approved assignments that haven't been batched yet.
+- 2026-04-20: Annual tax-time export at `/dashboard/payouts/export/<cleanerId>/<year>`. Print-styled page with full name, total jobs, per-property breakdown, line-item table, and a "Print / save as PDF" button.
+- 2026-04-20: `users.is_1099_contractor` flag. Toggle pill on the team row (cleaner role only), annual-export link right next to it.
+
+### Tickets
+
+- [x] F-1 Annual export PDF
+- [x] F-2 Pending payout dashboard tile
+- [x] F-3 1099 contractor flag
+
+### Migrations
+
+- `20260420040000_contractor_flag.sql` — applied ✓
+
+### Commit
+
+[f864964](https://github.com/seancheick/STR-Management/commit/f864964)
+
+---
+
+## Sprint 16: Smart Devices (MVP) + Bugfix Round
+
+### Goal
+
+Per-booking access codes visible to cleaners + guest welcome template on properties. Plus fix three user-reported bugs: time drift on new assignments, iCal feed silent on add, cancelled/approved cluttering Assignments page.
+
+### Comment Log
+
+- 2026-04-20: `assignments.access_code` + input on reschedule drawer + `AccessCodeCard` on cleaner job page with big mono-typed code + one-tap Copy button.
+- 2026-04-20: `properties.guest_welcome_template` + textarea on property form with starter placeholder (check-in, WiFi, gate code, quiet hours).
+- 2026-04-20: **Bugfix — time drift.** `datetime-local` values (`"2026-04-22T11:00"`) were being stored verbatim in `timestamptz`, so Postgres stamped them as UTC and the browser displayed UTC 11am as 7am EDT. Fix: both the new-assignment form and the reschedule drawer intercept FormData on submit and convert `dueAt`/`checkoutAt` via `new Date(local).toISOString()`.
+- 2026-04-20: **Bugfix — silent iCal add.** `addCalendarSourceAction` now kicks off the first sync immediately after insert. Success message reports how many cleanings were generated.
+- 2026-04-20: **Bugfix — cancelled/approved clutter.** Assignments page hides cancelled + approved by default. Filter chips toggle them on via `?cancelled=1&approved=1`. When shown, rows become checkable and a Delete button replaces the Assign button in the sticky bar. `deleteAssignmentsAction` hard-deletes only cancelled/approved rows — active jobs silently skipped.
+
+### Tickets
+
+- [x] G-1 Per-booking access code
+- [x] G-3 Guest welcome template
+- [x] Bugfix — datetime-local → ISO conversion
+- [x] Bugfix — auto-sync on iCal source add
+- [x] Bugfix — hide cancelled/approved + bulk delete
+
+### Migrations
+
+- `20260420050000_access_codes_and_welcome_template.sql` — applied ✓
+
+### Commits
+
+[00296ae](https://github.com/seancheick/STR-Management/commit/00296ae) (G-1 + G-3) and [ebd1be2](https://github.com/seancheick/STR-Management/commit/ebd1be2) (bugfix round).
+
+---
+
+## Sprint 17: Smart Lock Integration (Yale / August / Schlage) — PLANNED
+
+### Goal
+
+Auto-provision per-booking PIN codes on paired locks. Owner pairs a lock once per property; on every iCal-synced checkout, the app calls the vendor API to issue a temporary code valid from checkout → checkin+2h and writes it to `assignments.access_code`. After checkout+24h, the code is auto-revoked.
+
+### Blocked on
+
+- Yale / August developer API credentials (apply at yale.com/us/en/support/developer-api/)
+- Pick a vendor order: August + Yale first (shared API post-merger), Schlage via SmartThings bridge second
+- Confirm OAuth UX preference (per-property vs one-time account link)
+
+### Planned tickets
+
+- [ ] H-1 `property_smart_locks` table (vendor, vendor_lock_id, oauth_token, active)
+- [ ] H-2 August/Yale OAuth flow + "Connect lock" on property edit
+- [ ] H-3 On iCal sync, auto-issue PIN if property has active lock, save to `access_code`
+- [ ] H-4 Daily cron to revoke expired PINs after checkout+24h
+- [ ] H-5 Schlage via SmartThings bridge (separate adapter)
