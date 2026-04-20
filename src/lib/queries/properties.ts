@@ -22,6 +22,8 @@ export type PropertyRecord = {
   timezone: string | null;
   cleaner_notes: string | null;
   guest_welcome_template: string | null;
+  cleaner_access_code: string | null;
+  cleaner_access_code_set_at: string | null;
   created_at: string;
 };
 
@@ -52,6 +54,8 @@ export const listProperties = cache(async (): Promise<PropertiesQueryResult> => 
         "timezone",
         "cleaner_notes",
         "guest_welcome_template",
+        "cleaner_access_code",
+        "cleaner_access_code_set_at",
         "created_at",
       ].join(","),
     )
@@ -85,6 +89,8 @@ export async function getProperty(propertyId: string) {
         "timezone",
         "cleaner_notes",
         "guest_welcome_template",
+        "cleaner_access_code",
+        "cleaner_access_code_set_at",
         "created_at",
       ].join(","),
     )

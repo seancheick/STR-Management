@@ -65,6 +65,7 @@ export const propertyFormSchema = z.object({
   timezone: nullableTrimmedString(),
   cleanerNotes: nullableTrimmedString(),
   guestWelcomeTemplate: nullableTrimmedString(),
+  cleanerAccessCode: nullableTrimmedString(),
 });
 
 export type PropertyFormValues = z.infer<typeof propertyFormSchema>;

@@ -113,9 +113,15 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
         status={assignment.status}
       />
 
-      {/* Access code — door / gate code for this booking */}
-      {assignment.access_code && (
-        <AccessCodeCard accessCode={assignment.access_code} />
+      {/* Access code — per-booking code wins, otherwise the property's permanent code */}
+      {(assignment.access_code || propertyResult.data?.cleaner_access_code) && (
+        <AccessCodeCard
+          accessCode={
+            (assignment.access_code ||
+              propertyResult.data?.cleaner_access_code) as string
+          }
+          perBooking={Boolean(assignment.access_code)}
+        />
       )}
 
       {/* Cleaner notes — property-specific instructions */}

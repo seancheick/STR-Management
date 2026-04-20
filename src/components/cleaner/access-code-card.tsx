@@ -5,9 +5,11 @@ import { useState } from "react";
 
 type Props = {
   accessCode: string;
+  /** True when this code is specific to this booking; false when it's the property's permanent code. */
+  perBooking?: boolean;
 };
 
-export function AccessCodeCard({ accessCode }: Props) {
+export function AccessCodeCard({ accessCode, perBooking }: Props) {
   const [copied, setCopied] = useState(false);
 
   function handleCopy() {
@@ -29,7 +31,7 @@ export function AccessCodeCard({ accessCode }: Props) {
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold uppercase tracking-[0.15em] text-primary/80">
-          Access code
+          {perBooking ? "Access code · this booking" : "Property door code"}
         </p>
         <p className="mt-0.5 font-mono text-2xl font-semibold tracking-wider text-foreground">
           {accessCode}

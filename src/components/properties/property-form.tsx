@@ -1,12 +1,31 @@
 "use client";
 
-import { useActionState } from "react";
+import { RefreshCw } from "lucide-react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import {
   type PropertyActionState,
 } from "@/app/(admin)/dashboard/properties/actions";
 import type { PropertyRecord } from "@/lib/queries/properties";
+
+function generateAccessCode(): string {
+  // 4-digit code avoiding obvious patterns (0000, 1234, 1111)
+  for (let i = 0; i < 16; i++) {
+    const n = Math.floor(Math.random() * 10000);
+    const s = n.toString().padStart(4, "0");
+    if (/(.)\1{3}/.test(s)) continue; // reject aaaa
+    if (/0123|1234|2345|3456|4567|5678|6789/.test(s)) continue; // reject sequential
+    return s;
+  }
+  return Math.floor(Math.random() * 10000).toString().padStart(4, "0");
+}
+
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  return Number.isFinite(days) ? days : null;
+}
 
 type PropertyFormProps = {
   action: (
@@ -46,6 +65,11 @@ function FieldError({ errors }: { errors?: string[] }) {
 
 export function PropertyForm({ action, property, submitLabel }: PropertyFormProps) {
   const [state, formAction] = useActionState(action, initialPropertyActionState);
+  const [accessCode, setAccessCode] = useState<string>(
+    property?.cleaner_access_code ?? "",
+  );
+  const codeAge = daysSince(property?.cleaner_access_code_set_at ?? null);
+  const isStale = codeAge !== null && codeAge >= 90;
 
   return (
     <form action={formAction} className="space-y-8">
@@ -211,6 +235,50 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
             <option value="Pacific/Honolulu">Hawaii — Pacific/Honolulu</option>
           </select>
           <FieldError errors={state.fieldErrors?.timezone} />
+        </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <label className="text-sm font-medium" htmlFor="cleanerAccessCode">
+            Cleaner&apos;s door code
+            <span className="ml-2 font-normal text-muted-foreground">
+              (the permanent code you set on this property&apos;s lock)
+            </span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              autoComplete="off"
+              className="h-12 flex-1 rounded-xl border border-input bg-background px-4 font-mono text-base tracking-widest"
+              id="cleanerAccessCode"
+              maxLength={16}
+              name="cleanerAccessCode"
+              onChange={(e) => setAccessCode(e.target.value)}
+              placeholder="e.g. 4287"
+              type="text"
+              value={accessCode}
+            />
+            <button
+              className="inline-flex h-12 items-center gap-1.5 rounded-xl border border-border/70 bg-card px-4 text-xs font-medium transition hover:border-primary/40 hover:bg-muted"
+              onClick={() => setAccessCode(generateAccessCode())}
+              type="button"
+            >
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+              Generate
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Type this into your Yale / August / Schlage app so the lock accepts it,
+            then save here. Every cleaner job for this property will show this code.
+            {codeAge !== null && (
+              <>
+                {" "}
+                <span className={isStale ? "font-semibold text-amber-700" : ""}>
+                  Last changed {codeAge === 0 ? "today" : `${codeAge} days ago`}
+                  {isStale && " — consider rotating"}.
+                </span>
+              </>
+            )}
+          </p>
+          <FieldError errors={state.fieldErrors?.cleanerAccessCode} />
         </div>
 
         <div className="space-y-2 md:col-span-2">

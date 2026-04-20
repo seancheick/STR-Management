@@ -16,6 +16,7 @@ export function parsePropertyFormData(formData: FormData) {
     timezone: formData.get("timezone"),
     cleanerNotes: formData.get("cleanerNotes"),
     guestWelcomeTemplate: formData.get("guestWelcomeTemplate"),
+    cleanerAccessCode: formData.get("cleanerAccessCode"),
   });
 }
 

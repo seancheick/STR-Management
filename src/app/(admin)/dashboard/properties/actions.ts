@@ -58,6 +58,10 @@ export async function createPropertyAction(
       timezone: values.timezone,
       cleaner_notes: values.cleanerNotes,
       guest_welcome_template: values.guestWelcomeTemplate,
+      cleaner_access_code: values.cleanerAccessCode,
+      cleaner_access_code_set_at: values.cleanerAccessCode
+        ? new Date().toISOString()
+        : null,
     });
 
     if (error) {
@@ -106,6 +110,9 @@ export async function updatePropertyAction(
         default_cleaner_id: values.defaultCleanerId,
         active: values.active,
         timezone: values.timezone,
+        cleaner_notes: values.cleanerNotes,
+        guest_welcome_template: values.guestWelcomeTemplate,
+        cleaner_access_code: values.cleanerAccessCode,
       })
       .eq("id", propertyId);
 
