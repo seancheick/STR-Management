@@ -23,8 +23,10 @@ import {
   type PropertyTodayStatus,
 } from "@/lib/queries/assignments";
 import { getExceptionCounts } from "@/lib/queries/issues";
+import { listProperties } from "@/lib/queries/properties";
+import { listActiveCleaners } from "@/lib/queries/team";
 import { TodayJobsTimeline, AtRiskSection } from "@/components/dashboard/today-jobs-timeline";
-import { WeekPreviewStrip } from "@/components/dashboard/week-preview-strip";
+import { DashboardWeekCalendar } from "@/components/dashboard/dashboard-week-calendar";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,15 +70,25 @@ export default async function DashboardPage() {
     return d.toISOString();
   });
 
-  const [stats, todaysJobs, exceptions, propertyStatuses, atRiskJobs, weekAssignments] =
-    await Promise.all([
-      getDashboardStats(),
-      listTodaysAssignmentsForAdmin(),
-      getExceptionCounts(),
-      getPropertyTodayStatuses(),
-      listAtRiskAssignments(),
-      listAssignmentsForSchedule(weekStart.toISOString(), weekEnd.toISOString()),
-    ]);
+  const [
+    stats,
+    todaysJobs,
+    exceptions,
+    propertyStatuses,
+    atRiskJobs,
+    weekAssignments,
+    propertiesResult,
+    cleaners,
+  ] = await Promise.all([
+    getDashboardStats(),
+    listTodaysAssignmentsForAdmin(),
+    getExceptionCounts(),
+    getPropertyTodayStatuses(),
+    listAtRiskAssignments(),
+    listAssignmentsForSchedule(weekStart.toISOString(), weekEnd.toISOString()),
+    listProperties(),
+    listActiveCleaners(),
+  ]);
 
   const firstName = profile.full_name.split(" ")[0];
   const hasExceptions =
@@ -279,7 +291,15 @@ export default async function DashboardPage() {
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto px-6 py-6">
-          <div className="mx-auto flex max-w-4xl flex-col gap-8">
+          <div className="mx-auto flex max-w-6xl flex-col gap-8">
+
+            {/* Week calendar — first thing host sees */}
+            <DashboardWeekCalendar
+              assignments={weekAssignments}
+              cleaners={cleaners}
+              days={weekDays}
+              properties={propertiesResult.data}
+            />
 
             {/* Today's jobs — interactive, drawer on click */}
             <section aria-label="Today's jobs">
@@ -384,9 +404,6 @@ export default async function DashboardPage() {
                 </div>
               </section>
             )}
-
-            {/* Week preview strip */}
-            <WeekPreviewStrip assignments={weekAssignments} days={weekDays} />
 
             {/* Quick links to other sections */}
             <section aria-label="Quick actions" className="grid gap-3 sm:grid-cols-3">
