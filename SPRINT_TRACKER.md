@@ -34,7 +34,8 @@ Source: `Airbnb_Management_Plan.md`
 | Sprint 14: Beyond iCal | [x] | Recurring tasks, ICS subscription feed, weekly recap card |
 | Sprint 15: Revenue Awareness | [x] | Pending payout tile, annual tax export, 1099 flag |
 | Sprint 16: Smart Devices (MVP) | [x] | Per-booking access code, guest welcome template, bugfix round (time drift, iCal auto-sync, delete cancelled) |
-| Sprint 17: Smart Lock Integration (Yale/August/Schlage) | [ ] | OAuth flow, auto-provision per-booking PINs, revoke after checkout — blocked on Yale Dev API credentials |
+| Sprint 17: Permanent Cleaner Code (free smart-lock alt) | [x] | Property-level persistent code + Generate button + stale-age reminder. Yale/August auto-provisioning deferred — see Sprint 18. |
+| Sprint 18: Yale/August Auto-Provisioning | [ ] | Unofficial API (yalexs-style). Deferred pending user decision on credential storage + breakage tolerance. |
 
 ---
 
@@ -620,22 +621,53 @@ Per-booking access codes visible to cleaners + guest welcome template on propert
 
 ---
 
-## Sprint 17: Smart Lock Integration (Yale / August / Schlage) — PLANNED
+## Sprint 17: Permanent Cleaner Code (free smart-lock alternative)
 
 ### Goal
 
-Auto-provision per-booking PIN codes on paired locks. Owner pairs a lock once per property; on every iCal-synced checkout, the app calls the vendor API to issue a temporary code valid from checkout → checkin+2h and writes it to `assignments.access_code`. After checkout+24h, the code is auto-revoked.
+Give hosts the 90% of auto-provisioning value with zero ongoing cost: one permanent "cleaner code" per property, surfaced on every job for that property. Host types the code into the Yale / August app once per rotation (~quarterly). No unofficial APIs, no vendor credentials stored.
 
-### Blocked on
+### Comment Log
 
-- Yale / August developer API credentials (apply at yale.com/us/en/support/developer-api/)
-- Pick a vendor order: August + Yale first (shared API post-merger), Schlage via SmartThings bridge second
-- Confirm OAuth UX preference (per-property vs one-time account link)
+- 2026-04-20: Added `properties.cleaner_access_code` + `properties.cleaner_access_code_set_at` columns. DB trigger `touch_cleaner_access_code_set_at` stamps the timestamp only when the code value actually changes, so re-saving the property form doesn't spuriously reset the rotation clock.
+- 2026-04-20: Property form exposes the code + a Generate button that suggests a random 4-digit code (rejects trivial patterns like 1234 / aaaa). Stale-age annotation under the field turns amber at 90+ days.
+- 2026-04-20: Cleaner job page falls back to the property code when `assignments.access_code` is null. `AccessCodeCard` label flips between "Access code · this booking" and "Property door code" so the cleaner knows whether to memorise for a single visit or long-term.
+
+### Tickets
+
+- [x] Migration + trigger for set_at timestamp
+- [x] Property form field + Generate + stale-age annotation
+- [x] Cleaner job fallback chain (per-booking → property → nothing)
+- [x] AccessCodeCard label variants
+
+### Migrations
+
+- `20260420060000_property_cleaner_access_code.sql` — applied ✓
+
+### Commit
+
+[799ec78](https://github.com/seancheick/STR-Management/commit/799ec78)
+
+---
+
+## Sprint 18: Yale / August Auto-Provisioning — DEFERRED
+
+### Goal
+
+Auto-issue per-booking PINs on paired Yale/August locks via the unofficial yalexs-style API. Falls back to Sprint 17's permanent code when the API call fails.
+
+### Blocked on (user decision)
+
+User pivoted to Sprint 17's free approach; Sprint 18 is open whenever the trade-offs are accepted:
+- Storing encrypted August/Yale email + password in the DB
+- Accepting occasional manual-code gaps (1-2 days) when August changes their backend and we patch
+- Outside vendor ToS for commercial use (low enforcement risk but not zero)
 
 ### Planned tickets
 
-- [ ] H-1 `property_smart_locks` table (vendor, vendor_lock_id, oauth_token, active)
-- [ ] H-2 August/Yale OAuth flow + "Connect lock" on property edit
-- [ ] H-3 On iCal sync, auto-issue PIN if property has active lock, save to `access_code`
-- [ ] H-4 Daily cron to revoke expired PINs after checkout+24h
-- [ ] H-5 Schlage via SmartThings bridge (separate adapter)
+- [ ] Port minimal yalexs auth + access-code surface to Node/TypeScript
+- [ ] `property_smart_locks` table (vendor=`august`, encrypted_refresh_token, lock_id, active)
+- [ ] "Connect Yale/August" flow on property edit (email → SMS verification → refresh token)
+- [ ] On iCal sync: auto-issue time-bound PIN, save to `assignments.access_code`
+- [ ] Daily cron: revoke expired PINs at checkout+24h
+- [ ] Graceful degradation: when API call fails, log + fall back to property-level code (already works via Sprint 17)
