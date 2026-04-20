@@ -19,10 +19,31 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
       ? "Assignment created."
       : null;
 
-  const [assignments, cleaners] = await Promise.all([
+  const showCancelled = params.cancelled === "1";
+  const showApproved = params.approved === "1";
+
+  const [allAssignments, cleaners] = await Promise.all([
     listAssignmentsForAdmin(),
     listActiveCleaners(),
   ]);
+
+  const assignments = allAssignments.filter((a) => {
+    if (a.status === "cancelled") return showCancelled;
+    if (a.status === "approved") return showApproved;
+    return true;
+  });
+
+  const cancelledCount = allAssignments.filter((a) => a.status === "cancelled").length;
+  const approvedCount = allAssignments.filter((a) => a.status === "approved").length;
+
+  function buildHref(over: { cancelled: string | null; approved: string | null }): string {
+    const entries: string[] = [];
+    if (over.cancelled) entries.push(`cancelled=${over.cancelled}`);
+    if (over.approved) entries.push(`approved=${over.approved}`);
+    return entries.length > 0
+      ? `/dashboard/assignments?${entries.join("&")}`
+      : "/dashboard/assignments";
+  }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-6 py-10">
@@ -47,6 +68,52 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
           {banner}
         </section>
       ) : null}
+
+      {/* Filter chips — cancelled + approved hidden by default */}
+      <div className="flex flex-wrap gap-1.5 text-xs">
+        <span className="mr-1 self-center font-medium uppercase tracking-wider text-muted-foreground">
+          Show
+        </span>
+        {[
+          {
+            label: "Cancelled",
+            count: cancelledCount,
+            on: showCancelled,
+            href: (showCancelled
+              ? buildHref({ cancelled: null, approved: showApproved ? "1" : null })
+              : buildHref({ cancelled: "1", approved: showApproved ? "1" : null })) as Route,
+          },
+          {
+            label: "Approved",
+            count: approvedCount,
+            on: showApproved,
+            href: (showApproved
+              ? buildHref({ cancelled: showCancelled ? "1" : null, approved: null })
+              : buildHref({ cancelled: showCancelled ? "1" : null, approved: "1" })) as Route,
+          },
+        ].map((chip) => (
+          <Link
+            className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 font-medium transition ${
+              chip.on
+                ? "bg-primary text-[#f7f5ef]"
+                : "border border-border/70 bg-card text-muted-foreground hover:bg-muted"
+            }`}
+            href={chip.href}
+            key={chip.label}
+          >
+            {chip.label}
+            {chip.count > 0 && (
+              <span
+                className={`rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${
+                  chip.on ? "bg-white/20" : "bg-muted"
+                }`}
+              >
+                {chip.count}
+              </span>
+            )}
+          </Link>
+        ))}
+      </div>
 
       {assignments.length === 0 ? (
         <section className="flex flex-col items-center gap-4 rounded-[1.75rem] border border-dashed border-border bg-card/70 px-6 py-12 text-center">

@@ -139,6 +139,38 @@ export async function assignCleanerAction(
 }
 
 /**
+ * Hard-delete cancelled and approved assignments. Safe because:
+ *  - cancelled means the job never happened (soft-deleted already)
+ *  - approved means the unit is already guest-ready and the payout is closed
+ * Anything in an active state (unassigned/assigned/in_progress/pending_review)
+ * is silently skipped. Use this for cleanup, not for mid-flight edits.
+ */
+export async function deleteAssignmentsAction(
+  assignmentIds: string[],
+): Promise<{ error: string | null; deleted: number }> {
+  await requireRole(["owner", "admin"]);
+
+  if (assignmentIds.length === 0) {
+    return { error: "Nothing selected.", deleted: 0 };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("assignments")
+    .delete()
+    .in("id", assignmentIds)
+    .in("status", ["cancelled", "approved"])
+    .select("id");
+
+  if (error) return { error: error.message, deleted: 0 };
+
+  revalidatePath("/dashboard/assignments");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/schedule");
+  return { error: null, deleted: data?.length ?? 0 };
+}
+
+/**
  * Bulk assign a cleaner to a batch of currently-unassigned jobs.
  * Silently skips assignments whose status has already moved away from "unassigned".
  */

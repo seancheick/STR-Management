@@ -50,13 +50,17 @@ export async function addCalendarSourceAction(
   const ownerId = await resolveOwnerId();
   const supabase = await createServerSupabaseClient();
 
-  const { error } = await supabase.from("property_calendar_sources").insert({
-    owner_id: ownerId,
-    property_id: values.propertyId,
-    name: values.name,
-    ical_url: values.icalUrl,
-    platform: values.platform,
-  });
+  const { data: created, error } = await supabase
+    .from("property_calendar_sources")
+    .insert({
+      owner_id: ownerId,
+      property_id: values.propertyId,
+      name: values.name,
+      ical_url: values.icalUrl,
+      platform: values.platform,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     if (error.code === "23505") {
@@ -65,8 +69,42 @@ export async function addCalendarSourceAction(
     return { status: "error", message: error.message };
   }
 
+  // Kick off the first sync immediately — no "why is nothing showing up?" moment.
+  const { data: property } = await supabase
+    .from("properties")
+    .select("primary_checklist_template_id")
+    .eq("id", values.propertyId)
+    .maybeSingle();
+
+  const syncResult = await syncCalendarSource({
+    calendarSourceId: created.id as string,
+    ownerId,
+    propertyId: values.propertyId,
+    primaryChecklistTemplateId:
+      (property?.primary_checklist_template_id as string | null | undefined) ?? null,
+  });
+
   revalidatePath("/dashboard/calendar");
-  return { status: "success", message: "Calendar source added." };
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/schedule");
+  revalidatePath("/dashboard/assignments");
+  revalidatePath(`/dashboard/properties/${values.propertyId}`);
+  revalidatePath(`/dashboard/properties/${values.propertyId}/edit`);
+
+  if (syncResult.error) {
+    return {
+      status: "error",
+      message: `Source added but first sync failed: ${syncResult.error}. Hit "Sync now" to retry.`,
+    };
+  }
+
+  return {
+    status: "success",
+    message:
+      syncResult.assignmentsCreated > 0
+        ? `Added · ${syncResult.assignmentsCreated} upcoming cleaning${syncResult.assignmentsCreated === 1 ? "" : "s"} created.`
+        : "Added. No upcoming bookings in the feed yet — try Sync now later.",
+  };
 }
 
 export async function removeCalendarSourceAction(

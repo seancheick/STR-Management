@@ -109,7 +109,22 @@ export function NewAssignmentForm({
   }
 
   return (
-    <form action={formAction} className="space-y-8">
+    <form
+      action={(formData) => {
+        // datetime-local sends "YYYY-MM-DDTHH:MM" with no TZ. The browser
+        // means *local* time — convert to a real ISO so Postgres doesn't
+        // accidentally stamp it as UTC and surface hours off for the user.
+        for (const field of ["dueAt", "checkoutAt"]) {
+          const raw = formData.get(field);
+          if (typeof raw === "string" && raw.length > 0) {
+            const iso = new Date(raw).toISOString();
+            if (!Number.isNaN(Date.parse(iso))) formData.set(field, iso);
+          }
+        }
+        return formAction(formData);
+      }}
+      className="space-y-8"
+    >
       <section className="grid gap-5 md:grid-cols-2">
         {/* Property */}
         <div className="space-y-2 md:col-span-2">

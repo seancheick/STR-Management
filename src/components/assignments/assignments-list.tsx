@@ -1,9 +1,12 @@
 "use client";
 
-import { Loader2, Pencil, Users, X } from "lucide-react";
+import { Loader2, Pencil, Trash2, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
-import { bulkAssignCleanerAction } from "@/app/(admin)/dashboard/assignments/actions";
+import {
+  bulkAssignCleanerAction,
+  deleteAssignmentsAction,
+} from "@/app/(admin)/dashboard/assignments/actions";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { AssignmentEditForm } from "@/components/schedule/assignment-edit-form";
@@ -70,8 +73,34 @@ export function AssignmentsList({ assignments, cleaners }: AssignmentsListProps)
     () => assignments.filter((a) => a.status === "unassigned").map((a) => a.id),
     [assignments],
   );
+  const deletableIds = useMemo(
+    () =>
+      assignments
+        .filter((a) => a.status === "cancelled" || a.status === "approved")
+        .map((a) => a.id),
+    [assignments],
+  );
   const allUnassignedChecked =
     unassignedIds.length > 0 && unassignedIds.every((id) => checkedIds.has(id));
+
+  // Classify the current selection so the bulk bar knows what it can do.
+  const selection = useMemo(() => {
+    const statuses = new Set<string>();
+    for (const id of checkedIds) {
+      const a = assignments.find((x) => x.id === id);
+      if (a) statuses.add(a.status);
+    }
+    const allUnassigned = statuses.size === 1 && statuses.has("unassigned");
+    const allDeletable =
+      statuses.size > 0 &&
+      [...statuses].every((s) => s === "cancelled" || s === "approved");
+    return {
+      count: checkedIds.size,
+      allUnassigned,
+      allDeletable,
+      mixed: !allUnassigned && !allDeletable && statuses.size > 0,
+    };
+  }, [checkedIds, assignments]);
 
   function toggleChecked(id: string) {
     setCheckedIds((prev) => {
@@ -110,51 +139,95 @@ export function AssignmentsList({ assignments, cleaners }: AssignmentsListProps)
     });
   }
 
+  function handleBulkDelete() {
+    if (!selection.allDeletable) return;
+    const ids = Array.from(checkedIds);
+    if (
+      !confirm(
+        `Permanently delete ${ids.length} job${ids.length === 1 ? "" : "s"}? Cancelled and approved jobs are safe to remove.`,
+      )
+    )
+      return;
+    startTransition(async () => {
+      const res = await deleteAssignmentsAction(ids);
+      if (res.error) {
+        showToast(res.error, "error");
+      } else {
+        showToast(`Deleted ${res.deleted} job${res.deleted === 1 ? "" : "s"}.`);
+        setCheckedIds(new Set());
+      }
+    });
+  }
+
   return (
     <>
-      {unassignedIds.length > 0 && (
+      {(unassignedIds.length > 0 || deletableIds.length > 0) && (
         <div className="sticky top-0 z-20 -mx-2 mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-card/95 px-4 py-3 shadow-sm backdrop-blur">
-          <label className="flex items-center gap-2 text-xs font-medium">
-            <input
-              checked={allUnassignedChecked}
-              className="h-4 w-4 rounded border-input"
-              onChange={toggleAllUnassigned}
-              type="checkbox"
-            />
-            Select all unassigned ({unassignedIds.length})
-          </label>
+          {unassignedIds.length > 0 && (
+            <label className="flex items-center gap-2 text-xs font-medium">
+              <input
+                checked={allUnassignedChecked}
+                className="h-4 w-4 rounded border-input"
+                onChange={toggleAllUnassigned}
+                type="checkbox"
+              />
+              Select all unassigned ({unassignedIds.length})
+            </label>
+          )}
           <span className="text-xs text-muted-foreground">
-            {checkedIds.size === 0
+            {selection.count === 0
               ? "No jobs selected"
-              : `${checkedIds.size} job${checkedIds.size === 1 ? "" : "s"} selected`}
+              : `${selection.count} job${selection.count === 1 ? "" : "s"} selected`}
+            {selection.mixed &&
+              " · mix of statuses — pick either unassigned OR cancelled/approved"}
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <select
-              className="h-9 rounded-full border border-input bg-background px-3 text-xs disabled:opacity-60"
-              disabled={checkedIds.size === 0 || isPending}
-              onChange={(e) => setBulkCleaner(e.target.value)}
-              value={bulkCleaner}
-            >
-              <option value="">Choose cleaner…</option>
-              {cleaners.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.full_name}
-                </option>
-              ))}
-            </select>
-            <button
-              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
-              disabled={checkedIds.size === 0 || !bulkCleaner || isPending}
-              onClick={handleBulkAssign}
-              type="button"
-            >
-              {isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Users className="h-3.5 w-3.5" />
-              )}
-              Assign {checkedIds.size > 0 ? checkedIds.size : ""}
-            </button>
+            {selection.allDeletable ? (
+              <button
+                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-red-600 px-4 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+                disabled={isPending}
+                onClick={handleBulkDelete}
+                type="button"
+              >
+                {isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                Delete {selection.count}
+              </button>
+            ) : (
+              <>
+                <select
+                  className="h-9 rounded-full border border-input bg-background px-3 text-xs disabled:opacity-60"
+                  disabled={!selection.allUnassigned || isPending}
+                  onChange={(e) => setBulkCleaner(e.target.value)}
+                  value={bulkCleaner}
+                >
+                  <option value="">Choose cleaner…</option>
+                  {cleaners.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.full_name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+                  disabled={
+                    !selection.allUnassigned || !bulkCleaner || isPending
+                  }
+                  onClick={handleBulkAssign}
+                  type="button"
+                >
+                  {isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Users className="h-3.5 w-3.5" />
+                  )}
+                  Assign {selection.allUnassigned ? selection.count : ""}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -162,7 +235,10 @@ export function AssignmentsList({ assignments, cleaners }: AssignmentsListProps)
       <section className="flex flex-col gap-3">
         {assignments.map((a) => {
           const canEdit = !["approved", "cancelled"].includes(a.status);
-          const selectable = a.status === "unassigned";
+          const selectable =
+            a.status === "unassigned" ||
+            a.status === "cancelled" ||
+            a.status === "approved";
           const isChecked = checkedIds.has(a.id);
           return (
             <article

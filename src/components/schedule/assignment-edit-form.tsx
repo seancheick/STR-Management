@@ -123,7 +123,21 @@ export function AssignmentEditForm({
         </div>
       )}
 
-      <form action={formAction} className="flex flex-col gap-3">
+      <form
+        action={(fd) => {
+          // datetime-local values come back as local wall-clock. Convert to real
+          // ISO so Postgres doesn't stamp them as UTC.
+          for (const field of ["dueAt", "checkoutAt"]) {
+            const raw = fd.get(field);
+            if (typeof raw === "string" && raw.length > 0) {
+              const iso = new Date(raw).toISOString();
+              if (!Number.isNaN(Date.parse(iso))) fd.set(field, iso);
+            }
+          }
+          return formAction(fd);
+        }}
+        className="flex flex-col gap-3"
+      >
         <input type="hidden" name="assignmentId" value={assignment.id} />
 
         <div className="grid grid-cols-2 gap-3">
