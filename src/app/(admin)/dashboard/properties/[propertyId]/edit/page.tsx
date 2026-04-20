@@ -6,9 +6,12 @@ import { CalendarDays } from "lucide-react";
 import { updatePropertyAction } from "@/app/(admin)/dashboard/properties/actions";
 import { CalendarSourceRow } from "@/components/calendar/calendar-source-row";
 import { PropertyForm } from "@/components/properties/property-form";
+import { RecurringTasksSection } from "@/components/properties/recurring-tasks-section";
 import { requireRole } from "@/lib/auth/session";
 import { listCalendarSourcesForProperty } from "@/lib/queries/calendar";
 import { getProperty } from "@/lib/queries/properties";
+import { listRecurringTasksForProperty } from "@/lib/queries/recurring-tasks";
+import { listActiveCleaners } from "@/lib/queries/team";
 
 type EditPropertyPageProps = {
   params: Promise<{
@@ -19,10 +22,13 @@ type EditPropertyPageProps = {
 export default async function EditPropertyPage({ params }: EditPropertyPageProps) {
   await requireRole(["owner", "admin"]);
   const { propertyId } = await params;
-  const [propertyResult, calendarSources] = await Promise.all([
-    getProperty(propertyId),
-    listCalendarSourcesForProperty(propertyId),
-  ]);
+  const [propertyResult, calendarSources, recurringTasks, cleaners] =
+    await Promise.all([
+      getProperty(propertyId),
+      listCalendarSourcesForProperty(propertyId),
+      listRecurringTasksForProperty(propertyId),
+      listActiveCleaners(),
+    ]);
 
   if (!propertyResult.data) {
     notFound();
@@ -87,6 +93,13 @@ export default async function EditPropertyPage({ params }: EditPropertyPageProps
           </div>
         )}
       </section>
+
+      {/* Recurring work — deep clean, HVAC filters, etc. */}
+      <RecurringTasksSection
+        cleaners={cleaners}
+        propertyId={propertyId}
+        tasks={recurringTasks}
+      />
     </main>
   );
 }

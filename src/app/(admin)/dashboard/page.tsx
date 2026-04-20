@@ -29,6 +29,8 @@ import { TodayJobsTimeline, AtRiskSection } from "@/components/dashboard/today-j
 import { DashboardWeekCalendar } from "@/components/dashboard/dashboard-week-calendar";
 import { FirstRunWizard } from "@/components/dashboard/first-run-wizard";
 import { RightNowHero } from "@/components/dashboard/right-now-hero";
+import { WeeklyRecapCard } from "@/components/dashboard/weekly-recap-card";
+import { getWeeklyRecap } from "@/lib/queries/recap";
 import { listCalendarSources } from "@/lib/queries/calendar";
 import { listAllTeamMembers } from "@/lib/queries/team";
 
@@ -97,6 +99,8 @@ export default async function DashboardPage() {
     listCalendarSources(),
     listAllTeamMembers(),
   ]);
+
+  const recap = await getWeeklyRecap();
 
   const firstName = profile.full_name.split(" ")[0];
   const hasProperty = propertiesResult.data.length > 0;
@@ -344,6 +348,9 @@ export default async function DashboardPage() {
               days={weekDays}
               properties={propertiesResult.data}
             />
+
+            {/* Last 7 days recap */}
+            <WeeklyRecapCard recap={recap} />
 
             {/* Today's jobs — interactive, drawer on click */}
             <section aria-label="Today's jobs">
