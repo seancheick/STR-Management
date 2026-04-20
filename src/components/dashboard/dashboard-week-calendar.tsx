@@ -1,11 +1,12 @@
 "use client";
 
-import { LogOut, LogIn, Sparkles, X } from "lucide-react";
+import { AlertTriangle, LogOut, LogIn, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
+import { isTightTurnover } from "@/lib/domain/assignments";
 import { AssignmentEditForm } from "@/components/schedule/assignment-edit-form";
 
 type Pill =
@@ -252,28 +253,45 @@ function PillButton({ pill, onClick }: { pill: Pill; onClick: () => void }) {
     : pill.assignment.status === "unassigned"
       ? "Assign"
       : null;
+  const tight = isTightTurnover(pill.assignment.checkout_at, pill.assignment.due_at);
 
   if (pill.kind === "checkout") {
     return (
       <button
-        className="flex w-full items-center gap-1 rounded-lg border border-orange-200 bg-orange-50 px-1.5 py-1 text-left text-[11px] font-medium text-orange-800 transition hover:border-orange-300 hover:shadow-sm"
+        className={`flex w-full items-center gap-1 rounded-lg border px-1.5 py-1 text-left text-[11px] font-medium transition hover:shadow-sm ${
+          tight
+            ? "border-red-300 bg-red-50 text-red-800 hover:border-red-400"
+            : "border-orange-200 bg-orange-50 text-orange-800 hover:border-orange-300"
+        }`}
         onClick={onClick}
         type="button"
       >
-        <LogOut className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+        {tight ? (
+          <AlertTriangle className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+        ) : (
+          <LogOut className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+        )}
         <span className="truncate tabular-nums">{pill.time}</span>
-        <span className="truncate opacity-70">checkout</span>
+        <span className="truncate opacity-70">{tight ? "tight" : "checkout"}</span>
       </button>
     );
   }
 
   return (
     <button
-      className="flex w-full items-center gap-1 rounded-lg border border-green-200 bg-green-50 px-1.5 py-1 text-left text-[11px] font-medium text-green-800 transition hover:border-green-300 hover:shadow-sm"
+      className={`flex w-full items-center gap-1 rounded-lg border px-1.5 py-1 text-left text-[11px] font-medium transition hover:shadow-sm ${
+        tight
+          ? "border-red-300 bg-red-50 text-red-800 hover:border-red-400"
+          : "border-green-200 bg-green-50 text-green-800 hover:border-green-300"
+      }`}
       onClick={onClick}
       type="button"
     >
-      <Sparkles className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+      {tight ? (
+        <AlertTriangle className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+      ) : (
+        <Sparkles className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+      )}
       <span className="truncate tabular-nums">{pill.time}</span>
       <span className="truncate opacity-70">{cleanerLabel ?? "clean"}</span>
     </button>

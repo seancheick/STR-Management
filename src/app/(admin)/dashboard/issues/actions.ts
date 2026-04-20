@@ -24,6 +24,9 @@ export async function acknowledgeIssueAction(
   return { error: error?.message ?? null };
 }
 
+const EVIDENCE_GATE_SEVERITIES = new Set(["medium", "high", "critical"]);
+const MIN_EVIDENCE_NOTE_LENGTH = 10;
+
 export async function resolveIssueAction(
   issueId: string,
   notes?: string,
@@ -32,6 +35,31 @@ export async function resolveIssueAction(
   const supabase = await createServerSupabaseClient();
 
   const trimmed = notes?.trim() ?? "";
+
+  // Evidence gate: for severity ≥ medium, require a photo OR a 10+ char note.
+  const { data: current, error: fetchError } = await supabase
+    .from("issues")
+    .select("severity, status")
+    .eq("id", issueId)
+    .maybeSingle();
+
+  if (fetchError) return { error: fetchError.message };
+  if (!current) return { error: "Issue not found." };
+
+  if (EVIDENCE_GATE_SEVERITIES.has(current.severity)) {
+    if (trimmed.length < MIN_EVIDENCE_NOTE_LENGTH) {
+      const { count: photoCount } = await supabase
+        .from("issue_media")
+        .select("id", { count: "exact", head: true })
+        .eq("issue_id", issueId);
+      if ((photoCount ?? 0) === 0) {
+        return {
+          error: `Severity "${current.severity}" requires evidence. Add a photo or a resolution note (≥${MIN_EVIDENCE_NOTE_LENGTH} characters) describing how it was fixed.`,
+        };
+      }
+    }
+  }
+
   const payload: Record<string, unknown> = {
     status: "resolved",
     resolved_at: new Date().toISOString(),

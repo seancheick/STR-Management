@@ -1,11 +1,13 @@
 "use client";
 
-import { Pencil, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Loader2, Pencil, Users, X } from "lucide-react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
+import { bulkAssignCleanerAction } from "@/app/(admin)/dashboard/assignments/actions";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { AssignmentEditForm } from "@/components/schedule/assignment-edit-form";
+import { showToast } from "@/components/ui/toast";
 
 function priorityBadgeClass(priority: string) {
   const map: Record<string, string> = {
@@ -50,6 +52,9 @@ type AssignmentsListProps = {
 
 export function AssignmentsList({ assignments, cleaners }: AssignmentsListProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [bulkCleaner, setBulkCleaner] = useState("");
+  const [isPending, startTransition] = useTransition();
   const selected = assignments.find((a) => a.id === selectedId) ?? null;
 
   useEffect(() => {
@@ -61,28 +66,134 @@ export function AssignmentsList({ assignments, cleaners }: AssignmentsListProps)
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedId]);
 
+  const unassignedIds = useMemo(
+    () => assignments.filter((a) => a.status === "unassigned").map((a) => a.id),
+    [assignments],
+  );
+  const allUnassignedChecked =
+    unassignedIds.length > 0 && unassignedIds.every((id) => checkedIds.has(id));
+
+  function toggleChecked(id: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllUnassigned() {
+    setCheckedIds((prev) => {
+      if (allUnassignedChecked) {
+        const next = new Set(prev);
+        for (const id of unassignedIds) next.delete(id);
+        return next;
+      }
+      return new Set([...prev, ...unassignedIds]);
+    });
+  }
+
+  function handleBulkAssign() {
+    if (checkedIds.size === 0 || !bulkCleaner) return;
+    const ids = Array.from(checkedIds);
+    startTransition(async () => {
+      const res = await bulkAssignCleanerAction(ids, bulkCleaner);
+      if (res.error) {
+        showToast(res.error, "error");
+      } else {
+        showToast(
+          `Assigned ${res.assigned} job${res.assigned === 1 ? "" : "s"}.`,
+        );
+        setCheckedIds(new Set());
+        setBulkCleaner("");
+      }
+    });
+  }
+
   return (
     <>
+      {unassignedIds.length > 0 && (
+        <div className="sticky top-0 z-20 -mx-2 mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-card/95 px-4 py-3 shadow-sm backdrop-blur">
+          <label className="flex items-center gap-2 text-xs font-medium">
+            <input
+              checked={allUnassignedChecked}
+              className="h-4 w-4 rounded border-input"
+              onChange={toggleAllUnassigned}
+              type="checkbox"
+            />
+            Select all unassigned ({unassignedIds.length})
+          </label>
+          <span className="text-xs text-muted-foreground">
+            {checkedIds.size === 0
+              ? "No jobs selected"
+              : `${checkedIds.size} job${checkedIds.size === 1 ? "" : "s"} selected`}
+          </span>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <select
+              className="h-9 rounded-full border border-input bg-background px-3 text-xs disabled:opacity-60"
+              disabled={checkedIds.size === 0 || isPending}
+              onChange={(e) => setBulkCleaner(e.target.value)}
+              value={bulkCleaner}
+            >
+              <option value="">Choose cleaner…</option>
+              {cleaners.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.full_name}
+                </option>
+              ))}
+            </select>
+            <button
+              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+              disabled={checkedIds.size === 0 || !bulkCleaner || isPending}
+              onClick={handleBulkAssign}
+              type="button"
+            >
+              {isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Users className="h-3.5 w-3.5" />
+              )}
+              Assign {checkedIds.size > 0 ? checkedIds.size : ""}
+            </button>
+          </div>
+        </div>
+      )}
+
       <section className="flex flex-col gap-3">
         {assignments.map((a) => {
           const canEdit = !["approved", "cancelled"].includes(a.status);
+          const selectable = a.status === "unassigned";
+          const isChecked = checkedIds.has(a.id);
           return (
             <article
-              className="rounded-[1.5rem] border border-border/70 bg-card p-5 shadow-sm transition duration-200 hover:shadow-md"
+              className={`rounded-[1.5rem] border bg-card p-5 shadow-sm transition duration-200 hover:shadow-md ${
+                isChecked ? "border-primary/50 bg-primary/[0.03]" : "border-border/70"
+              }`}
               key={a.id}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-bold tracking-tight">
-                    {a.properties?.name ?? "Unknown property"}
-                  </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {a.properties
-                      ? [a.properties.address_line_1, a.properties.city]
-                          .filter(Boolean)
-                          .join(", ")
-                      : null}
-                  </p>
+                <div className="flex flex-1 items-start gap-3">
+                  {selectable && (
+                    <input
+                      aria-label={`Select ${a.properties?.name ?? "assignment"}`}
+                      checked={isChecked}
+                      className="mt-1 h-4 w-4 rounded border-input"
+                      onChange={() => toggleChecked(a.id)}
+                      type="checkbox"
+                    />
+                  )}
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight">
+                      {a.properties?.name ?? "Unknown property"}
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {a.properties
+                        ? [a.properties.address_line_1, a.properties.city]
+                            .filter(Boolean)
+                            .join(", ")
+                        : null}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span

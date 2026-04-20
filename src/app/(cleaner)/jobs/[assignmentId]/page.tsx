@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Info } from "lucide-react";
 
 import { requireRole } from "@/lib/auth/session";
 import { getAssignmentDetail } from "@/lib/queries/assignments";
 import { listInventoryForProperty } from "@/lib/queries/issues";
+import { getProperty } from "@/lib/queries/properties";
 import { addCleanerNoteAction, reportIssueAction, requestRestockAction } from "@/app/(cleaner)/jobs/actions";
 import { summarizeReviewEvidence } from "@/lib/services/review-evidence";
 import { ChecklistSection } from "@/components/assignments/checklist-section";
@@ -37,7 +39,11 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
     notFound();
   }
 
-  const inventoryItems = await listInventoryForProperty(assignment.property_id);
+  const [inventoryItems, propertyResult] = await Promise.all([
+    listInventoryForProperty(assignment.property_id),
+    getProperty(assignment.property_id),
+  ]);
+  const cleanerNotes = propertyResult.data?.cleaner_notes ?? null;
 
   // Cleaners can only see their own jobs
   if (profile.role === "cleaner" && assignment.cleaner_id !== profile.id) {
@@ -89,6 +95,23 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
         </h1>
         <p className="text-sm text-muted-foreground">Due: {formatDate(assignment.due_at)}</p>
       </div>
+
+      {/* Cleaner notes — property-specific instructions */}
+      {cleanerNotes && (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-2">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-amber-800">
+                Read first
+              </p>
+              <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-amber-900">
+                {cleanerNotes}
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Progress summary */}
       <section className="rounded-2xl border border-border/70 bg-card p-4">

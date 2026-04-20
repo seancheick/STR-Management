@@ -43,6 +43,7 @@ describe("parsePropertyFormData", () => {
       defaultCleanerId: null,
       active: true,
       timezone: null,
+      cleanerNotes: null,
     });
   });
 

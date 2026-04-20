@@ -138,3 +138,38 @@ export async function assignCleanerAction(
   return { error: null };
 }
 
+/**
+ * Bulk assign a cleaner to a batch of currently-unassigned jobs.
+ * Silently skips assignments whose status has already moved away from "unassigned".
+ */
+export async function bulkAssignCleanerAction(
+  assignmentIds: string[],
+  cleanerId: string,
+): Promise<{ error: string | null; assigned: number }> {
+  await requireRole(["owner", "admin"]);
+
+  if (assignmentIds.length === 0) {
+    return { error: "Nothing selected.", assigned: 0 };
+  }
+  if (!cleanerId || typeof cleanerId !== "string") {
+    return { error: "Pick a cleaner.", assigned: 0 };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("assignments")
+    .update({ cleaner_id: cleanerId, status: "assigned", ack_status: "pending" })
+    .in("id", assignmentIds)
+    .eq("status", "unassigned")
+    .select("id");
+
+  if (error) return { error: error.message, assigned: 0 };
+
+  revalidatePath("/dashboard/assignments");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/schedule");
+  revalidatePath("/jobs");
+  revalidatePath("/jobs/schedule");
+  return { error: null, assigned: data?.length ?? 0 };
+}
+

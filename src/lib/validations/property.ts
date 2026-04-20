@@ -63,6 +63,7 @@ export const propertyFormSchema = z.object({
   defaultCleanerId: nullableTrimmedString(),
   active: z.boolean(),
   timezone: nullableTrimmedString(),
+  cleanerNotes: nullableTrimmedString(),
 });
 
 export type PropertyFormValues = z.infer<typeof propertyFormSchema>;

@@ -56,6 +56,7 @@ export async function createPropertyAction(
       default_cleaner_id: values.defaultCleanerId,
       active: values.active,
       timezone: values.timezone,
+      cleaner_notes: values.cleanerNotes,
     });
 
     if (error) {

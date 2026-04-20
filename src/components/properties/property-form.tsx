@@ -212,6 +212,24 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </select>
           <FieldError errors={state.fieldErrors?.timezone} />
         </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <label className="text-sm font-medium" htmlFor="cleanerNotes">
+            Notes for the cleaner
+            <span className="ml-2 font-normal text-muted-foreground">
+              (shown at the top of the job — WiFi, lockbox code, linen closet, quirks)
+            </span>
+          </label>
+          <textarea
+            className="min-h-28 w-full rounded-xl border border-input bg-background px-4 py-3 text-sm"
+            defaultValue={property?.cleaner_notes ?? ""}
+            id="cleanerNotes"
+            name="cleanerNotes"
+            placeholder={`Example:\nWiFi: Lakeview-Guest / PW: 55Lake!\nLockbox: right of the door, code 4287\nLinens: top shelf of hallway closet\nTrash day: Tuesday morning, bins in garage`}
+            rows={5}
+          />
+          <FieldError errors={state.fieldErrors?.cleanerNotes} />
+        </div>
       </section>
 
       <label className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3">

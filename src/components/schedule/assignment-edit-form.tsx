@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Loader2, Trash2 } from "lucide-react";
+import { AlertCircle, Clock, Loader2, Trash2 } from "lucide-react";
 import { useActionState, useEffect, useState } from "react";
 
 import {
@@ -9,6 +9,11 @@ import {
   type CancelState,
   type RescheduleState,
 } from "@/app/(admin)/dashboard/schedule/actions";
+import {
+  formatTurnoverWindow,
+  isTightTurnover,
+  tightTurnoverMinutes,
+} from "@/lib/domain/assignments";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { showToast } from "@/components/ui/toast";
 
@@ -84,9 +89,26 @@ export function AssignmentEditForm({
   const editableStatuses = ["unassigned", "assigned", "confirmed", "needs_reclean"];
   const canDelete = editableStatuses.includes(assignment.status);
   const isLocked = !editableStatuses.includes(assignment.status);
+  const tight = isTightTurnover(assignment.checkout_at, assignment.due_at);
+  const tightWindow = tight
+    ? formatTurnoverWindow(tightTurnoverMinutes(assignment.checkout_at, assignment.due_at))
+    : null;
 
   return (
     <div className="flex flex-col gap-4">
+      {tight && (
+        <div
+          className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900"
+          role="alert"
+        >
+          <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-600" aria-hidden="true" />
+          <span>
+            <strong className="font-semibold">Tight turn — {tightWindow} window.</strong>{" "}
+            Confirm cleaner is aware and on-site by checkout.
+          </span>
+        </div>
+      )}
+
       {isLocked && (
         <div
           className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"

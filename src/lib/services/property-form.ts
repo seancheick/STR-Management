@@ -14,6 +14,7 @@ export function parsePropertyFormData(formData: FormData) {
     defaultCleanerId: formData.get("defaultCleanerId"),
     active: formData.get("active") === "on",
     timezone: formData.get("timezone"),
+    cleanerNotes: formData.get("cleanerNotes"),
   });
 }
 
