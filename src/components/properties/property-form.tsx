@@ -187,6 +187,31 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           />
           <FieldError errors={state.fieldErrors?.difficultyScore} />
         </div>
+
+        <div className="space-y-2 md:col-span-2">
+          <label className="text-sm font-medium" htmlFor="timezone">
+            Timezone
+            <span className="ml-2 font-normal text-muted-foreground">
+              (controls iCal check-in / checkout snapping; leave blank to use app default)
+            </span>
+          </label>
+          <select
+            className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
+            defaultValue={property?.timezone ?? ""}
+            id="timezone"
+            name="timezone"
+          >
+            <option value="">Use app default (America/New_York)</option>
+            <option value="America/New_York">Eastern — America/New_York</option>
+            <option value="America/Chicago">Central — America/Chicago</option>
+            <option value="America/Denver">Mountain — America/Denver</option>
+            <option value="America/Phoenix">Arizona (no DST) — America/Phoenix</option>
+            <option value="America/Los_Angeles">Pacific — America/Los_Angeles</option>
+            <option value="America/Anchorage">Alaska — America/Anchorage</option>
+            <option value="Pacific/Honolulu">Hawaii — Pacific/Honolulu</option>
+          </select>
+          <FieldError errors={state.fieldErrors?.timezone} />
+        </div>
       </section>
 
       <label className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3">

@@ -13,6 +13,7 @@ export function parsePropertyFormData(formData: FormData) {
     difficultyScore: formData.get("difficultyScore"),
     defaultCleanerId: formData.get("defaultCleanerId"),
     active: formData.get("active") === "on",
+    timezone: formData.get("timezone"),
   });
 }
 

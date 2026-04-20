@@ -1,6 +1,7 @@
 import "server-only";
 
 import { parseIcal, type TurnoverCandidate } from "./parser";
+import { DEFAULT_TIMEZONE } from "./timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type SyncSourceInput = {
@@ -233,7 +234,17 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
     };
   }
 
-  const candidates = parseIcal(rawIcal);
+  // Anchor DATE-only iCal events to the property's local timezone if set,
+  // otherwise fall back to the app default (America/New_York).
+  const { data: propertyTz } = await supabase
+    .from("properties")
+    .select("timezone")
+    .eq("id", input.propertyId)
+    .maybeSingle();
+  const timeZone =
+    (propertyTz?.timezone as string | null | undefined) ?? DEFAULT_TIMEZONE;
+
+  const candidates = parseIcal(rawIcal, { timeZone });
 
   let created = 0;
   let skipped = 0;

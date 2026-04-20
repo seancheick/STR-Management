@@ -9,6 +9,7 @@ import {
   groupEntriesByClean,
 } from "@/lib/queries/payouts";
 import { BatchActionButtons } from "@/components/payouts/batch-action-buttons";
+import { EntryPaidToggle } from "@/components/payouts/entry-paid-toggle";
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString("en-US", {
@@ -183,6 +184,9 @@ export default async function PayoutBatchDetailPage({
                     <th className="px-4 py-3 text-center font-medium text-muted-foreground">
                       Status
                     </th>
+                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">
+                      Payment
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -212,6 +216,9 @@ export default async function PayoutBatchDetailPage({
                         >
                           {e.status}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <EntryPaidToggle entryId={e.id} paidAt={e.paid_at} />
                       </td>
                     </tr>
                   ))}

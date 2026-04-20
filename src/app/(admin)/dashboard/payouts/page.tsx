@@ -21,13 +21,43 @@ function formatDate(d: string) {
   });
 }
 
-export default async function PayoutsPage() {
-  await requireRole(["owner", "admin", "supervisor"]);
+const FILTER_PRESETS: Array<{ key: string; label: string; days: number | "all" }> = [
+  { key: "all", label: "All", days: "all" },
+  { key: "30", label: "Last 30 days", days: 30 },
+  { key: "90", label: "Last 90 days", days: 90 },
+  { key: "365", label: "This year", days: 365 },
+];
 
-  const [batches, cleaners] = await Promise.all([
+type PayoutsPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
+  await requireRole(["owner", "admin", "supervisor"]);
+  const params = (await searchParams) ?? {};
+  const rangeKey = typeof params.range === "string" ? params.range : "all";
+
+  const [allBatches, cleaners] = await Promise.all([
     listPayoutBatches(),
     listActiveCleaners(),
   ]);
+
+  // Filter in-memory — payout_batches is a small table per owner.
+  const preset = FILTER_PRESETS.find((p) => p.key === rangeKey) ?? FILTER_PRESETS[0];
+  const cutoff =
+    preset.days === "all"
+      ? null
+      : new Date(Date.now() - preset.days * 24 * 60 * 60 * 1000);
+  const batches = cutoff
+    ? allBatches.filter((b) => new Date(b.period_end) >= cutoff)
+    : allBatches;
+
+  const totalPaid = batches
+    .filter((b) => b.status === "paid")
+    .reduce((sum, b) => sum + Number(b.total_amount), 0);
+  const totalPending = batches
+    .filter((b) => b.status === "draft" || b.status === "approved")
+    .reduce((sum, b) => sum + Number(b.total_amount), 0);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-8 px-6 py-10">
@@ -52,12 +82,61 @@ export default async function PayoutsPage() {
         <CreatePayoutBatchForm cleaners={cleaners} />
       </section>
 
-      {/* Report list */}
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Recent reports</h2>
+      {/* Report list with date-range filter + totals */}
+      <section className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Reports</h2>
+          <div className="flex flex-wrap gap-1.5">
+            {FILTER_PRESETS.map((p) => {
+              const active = p.key === rangeKey;
+              return (
+                <Link
+                  className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-medium transition ${
+                    active
+                      ? "bg-primary text-[#f7f5ef]"
+                      : "border border-border/70 bg-card text-foreground hover:bg-muted"
+                  }`}
+                  href={
+                    (p.key === "all"
+                      ? "/dashboard/payouts"
+                      : `/dashboard/payouts?range=${p.key}`) as Route
+                  }
+                  key={p.key}
+                >
+                  {p.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Totals for the filtered range */}
+        {batches.length > 0 && (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-2xl border border-border/70 bg-card px-4 py-3">
+              <p className="text-xs text-muted-foreground">Reports</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{batches.length}</p>
+            </div>
+            <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3">
+              <p className="text-xs text-green-700/80">Paid out</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-green-800">
+                ${totalPaid.toFixed(2)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-xs text-amber-700/80">Pending</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-amber-800">
+                ${totalPending.toFixed(2)}
+              </p>
+            </div>
+          </div>
+        )}
+
         {batches.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No reports yet. Generate one above.
+            {allBatches.length === 0
+              ? "No reports yet. Generate one above."
+              : "No reports in that range — try a wider filter."}
           </p>
         ) : (
           batches.map((b) => (

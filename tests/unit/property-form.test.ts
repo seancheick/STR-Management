@@ -42,7 +42,27 @@ describe("parsePropertyFormData", () => {
       difficultyScore: 4,
       defaultCleanerId: null,
       active: true,
+      timezone: null,
     });
+  });
+
+  it("keeps a valid timezone selection", () => {
+    const result = parsePropertyFormData(
+      makeFormData({
+        name: "Chicago Studio",
+        addressLine1: "",
+        city: "",
+        state: "",
+        postalCode: "",
+        bedrooms: "",
+        bathrooms: "",
+        defaultCleanPrice: "",
+        difficultyScore: "",
+        defaultCleanerId: "",
+        timezone: "America/Chicago",
+      }),
+    );
+    expect(result.timezone).toBe("America/Chicago");
   });
 
   it("defaults active to false when the checkbox is absent", () => {

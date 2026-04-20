@@ -19,6 +19,7 @@ export type PropertyRecord = {
   difficulty_score: number | null;
   default_cleaner_id: string | null;
   active: boolean;
+  timezone: string | null;
   created_at: string;
 };
 
@@ -46,6 +47,7 @@ export const listProperties = cache(async (): Promise<PropertiesQueryResult> => 
         "difficulty_score",
         "default_cleaner_id",
         "active",
+        "timezone",
         "created_at",
       ].join(","),
     )
@@ -76,6 +78,7 @@ export async function getProperty(propertyId: string) {
         "difficulty_score",
         "default_cleaner_id",
         "active",
+        "timezone",
         "created_at",
       ].join(","),
     )

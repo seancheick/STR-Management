@@ -62,6 +62,7 @@ export const propertyFormSchema = z.object({
   difficultyScore: nullableNumber({ integer: true, min: 1, max: 5 }),
   defaultCleanerId: nullableTrimmedString(),
   active: z.boolean(),
+  timezone: nullableTrimmedString(),
 });
 
 export type PropertyFormValues = z.infer<typeof propertyFormSchema>;

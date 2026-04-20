@@ -55,6 +55,7 @@ export async function createPropertyAction(
       difficulty_score: values.difficultyScore,
       default_cleaner_id: values.defaultCleanerId,
       active: values.active,
+      timezone: values.timezone,
     });
 
     if (error) {
@@ -102,6 +103,7 @@ export async function updatePropertyAction(
         difficulty_score: values.difficultyScore,
         default_cleaner_id: values.defaultCleanerId,
         active: values.active,
+        timezone: values.timezone,
       })
       .eq("id", propertyId);
 

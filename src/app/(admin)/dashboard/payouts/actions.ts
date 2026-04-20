@@ -13,6 +13,7 @@ import {
   updateEntryAmount,
   excludeEntry,
 } from "@/lib/services/payout-service";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const createBatchSchema = z.object({
   label: z.string().min(1, "Label required"),
@@ -108,5 +109,37 @@ export async function excludeEntryAction(
   const result = await excludeEntry(entryId, reason);
   if (!result.success) return { error: result.error };
   revalidatePath("/dashboard/payouts");
+  return { error: null };
+}
+
+/**
+ * Mark a single payout entry paid/unpaid independently of the parent report.
+ * Useful when a host pays out cleaner-by-cleaner or line-by-line.
+ */
+export async function toggleEntryPaidAction(
+  entryId: string,
+  paid: boolean,
+): Promise<{ error: string | null }> {
+  const profile = await requireRole(["owner", "admin"]);
+  const supabase = await createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("payout_entries")
+    .update(
+      paid
+        ? { paid_at: new Date().toISOString(), paid_by_id: profile.id }
+        : { paid_at: null, paid_by_id: null },
+    )
+    .eq("id", entryId)
+    .select("batch_id")
+    .maybeSingle();
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard/payouts");
+  revalidatePath("/jobs/pay");
+  if (data?.batch_id) {
+    revalidatePath(`/dashboard/payouts/${data.batch_id}`);
+  }
   return { error: null };
 }

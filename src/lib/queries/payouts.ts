@@ -32,6 +32,8 @@ export type PayoutEntryRecord = {
   amount: number;
   status: "included" | "excluded" | "disputed";
   notes: string | null;
+  paid_at: string | null;
+  paid_by_id: string | null;
   created_at: string;
   cleaners?: { full_name: string } | null;
   properties?: { name: string } | null;
