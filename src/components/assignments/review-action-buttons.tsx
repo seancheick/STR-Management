@@ -49,7 +49,7 @@ export function ReviewActionButtons({ assignmentId }: Props) {
           onClick={handleApprove}
           type="button"
         >
-          {isPending ? "…" : "Approve"}
+          {isPending ? "…" : "Unit ready"}
         </button>
         <button
           className="flex-1 rounded-full border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-700 transition hover:bg-orange-100 disabled:opacity-60"

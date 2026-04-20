@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { z } from "zod";
 
 import { requireRole } from "@/lib/auth/session";
@@ -47,58 +48,71 @@ export async function createAssignmentAction(
   _prev: AssignmentActionState,
   formData: FormData,
 ): Promise<AssignmentActionState> {
-  const profile = await requireRole(["owner", "admin"]);
-
-  let values: ReturnType<typeof parseAssignmentForm>;
   try {
-    values = parseAssignmentForm(formData);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        status: "error",
-        message: "Validation failed.",
-        fieldErrors: error.flatten().fieldErrors as Record<string, string[] | undefined>,
-      };
+    const profile = await requireRole(["owner", "admin"]);
+
+    let values: ReturnType<typeof parseAssignmentForm>;
+    try {
+      values = parseAssignmentForm(formData);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return {
+          status: "error",
+          message: "Validation failed.",
+          fieldErrors: error.flatten().fieldErrors as Record<string, string[] | undefined>,
+        };
+      }
+      return { status: "error", message: "Invalid form data." };
     }
-    return { status: "error", message: "Invalid form data." };
+
+    const supabase = await createServerSupabaseClient();
+
+    // Explicit template selection overrides the property default
+    const explicitTemplateId = (formData.get("templateId") as string | null) || null;
+    let resolvedTemplateId = explicitTemplateId;
+
+    if (!resolvedTemplateId) {
+      const { data: property } = await supabase
+        .from("properties")
+        .select("primary_checklist_template_id")
+        .eq("id", values.propertyId)
+        .maybeSingle();
+      resolvedTemplateId = property?.primary_checklist_template_id ?? null;
+    }
+
+    const ownerId = await resolveOwnerId();
+
+    const result = await createAssignment({
+      ownerId,
+      propertyId: values.propertyId,
+      cleanerId: values.cleanerId,
+      dueAt: values.dueAt,
+      checkoutAt: values.checkoutAt,
+      priority: values.priority,
+      expectedDurationMin: values.expectedDurationMin,
+      fixedPayoutAmount: values.fixedPayoutAmount,
+      primaryChecklistTemplateId: resolvedTemplateId,
+      createdByUserId: profile.id,
+    });
+
+    if (!result.success) {
+      return { status: "error", message: result.error };
+    }
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/assignments");
+    revalidatePath("/dashboard/schedule");
+    revalidatePath("/jobs");
+    revalidatePath("/jobs/schedule");
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    console.error("[createAssignmentAction]", error);
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "Could not create assignment.",
+    };
   }
 
-  const supabase = await createServerSupabaseClient();
-
-  // Explicit template selection overrides the property default
-  const explicitTemplateId = (formData.get("templateId") as string | null) || null;
-  let resolvedTemplateId = explicitTemplateId;
-
-  if (!resolvedTemplateId) {
-    const { data: property } = await supabase
-      .from("properties")
-      .select("primary_checklist_template_id")
-      .eq("id", values.propertyId)
-      .maybeSingle();
-    resolvedTemplateId = property?.primary_checklist_template_id ?? null;
-  }
-
-  const ownerId = await resolveOwnerId();
-
-  const result = await createAssignment({
-    ownerId,
-    propertyId: values.propertyId,
-    cleanerId: values.cleanerId,
-    dueAt: values.dueAt,
-    checkoutAt: values.checkoutAt,
-priority: values.priority,
-    expectedDurationMin: values.expectedDurationMin,
-    fixedPayoutAmount: values.fixedPayoutAmount,
-    primaryChecklistTemplateId: resolvedTemplateId,
-    createdByUserId: profile.id,
-  });
-
-  if (!result.success) {
-    return { status: "error", message: result.error };
-  }
-
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/assignments");
   redirect(`/dashboard/assignments?status=created` as never);
 }
 

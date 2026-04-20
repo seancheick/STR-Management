@@ -1,13 +1,15 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import {
   AlertCircle,
   Calendar,
   CheckCircle2,
   Clock,
   Loader2,
+  Pencil,
   User,
+  UserMinus,
   X,
 } from "lucide-react";
 import type { Route } from "next";
@@ -16,7 +18,13 @@ import Link from "next/link";
 import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
-import { quickAssignAction, type QuickAssignState } from "@/app/(admin)/dashboard/schedule/actions";
+import {
+  quickAssignAction,
+  unassignCleanerAction,
+  type QuickAssignState,
+} from "@/app/(admin)/dashboard/schedule/actions";
+import { AssignmentEditForm } from "@/components/schedule/assignment-edit-form";
+import { showToast } from "@/components/ui/toast";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -130,8 +138,32 @@ function AssignmentDetailPanel({
   onClose: () => void;
 }) {
   const cfg = statusConfig(assignment.status);
-  const window = turnoverWindow(assignment.checkout_at, assignment.due_at);
+  const turnover = turnoverWindow(assignment.checkout_at, assignment.due_at);
   const [state, formAction, isPending] = useActionState(quickAssignAction, initialState);
+  const [unassignState, unassignFormAction, isUnassigning] = useActionState(
+    unassignCleanerAction,
+    initialState,
+  );
+  const [mode, setMode] = useState<"view" | "edit">("view");
+
+  useEffect(() => {
+    if (state.status === "success" && state.message) showToast(state.message);
+    else if (state.status === "error" && state.message) showToast(state.message, "error");
+  }, [state]);
+
+  useEffect(() => {
+    if (unassignState.status === "success" && unassignState.message) {
+      showToast(unassignState.message);
+    } else if (unassignState.status === "error" && unassignState.message) {
+      showToast(unassignState.message, "error");
+    }
+  }, [unassignState]);
+
+  const editableStatuses = ["unassigned", "assigned", "confirmed", "needs_reclean"];
+  const canEdit = editableStatuses.includes(assignment.status);
+  const canUnassign =
+    assignment.cleaner_id !== null &&
+    ["assigned", "confirmed", "needs_reclean"].includes(assignment.status);
 
   return (
     <div className="flex flex-col gap-5">
@@ -139,7 +171,7 @@ function AssignmentDetailPanel({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Assignment detail
+            {mode === "edit" ? "Edit assignment" : "Assignment detail"}
           </p>
           <h3 className="mt-1 text-lg font-semibold tracking-tight">
             {assignment.properties?.name ?? "Property"}
@@ -162,111 +194,157 @@ function AssignmentDetailPanel({
         </button>
       </div>
 
-      {/* Status chip */}
-      <span
-        className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${cfg.bg} ${cfg.border} ${cfg.text}`}
-      >
-        <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} aria-hidden="true" />
-        {cfg.label}
-      </span>
-
-      {/* Time info */}
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-            Checkout
-          </dt>
-          <dd className="mt-1 font-medium tabular-nums">{formatTime(assignment.checkout_at)}</dd>
-        </div>
-        <div>
-          <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-            Cleaning due
-          </dt>
-          <dd className="mt-1 font-medium tabular-nums">{formatTime(assignment.due_at)}</dd>
-        </div>
-        {window && (
-          <div className="col-span-2">
-            <dt className="text-xs text-muted-foreground">Turnover window</dt>
-            <dd className="mt-1 font-semibold text-primary tabular-nums">{window}</dd>
-          </div>
-        )}
-        <div>
-          <dt className="text-xs text-muted-foreground">Priority</dt>
-          <dd className="mt-1 font-medium capitalize">{assignment.priority}</dd>
-        </div>
-        {assignment.fixed_payout_amount !== null && (
-          <div>
-            <dt className="text-xs text-muted-foreground">Payout</dt>
-            <dd className="mt-1 font-semibold tabular-nums">
-              ${Number(assignment.fixed_payout_amount).toFixed(2)}
-            </dd>
-          </div>
-        )}
-      </dl>
-
-      {/* Current cleaner */}
-      <div className="rounded-xl border border-border/70 bg-background px-4 py-3">
-        <p className="text-xs text-muted-foreground">Assigned cleaner</p>
-        <p className="mt-1 flex items-center gap-2 font-medium">
-          <User className="h-4 w-4 text-muted-foreground/60" aria-hidden="true" />
-          {assignment.cleaners?.full_name ?? "Unassigned"}
-        </p>
-      </div>
-
-      {/* Quick assign — only if unassigned */}
-      {assignment.status === "unassigned" && (
-        <form action={formAction} className="flex flex-col gap-3">
-          <input type="hidden" name="assignmentId" value={assignment.id} />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground" htmlFor="cleanerId">
-              Assign cleaner
-            </label>
-            <select
-              id="cleanerId"
-              name="cleanerId"
-              required
-              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
-            >
-              <option value="">Select a cleaner…</option>
-              {cleaners.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.full_name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {state.status === "error" && (
-            <p className="flex items-center gap-1.5 text-xs text-destructive">
-              <AlertCircle className="h-3.5 w-3.5" />
-              {state.message}
-            </p>
-          )}
-          {state.status === "success" && (
-            <p className="flex items-center gap-1.5 text-xs text-green-700">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {state.message}
-            </p>
-          )}
-          <button
-            type="submit"
-            disabled={isPending}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+      {mode === "edit" ? (
+        <AssignmentEditForm
+          assignment={assignment}
+          cleaners={cleaners}
+          onCancel={() => setMode("view")}
+          onSaved={() => {
+            setMode("view");
+            onClose();
+          }}
+          onDeleted={onClose}
+        />
+      ) : (
+        <>
+          {/* Status chip */}
+          <span
+            className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${cfg.bg} ${cfg.border} ${cfg.text}`}
           >
-            {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Assign cleaner
-          </button>
-        </form>
-      )}
+            <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} aria-hidden="true" />
+            {cfg.label}
+          </span>
 
-      {/* Link to full detail */}
-      <Link
-        href={`/dashboard/assignments` as Route}
-        className="inline-flex h-9 items-center justify-center rounded-full border border-border/70 px-4 text-sm font-medium text-foreground transition hover:bg-muted"
-      >
-        View full assignment →
-      </Link>
+          {/* Time info */}
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                Checkout
+              </dt>
+              <dd className="mt-1 font-medium tabular-nums">{formatTime(assignment.checkout_at)}</dd>
+            </div>
+            <div>
+              <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                Cleaning due
+              </dt>
+              <dd className="mt-1 font-medium tabular-nums">{formatTime(assignment.due_at)}</dd>
+            </div>
+            {turnover && (
+              <div className="col-span-2">
+                <dt className="text-xs text-muted-foreground">Turnover window</dt>
+                <dd className="mt-1 font-semibold text-primary tabular-nums">{turnover}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-xs text-muted-foreground">Priority</dt>
+              <dd className="mt-1 font-medium capitalize">{assignment.priority}</dd>
+            </div>
+            {assignment.fixed_payout_amount !== null && (
+              <div>
+                <dt className="text-xs text-muted-foreground">Payout</dt>
+                <dd className="mt-1 font-semibold tabular-nums">
+                  ${Number(assignment.fixed_payout_amount).toFixed(2)}
+                </dd>
+              </div>
+            )}
+          </dl>
+
+          {/* Current cleaner */}
+          <div className="rounded-xl border border-border/70 bg-background px-4 py-3">
+            <p className="text-xs text-muted-foreground">Assigned cleaner</p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 font-medium">
+                <User className="h-4 w-4 text-muted-foreground/60" aria-hidden="true" />
+                {assignment.cleaners?.full_name ?? "Unassigned"}
+              </p>
+              {canUnassign && (
+                <form action={unassignFormAction}>
+                  <input type="hidden" name="assignmentId" value={assignment.id} />
+                  <button
+                    className="inline-flex h-7 items-center gap-1 rounded-full border border-border/70 px-2.5 text-[11px] font-medium text-muted-foreground transition hover:border-amber-400/50 hover:bg-amber-50 hover:text-amber-800 disabled:opacity-60"
+                    disabled={isUnassigning}
+                    type="submit"
+                  >
+                    {isUnassigning ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <UserMinus className="h-3 w-3" />
+                    )}
+                    Unassign
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+
+          {/* Quick assign — only if unassigned */}
+          {assignment.status === "unassigned" && (
+            <form action={formAction} className="flex flex-col gap-3">
+              <input type="hidden" name="assignmentId" value={assignment.id} />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="cleanerId">
+                  Assign cleaner
+                </label>
+                <select
+                  id="cleanerId"
+                  name="cleanerId"
+                  required
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Select a cleaner…</option>
+                  {cleaners.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {state.status === "error" && (
+                <p className="flex items-center gap-1.5 text-xs text-destructive">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {state.message}
+                </p>
+              )}
+              {state.status === "success" && (
+                <p className="flex items-center gap-1.5 text-xs text-green-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {state.message}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={isPending}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+              >
+                {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Assign cleaner
+              </button>
+            </form>
+          )}
+
+          {/* Edit / View-full actions */}
+          <div className="flex items-center gap-2">
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setMode("edit")}
+                className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </button>
+            )}
+            <Link
+              href={`/jobs/${assignment.id}` as Route}
+              className="inline-flex h-9 items-center justify-center rounded-full border border-border/70 px-4 text-sm font-medium text-foreground transition hover:bg-muted"
+            >
+              Details →
+            </Link>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -291,6 +369,15 @@ export function ScheduleGrid({
   view,
 }: ScheduleGridProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    function handler(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedId(null);
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectedId]);
 
   const today = new Date();
   const selectedAssignment = assignments.find((a) => a.id === selectedId) ?? null;

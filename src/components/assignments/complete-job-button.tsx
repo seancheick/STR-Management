@@ -20,7 +20,7 @@ export function CompleteJobButton({ assignmentId }: CompleteJobButtonProps) {
         router.push("/jobs");
         router.refresh();
       } else {
-        setError(result.error ?? "Could not complete job.");
+        setError(result.error ?? "Could not mark unit ready.");
       }
     });
   }
@@ -38,7 +38,7 @@ export function CompleteJobButton({ assignmentId }: CompleteJobButtonProps) {
         onClick={handleComplete}
         type="button"
       >
-        {isPending ? "Submitting…" : "Submit for review"}
+        {isPending ? "Marking ready…" : "Unit is ready"}
       </button>
     </div>
   );

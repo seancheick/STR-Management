@@ -9,9 +9,11 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 type UserProfile = {
   id: string;
   email: string;
+  phone: string | null;
   full_name: string;
   role: UserRole;
   active: boolean;
+  availability: string | null;
 };
 
 export async function getSessionUser() {
@@ -33,7 +35,7 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, full_name, role, active")
+    .select("id, email, phone, full_name, role, active, availability")
     .eq("id", user.id)
     .maybeSingle();
 

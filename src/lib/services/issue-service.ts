@@ -2,6 +2,7 @@ import "server-only";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveOwnerId } from "@/lib/queries/properties";
+import { getOwnerIdFromLinkedAssignment } from "@/lib/services/issue-owner";
 
 const MAX_MEDIA_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_MEDIA_PER_ISSUE = 5;
@@ -25,7 +26,24 @@ export async function createIssue(input: CreateIssueInput): Promise<CreateIssueR
 
   let ownerId: string;
   try {
-    ownerId = await resolveOwnerId();
+    if (input.assignmentId) {
+      const { data: assignment, error } = await supabase
+        .from("assignments")
+        .select("owner_id, property_id")
+        .eq("id", input.assignmentId)
+        .maybeSingle();
+
+      if (error || !assignment) {
+        throw new Error("Could not resolve assignment owner.");
+      }
+
+      ownerId = getOwnerIdFromLinkedAssignment(
+        assignment as { owner_id: string; property_id: string },
+        input.propertyId,
+      );
+    } else {
+      ownerId = await resolveOwnerId();
+    }
   } catch {
     return { success: false, error: "Could not resolve owner." };
   }

@@ -44,6 +44,23 @@ export async function listCalendarSources(): Promise<CalendarSourceRecord[]> {
   return (data as unknown as CalendarSourceRecord[]) ?? [];
 }
 
+export async function listCalendarSourcesForProperty(
+  propertyId: string,
+): Promise<CalendarSourceRecord[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("property_calendar_sources")
+    .select(`
+      id, owner_id, property_id, name, ical_url, platform,
+      active, last_synced_at, created_at,
+      properties:property_id ( name )
+    `)
+    .eq("active", true)
+    .eq("property_id", propertyId)
+    .order("created_at", { ascending: false });
+  return (data as unknown as CalendarSourceRecord[]) ?? [];
+}
+
 export async function listCalendarSourcesForSync(): Promise<{
   id: string;
   owner_id: string;

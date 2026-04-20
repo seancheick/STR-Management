@@ -45,7 +45,7 @@ const PROPERTY_STATUS_CONFIG: Record<
   assigned:       { label: "Assigned",       dot: "bg-blue-400",   badge: "bg-blue-50 text-blue-700 border-blue-200" },
   in_progress:    { label: "In progress",    dot: "bg-orange-400", badge: "bg-orange-50 text-orange-700 border-orange-200" },
   pending_review: { label: "Pending review", dot: "bg-purple-400", badge: "bg-purple-50 text-purple-700 border-purple-200" },
-  ready:          { label: "Ready",          dot: "bg-green-400",  badge: "bg-green-50 text-green-700 border-green-200" },
+  ready:          { label: "Unit ready",     dot: "bg-green-400",  badge: "bg-green-50 text-green-700 border-green-200" },
   quiet:          { label: "No jobs today",  dot: "bg-border",     badge: "bg-muted/60 text-muted-foreground border-border/60" },
 };
 

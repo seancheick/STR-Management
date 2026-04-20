@@ -115,6 +115,20 @@ export function transitionAssignment(
         ackStatus: "accepted",
       };
 
+    case "mark_unit_ready":
+      if (parsedState.status !== "in_progress" || parsedState.ackStatus !== "accepted") {
+        invalidTransition(parsedTransition.action, parsedState);
+      }
+
+      if (!parsedTransition.proofChecklistComplete || !parsedTransition.proofPhotosComplete) {
+        throw new Error("Assignment proof is incomplete.");
+      }
+
+      return {
+        status: "approved",
+        ackStatus: "accepted",
+      };
+
     case "approve":
       if (
         parsedState.status !== "completed_pending_review" ||

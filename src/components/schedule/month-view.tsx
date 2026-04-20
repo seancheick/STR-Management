@@ -1,17 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
+import { Loader2, Pencil, UserMinus } from "lucide-react";
 
 import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { PropertyRecord } from "@/lib/queries/properties";
+import type { TeamMemberRecord } from "@/lib/queries/team";
+import { AssignmentEditForm } from "@/components/schedule/assignment-edit-form";
+import {
+  unassignCleanerAction,
+  type QuickAssignState,
+} from "@/app/(admin)/dashboard/schedule/actions";
+import { showToast } from "@/components/ui/toast";
+
+const unassignInitial: QuickAssignState = { status: "idle", message: null };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type MonthViewProps = {
   assignments: AssignmentScheduleRecord[];
   properties: PropertyRecord[];
+  cleaners: TeamMemberRecord[];
   monthDays: string[]; // ISO strings for every day in the month
   monthOffset: number;
   view: "week" | "month";
@@ -57,15 +68,6 @@ function firstName(fullName: string | null | undefined) {
   return fullName.split(" ")[0];
 }
 
-function propertyDayStatus(propertyId: string, dayAssignments: AssignmentScheduleRecord[]) {
-  const mine = dayAssignments.filter((a) => a.property_id === propertyId);
-  if (mine.some((a) => a.status === "unassigned" || a.status === "needs_reclean")) return "text-amber-600";
-  if (mine.some((a) => a.status === "in_progress")) return "text-orange-600";
-  if (mine.every((a) => a.status === "approved")) return "text-green-600";
-  if (mine.length > 0) return "text-blue-600";
-  return "";
-}
-
 // ─── Assignment chip (compact, for narrow month columns) ──────────────────────
 
 function AssignmentChip({
@@ -108,27 +110,69 @@ function AssignmentChip({
 
 function DetailPanel({
   assignment,
+  cleaners,
   onClose,
 }: {
   assignment: AssignmentScheduleRecord;
+  cleaners: TeamMemberRecord[];
   onClose: () => void;
 }) {
   const cfg = STATUS_CFG[assignment.status] ?? { bg: "bg-muted", border: "border-border", text: "text-foreground", dot: "bg-muted-foreground" };
   const label = STATUS_LABEL[assignment.status] ?? assignment.status;
+  const [mode, setMode] = useState<"view" | "edit">("view");
+  const [unassignState, unassignFormAction, isUnassigning] = useActionState(
+    unassignCleanerAction,
+    unassignInitial,
+  );
+
+  useEffect(() => {
+    if (unassignState.status === "success" && unassignState.message) {
+      showToast(unassignState.message);
+    } else if (unassignState.status === "error" && unassignState.message) {
+      showToast(unassignState.message, "error");
+    }
+  }, [unassignState]);
+
+  const editableStatuses = ["unassigned", "assigned", "confirmed", "needs_reclean"];
+  const canEdit = editableStatuses.includes(assignment.status);
+  const canUnassign =
+    assignment.cleaner_id !== null &&
+    ["assigned", "confirmed", "needs_reclean"].includes(assignment.status);
 
   return (
     <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Assignment</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {mode === "edit" ? "Edit assignment" : "Assignment"}
+          </p>
           <h3 className="mt-0.5 truncate text-base font-semibold">
             {assignment.properties?.name ?? "Property"}
           </h3>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {assignment.cleaners?.full_name ?? (
-              <span className="font-medium text-amber-600">Unassigned</span>
+          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>
+              {assignment.cleaners?.full_name ?? (
+                <span className="font-medium text-amber-600">Unassigned</span>
+              )}
+            </span>
+            {canUnassign && (
+              <form action={unassignFormAction}>
+                <input type="hidden" name="assignmentId" value={assignment.id} />
+                <button
+                  className="inline-flex h-6 items-center gap-1 rounded-full border border-border/70 px-2 text-[10px] font-medium text-muted-foreground transition hover:border-amber-400/60 hover:bg-amber-50 hover:text-amber-800 disabled:opacity-60"
+                  disabled={isUnassigning}
+                  type="submit"
+                >
+                  {isUnassigning ? (
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                  ) : (
+                    <UserMinus className="h-2.5 w-2.5" />
+                  )}
+                  Unassign
+                </button>
+              </form>
             )}
-          </p>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${cfg.bg} ${cfg.border} ${cfg.text}`}>
@@ -146,38 +190,73 @@ function DetailPanel({
         </div>
       </div>
 
-      <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-        {assignment.checkout_at && (
-          <div>
-            <dt className="text-xs text-muted-foreground">Checkout</dt>
-            <dd className="font-medium tabular-nums">{shortTime(assignment.checkout_at)}</dd>
-          </div>
-        )}
-        <div>
-          <dt className="text-xs text-muted-foreground">Cleaning due</dt>
-          <dd className="font-medium tabular-nums">{shortTime(assignment.due_at)}</dd>
+      {mode === "edit" ? (
+        <div className="mt-4">
+          <AssignmentEditForm
+            assignment={assignment}
+            cleaners={cleaners}
+            onCancel={() => setMode("view")}
+            onSaved={() => {
+              setMode("view");
+              onClose();
+            }}
+            onDeleted={onClose}
+          />
         </div>
+      ) : (
+        <>
+          <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            {assignment.checkout_at && (
+              <div>
+                <dt className="text-xs text-muted-foreground">Checkout</dt>
+                <dd className="font-medium tabular-nums">{shortTime(assignment.checkout_at)}</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-xs text-muted-foreground">Cleaning due</dt>
+              <dd className="font-medium tabular-nums">{shortTime(assignment.due_at)}</dd>
+            </div>
 
-        {assignment.expected_duration_min && (
-          <div>
-            <dt className="text-xs text-muted-foreground">Duration</dt>
-            <dd className="font-medium">~{assignment.expected_duration_min} min</dd>
+            {assignment.expected_duration_min && (
+              <div>
+                <dt className="text-xs text-muted-foreground">Duration</dt>
+                <dd className="font-medium">~{assignment.expected_duration_min} min</dd>
+              </div>
+            )}
+            <div>
+              <dt className="text-xs text-muted-foreground">Priority</dt>
+              <dd className="font-medium capitalize">{assignment.priority}</dd>
+            </div>
+            {assignment.fixed_payout_amount !== null && (
+              <div>
+                <dt className="text-xs text-muted-foreground">Payout</dt>
+                <dd className="font-medium tabular-nums">
+                  ${Number(assignment.fixed_payout_amount).toFixed(2)}
+                </dd>
+              </div>
+            )}
+          </dl>
+
+          <div className="mt-3 flex items-center gap-2">
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setMode("edit")}
+                className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
+              >
+                <Pencil className="h-3 w-3" />
+                Edit
+              </button>
+            )}
+            <Link
+              href={`/jobs/${assignment.id}` as Route}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/70 px-3 text-xs font-medium transition hover:bg-muted"
+            >
+              Details →
+            </Link>
           </div>
-        )}
-        <div>
-          <dt className="text-xs text-muted-foreground">Priority</dt>
-          <dd className="font-medium capitalize">{assignment.priority}</dd>
-        </div>
-      </dl>
-
-      <div className="mt-3 flex items-center gap-2">
-        <Link
-          href={`/dashboard/assignments/new` as Route}
-          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/70 px-3 text-xs font-medium transition hover:bg-muted"
-        >
-          + New job
-        </Link>
-      </div>
+        </>
+      )}
     </div>
   );
 }
@@ -187,11 +266,21 @@ function DetailPanel({
 export function MonthView({
   assignments,
   properties,
+  cleaners,
   monthDays,
   monthOffset,
   view,
 }: MonthViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    function handler(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedId(null);
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectedId]);
 
   const today = new Date();
   const firstDay = new Date(monthDays[0]);
@@ -371,6 +460,7 @@ export function MonthView({
       {selectedAssignment && (
         <DetailPanel
           assignment={selectedAssignment}
+          cleaners={cleaners}
           onClose={() => setSelectedId(null)}
         />
       )}

@@ -69,6 +69,22 @@ describe("transitionAssignment", () => {
     });
   });
 
+  it("marks an in-progress assignment ready when cleaner proof exists", () => {
+    const result = transitionAssignment(
+      { status: "in_progress", ackStatus: "accepted" },
+      {
+        action: "mark_unit_ready",
+        proofChecklistComplete: true,
+        proofPhotosComplete: true,
+      },
+    );
+
+    expect(result).toEqual({
+      status: "approved",
+      ackStatus: "accepted",
+    });
+  });
+
   it("blocks accept after the acknowledgment window is closed", () => {
     expect(() =>
       transitionAssignment(
@@ -90,4 +106,3 @@ describe("transitionAssignment", () => {
     });
   });
 });
-

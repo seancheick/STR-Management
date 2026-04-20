@@ -1,5 +1,10 @@
 import { requireRole } from "@/lib/auth/session";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import {
+  summarizeReviewEvidence,
+  type ReviewEvidenceIssue,
+  type ReviewEvidenceNote,
+} from "@/lib/services/review-evidence";
 import { ReviewActionButtons } from "@/components/assignments/review-action-buttons";
 import { CheckCircle2, Clock, User } from "lucide-react";
 
@@ -11,6 +16,19 @@ type PendingReviewJob = {
   checklist_total: number;
   checklist_done: number;
   photo_count: number;
+  cleaner_notes: Array<{
+    body: string;
+    created_at: string;
+    users?: { full_name: string } | null;
+  }>;
+  reported_issues: Array<{
+    id: string;
+    title: string;
+    severity: string;
+    status: string;
+    description: string | null;
+    created_at: string;
+  }>;
 };
 
 async function listPendingReviewJobs(): Promise<PendingReviewJob[]> {
@@ -23,7 +41,9 @@ async function listPendingReviewJobs(): Promise<PendingReviewJob[]> {
        properties:property_id ( name ),
        cleaners:cleaner_id ( full_name ),
        assignment_checklist_items ( id, completed ),
-       assignment_photos ( id )`,
+       assignment_photos ( id ),
+       assignment_notes ( id, note_type, body, created_at, users:user_id ( full_name ) ),
+       issues ( id, title, severity, status, description, created_at )`,
     )
     .eq("status", "completed_pending_review")
     .order("due_at", { ascending: true });
@@ -33,6 +53,10 @@ async function listPendingReviewJobs(): Promise<PendingReviewJob[]> {
   return (assignments ?? []).map((a) => {
     const items = (a.assignment_checklist_items as { id: string; completed: boolean }[]) ?? [];
     const photos = (a.assignment_photos as { id: string }[]) ?? [];
+    const evidence = summarizeReviewEvidence({
+      notes: ((a.assignment_notes as unknown) as ReviewEvidenceNote[]) ?? [],
+      issues: ((a.issues as unknown) as ReviewEvidenceIssue[]) ?? [],
+    });
     return {
       id: a.id,
       due_at: a.due_at,
@@ -41,6 +65,19 @@ async function listPendingReviewJobs(): Promise<PendingReviewJob[]> {
       checklist_total: items.length,
       checklist_done: items.filter((i) => i.completed).length,
       photo_count: photos.length,
+      cleaner_notes: evidence.cleanerNotes.map((note) => ({
+        body: note.body,
+        created_at: note.created_at,
+        users: note.users ?? null,
+      })),
+      reported_issues: evidence.reportedIssues.map((issue) => ({
+        id: issue.id,
+        title: issue.title,
+        severity: issue.severity,
+        status: issue.status,
+        description: issue.description ?? null,
+        created_at: issue.created_at,
+      })),
     };
   });
 }
@@ -64,7 +101,7 @@ export default async function ReviewQueuePage() {
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-semibold tracking-tight">Review queue</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Jobs waiting for your approval or re-clean decision.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Jobs waiting for a ready or re-clean decision.</p>
         </div>
         <span className="rounded-full border border-purple-200 bg-purple-50 px-4 py-1.5 text-sm font-semibold tabular-nums text-purple-700">
           {jobs.length} pending
@@ -123,7 +160,48 @@ export default async function ReviewQueuePage() {
                     <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
                       {job.photo_count} photo{job.photo_count !== 1 ? "s" : ""}
                     </span>
+                    {job.cleaner_notes.length > 0 && (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700">
+                        {job.cleaner_notes.length} note{job.cleaner_notes.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                    {job.reported_issues.length > 0 && (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                        {job.reported_issues.length} issue{job.reported_issues.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
                   </div>
+
+                  {(job.cleaner_notes.length > 0 || job.reported_issues.length > 0) && (
+                    <div className="mt-4 space-y-3 rounded-2xl border border-border/70 bg-background/60 p-4">
+                      {job.cleaner_notes.map((note) => (
+                        <div key={`${note.created_at}-${note.body}`}>
+                          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+                            Cleaner note
+                          </p>
+                          <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{note.body}</p>
+                        </div>
+                      ))}
+                      {job.reported_issues.map((issue) => (
+                        <div
+                          className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"
+                          key={issue.id}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-sm font-medium text-amber-900">{issue.title}</p>
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
+                              {issue.severity}
+                            </span>
+                          </div>
+                          {issue.description && (
+                            <p className="mt-1 text-xs leading-5 text-amber-800/80">
+                              {issue.description}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Review actions */}

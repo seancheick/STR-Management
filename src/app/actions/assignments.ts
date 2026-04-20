@@ -3,6 +3,7 @@
 import { getAssignmentDetail } from "@/lib/queries/assignments";
 import { requireRole } from "@/lib/auth/session";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { summarizeReviewEvidence } from "@/lib/services/review-evidence";
 import { revalidatePath } from "next/cache";
 
 export type CleanerSuggestion = {
@@ -23,6 +24,10 @@ export async function fetchAssignmentDetail(assignmentId: string) {
   const completedItems = detail.checklist_items.filter((i) => i.completed).length;
   const totalItems = detail.checklist_items.length;
   const photoCount = detail.photos.length;
+  const evidence = summarizeReviewEvidence({
+    notes: detail.notes,
+    issues: detail.issues,
+  });
 
   return {
     id: detail.id,
@@ -43,6 +48,19 @@ export async function fetchAssignmentDetail(assignmentId: string) {
     photoCount,
     propertyId: detail.property_id,
     cleanerId: detail.cleaner_id,
+    cleanerNotes: evidence.cleanerNotes.map((note) => ({
+      body: note.body,
+      createdAt: note.created_at,
+      authorName: note.users?.full_name ?? null,
+    })),
+    reportedIssues: evidence.reportedIssues.map((issue) => ({
+      id: issue.id,
+      title: issue.title,
+      severity: issue.severity,
+      status: issue.status,
+      description: issue.description ?? null,
+      createdAt: issue.created_at,
+    })),
   };
 }
 

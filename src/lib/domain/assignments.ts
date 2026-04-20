@@ -23,6 +23,7 @@ export const assignmentActions = [
   "expire",
   "start",
   "submit_for_review",
+  "mark_unit_ready",
   "approve",
   "reject_to_reclean",
   "reopen_to_unassigned",
@@ -34,4 +35,3 @@ export type AssignmentAckStatus = (typeof assignmentAckStatuses)[number];
 export type AssignmentAction = (typeof assignmentActions)[number];
 
 export const terminalAssignmentStatuses = ["approved", "cancelled"] as const;
-

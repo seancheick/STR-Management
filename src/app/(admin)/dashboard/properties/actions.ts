@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 
 import { requireRole } from "@/lib/auth/session";
 import { resolveOwnerId } from "@/lib/queries/properties";
@@ -35,9 +36,9 @@ export async function createPropertyAction(
   _previousState: PropertyActionState,
   formData: FormData,
 ): Promise<PropertyActionState> {
-  await requireRole(["owner", "admin"]);
-
   try {
+    await requireRole(["owner", "admin"]);
+
     const values = parsePropertyFormData(formData);
     const ownerId = await resolveOwnerId();
     const supabase = await createServerSupabaseClient();
@@ -63,6 +64,8 @@ export async function createPropertyAction(
       };
     }
   } catch (error) {
+    if (isRedirectError(error)) throw error;
+    console.error("[createPropertyAction]", error);
     return {
       status: "error",
       message: error instanceof Error ? error.message : "Could not create property.",
@@ -80,9 +83,9 @@ export async function updatePropertyAction(
   _previousState: PropertyActionState,
   formData: FormData,
 ): Promise<PropertyActionState> {
-  await requireRole(["owner", "admin"]);
-
   try {
+    await requireRole(["owner", "admin"]);
+
     const values = parsePropertyFormData(formData);
     const supabase = await createServerSupabaseClient();
     const { error } = await supabase
@@ -109,6 +112,8 @@ export async function updatePropertyAction(
       };
     }
   } catch (error) {
+    if (isRedirectError(error)) throw error;
+    console.error("[updatePropertyAction]", error);
     return {
       status: "error",
       message: error instanceof Error ? error.message : "Could not update property.",

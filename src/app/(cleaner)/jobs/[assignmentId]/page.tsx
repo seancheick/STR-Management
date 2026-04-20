@@ -4,10 +4,12 @@ import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import { getAssignmentDetail } from "@/lib/queries/assignments";
 import { listInventoryForProperty } from "@/lib/queries/issues";
-import { reportIssueAction, requestRestockAction } from "@/app/(cleaner)/jobs/actions";
+import { addCleanerNoteAction, reportIssueAction, requestRestockAction } from "@/app/(cleaner)/jobs/actions";
+import { summarizeReviewEvidence } from "@/lib/services/review-evidence";
 import { ChecklistSection } from "@/components/assignments/checklist-section";
 import { PhotoUploadSection } from "@/components/assignments/photo-upload-section";
 import { CompleteJobButton } from "@/components/assignments/complete-job-button";
+import { CleanerNotesSection } from "@/components/assignments/cleaner-notes-section";
 import { ReportIssueSection } from "@/components/assignments/report-issue-section";
 import { RestockRequestSection } from "@/components/assignments/restock-request-section";
 
@@ -71,6 +73,10 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
   const requiredDoneCount = assignment.checklist_items.filter(
     (i) => i.required && i.completed,
   ).length;
+  const evidence = summarizeReviewEvidence({
+    notes: assignment.notes,
+    issues: assignment.issues,
+  });
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-5 py-8">
@@ -132,6 +138,13 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
         readOnly={isReadOnly}
       />
 
+      <CleanerNotesSection
+        action={addCleanerNoteAction}
+        assignmentId={assignmentId}
+        notes={evidence.cleanerNotes}
+        readOnly={isReadOnly}
+      />
+
       {/* Issue reporting — available during in_progress or after */}
       {["in_progress", "completed_pending_review"].includes(assignment.status) && (
         <ReportIssueSection
@@ -158,6 +171,12 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
       {assignment.status === "completed_pending_review" && (
         <section className="rounded-2xl border border-purple-200 bg-purple-50 p-4 text-sm text-purple-700">
           Submitted for review. Your supervisor will approve this job.
+        </section>
+      )}
+
+      {assignment.status === "approved" && (
+        <section className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+          Unit marked ready. The manager dashboard now shows this unit as ready.
         </section>
       )}
     </main>

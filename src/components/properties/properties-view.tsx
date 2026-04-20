@@ -2,7 +2,7 @@
 
 import { LayoutGrid, List, ChevronDown, ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { archivePropertyAction } from "@/app/(admin)/dashboard/properties/actions";
 import type { PropertyRecord } from "@/lib/queries/properties";
@@ -10,6 +10,26 @@ import type { PropertyRecord } from "@/lib/queries/properties";
 type ViewMode = "grid" | "list";
 
 const STORAGE_KEY = "props-view";
+const STORAGE_EVENT = "props-view-change";
+
+function getStoredView(): ViewMode {
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored === "grid" || stored === "list") return stored;
+  } catch {
+    // localStorage unavailable
+  }
+  return "grid";
+}
+
+function subscribeToViewPreference(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(STORAGE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(STORAGE_EVENT, onStoreChange);
+  };
+}
 
 function bedbathLabel(bedrooms: number | null, bathrooms: number | null) {
   const bed = bedrooms != null ? `${bedrooms} bed` : null;
@@ -138,24 +158,13 @@ type PropertiesViewProps = {
 };
 
 export function PropertiesView({ activeProperties, archivedProperties }: PropertiesViewProps) {
-  const [view, setView] = useState<ViewMode>("grid");
+  const view = useSyncExternalStore(subscribeToViewPreference, getStoredView, () => "grid");
   const [archivedOpen, setArchivedOpen] = useState(false);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored === "grid" || stored === "list") {
-        setView(stored);
-      }
-    } catch {
-      // localStorage unavailable
-    }
-  }, []);
-
   function handleViewChange(next: ViewMode) {
-    setView(next);
     try {
-      localStorage.setItem(STORAGE_KEY, next);
+      window.localStorage.setItem(STORAGE_KEY, next);
+      window.dispatchEvent(new Event(STORAGE_EVENT));
     } catch {
       // ignore
     }

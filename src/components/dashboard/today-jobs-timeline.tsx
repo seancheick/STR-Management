@@ -26,6 +26,7 @@ function statusBadgeClass(status: string) {
 }
 
 function formatStatus(s: string) {
+  if (s === "approved") return "Unit Ready";
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 

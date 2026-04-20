@@ -159,5 +159,12 @@ export function parseIcal(raw: string): TurnoverCandidate[] {
   }
 
   // Strip the internal checkinAt field before returning
-  return parsed.map(({ checkinAt: _checkinAt, ...rest }) => rest);
+  return parsed.map((event) => ({
+    uid: event.uid,
+    checkoutAt: event.checkoutAt,
+    dueAt: event.dueAt,
+    nextCheckinAt: event.nextCheckinAt,
+    summary: event.summary,
+    description: event.description,
+  }));
 }

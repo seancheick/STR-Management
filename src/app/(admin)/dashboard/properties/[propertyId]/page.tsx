@@ -1,11 +1,12 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, Bed, Bath, ClipboardList, Package, Pencil } from "lucide-react";
+import { ArrowRight, Bed, Bath, CalendarDays, ClipboardList, Package, Pencil } from "lucide-react";
 
 import { requireRole } from "@/lib/auth/session";
 import { getProperty } from "@/lib/queries/properties";
 import { listAssignmentsForAdmin } from "@/lib/queries/assignments";
+import { listCalendarSourcesForProperty } from "@/lib/queries/calendar";
 
 type PropertyPageProps = {
   params: Promise<{ propertyId: string }>;
@@ -42,9 +43,10 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
   await requireRole(["owner", "admin"]);
   const { propertyId } = await params;
 
-  const [propertyResult, allAssignments] = await Promise.all([
+  const [propertyResult, allAssignments, calendarSources] = await Promise.all([
     getProperty(propertyId),
     listAssignmentsForAdmin(),
+    listCalendarSourcesForProperty(propertyId),
   ]);
 
   if (!propertyResult.data) notFound();
@@ -126,27 +128,41 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
       </section>
 
       {/* Quick links */}
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           {
             href: `/dashboard/assignments/new?propertyId=${propertyId}`,
             icon: ClipboardList,
             label: "New assignment",
             sub: "Schedule a cleaning",
+            badge: null as string | null,
+          },
+          {
+            href: `/dashboard/calendar?propertyId=${propertyId}#add-source`,
+            icon: CalendarDays,
+            label: calendarSources.length > 0 ? "Calendar sync" : "Add iCal",
+            sub:
+              calendarSources.length > 0
+                ? `${calendarSources.length} source${calendarSources.length === 1 ? "" : "s"} connected`
+                : "Auto-create from bookings",
+            badge:
+              calendarSources.length > 0 ? String(calendarSources.length) : null,
           },
           {
             href: `/dashboard/properties/${propertyId}/inventory`,
             icon: Package,
             label: "Inventory",
             sub: "Manage supplies",
+            badge: null,
           },
           {
             href: `/dashboard/properties/${propertyId}/edit`,
             icon: Pencil,
             label: "Edit property",
             sub: "Update details",
+            badge: null,
           },
-        ].map(({ href, icon: Icon, label, sub }) => (
+        ].map(({ href, icon: Icon, label, sub, badge }) => (
           <Link
             key={href}
             href={href as Route}
@@ -156,7 +172,14 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
               <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium">{label}</p>
+              <p className="flex items-center gap-2 text-sm font-medium">
+                {label}
+                {badge && (
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                    {badge}
+                  </span>
+                )}
+              </p>
               <p className="text-xs text-muted-foreground">{sub}</p>
             </div>
             <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/40" />

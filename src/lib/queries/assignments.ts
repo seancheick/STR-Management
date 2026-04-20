@@ -23,6 +23,8 @@ export type AssignmentListRecord = {
 export type AssignmentDetailRecord = AssignmentListRecord & {
   checklist_items: AssignmentChecklistItemRecord[];
   photos: AssignmentPhotoRecord[];
+  notes: AssignmentNoteRecord[];
+  issues: AssignmentDetailIssueRecord[];
 };
 
 export type AssignmentChecklistItemRecord = {
@@ -46,6 +48,26 @@ export type AssignmentPhotoRecord = {
   photo_category: string;
   storage_path: string;
   captured_at: string | null;
+};
+
+export type AssignmentNoteRecord = {
+  id: string;
+  assignment_id: string;
+  user_id: string | null;
+  note_type: string;
+  body: string;
+  created_at: string;
+  users: { full_name: string } | null;
+};
+
+export type AssignmentDetailIssueRecord = {
+  id: string;
+  assignment_id: string | null;
+  title: string;
+  severity: string;
+  status: string;
+  description: string | null;
+  created_at: string;
 };
 
 const ASSIGNMENT_LIST_SELECT = `
@@ -78,7 +100,7 @@ export async function listTodaysAssignmentsForAdmin(): Promise<AssignmentListRec
     .select(ASSIGNMENT_LIST_SELECT)
     .gte("due_at", todayStart.toISOString())
     .lte("due_at", todayEnd.toISOString())
-    .not("status", "in", '("cancelled","approved")')
+    .not("status", "eq", "cancelled")
     .order("due_at", { ascending: true });
 
   return (data as AssignmentListRecord[] | null) ?? [];
@@ -124,12 +146,41 @@ export async function listAssignmentsForCleaner(
   return (data as AssignmentListRecord[] | null) ?? [];
 }
 
+export async function listCleanerPortalAssignments(
+  cleanerId: string,
+): Promise<AssignmentListRecord[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("assignments")
+    .select(ASSIGNMENT_LIST_SELECT)
+    .eq("cleaner_id", cleanerId)
+    .not("status", "eq", "cancelled")
+    .order("due_at", { ascending: true });
+
+  return (data as AssignmentListRecord[] | null) ?? [];
+}
+
+export async function listCleanerHistoryAssignments(
+  cleanerId: string,
+): Promise<AssignmentListRecord[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("assignments")
+    .select(ASSIGNMENT_LIST_SELECT)
+    .eq("cleaner_id", cleanerId)
+    .in("status", ["completed_pending_review", "approved", "needs_reclean"])
+    .order("due_at", { ascending: false })
+    .limit(100);
+
+  return (data as AssignmentListRecord[] | null) ?? [];
+}
+
 export async function getAssignmentDetail(
   assignmentId: string,
 ): Promise<AssignmentDetailRecord | null> {
   const supabase = await createServerSupabaseClient();
 
-  const [assignmentRes, checklistRes, photosRes] = await Promise.all([
+  const [assignmentRes, checklistRes, photosRes, notesRes, issuesRes] = await Promise.all([
     supabase
       .from("assignments")
       .select(ASSIGNMENT_LIST_SELECT)
@@ -146,6 +197,16 @@ export async function getAssignmentDetail(
       .from("assignment_photos")
       .select("id, assignment_id, photo_category, storage_path, captured_at")
       .eq("assignment_id", assignmentId),
+    supabase
+      .from("assignment_notes")
+      .select("id, assignment_id, user_id, note_type, body, created_at, users:user_id ( full_name )")
+      .eq("assignment_id", assignmentId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("issues")
+      .select("id, assignment_id, title, severity, status, description, created_at")
+      .eq("assignment_id", assignmentId)
+      .order("created_at", { ascending: false }),
   ]);
 
   if (!assignmentRes.data) {
@@ -156,6 +217,8 @@ export async function getAssignmentDetail(
     ...(assignmentRes.data as unknown as AssignmentListRecord),
     checklist_items: (checklistRes.data as AssignmentChecklistItemRecord[] | null) ?? [],
     photos: (photosRes.data as AssignmentPhotoRecord[] | null) ?? [],
+    notes: (notesRes.data as unknown as AssignmentNoteRecord[] | null) ?? [],
+    issues: (issuesRes.data as AssignmentDetailIssueRecord[] | null) ?? [],
   };
 }
 

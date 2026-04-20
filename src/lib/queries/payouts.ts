@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { AssignmentListRecord } from "@/lib/queries/assignments";
 
 export type PayoutBatchRecord = {
   id: string;
@@ -103,6 +104,46 @@ export async function listMyPayoutEntries(
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as PayoutEntryRecord[];
+}
+
+const CLEANER_PENDING_PAYOUT_ASSIGNMENT_SELECT = `
+  id, owner_id, property_id, cleaner_id, assignment_type,
+  status, ack_status, priority, checkout_at, due_at,
+  expected_duration_min, fixed_payout_amount, created_at,
+  properties:property_id ( name, address_line_1, city ),
+  cleaners:cleaner_id ( full_name )
+`.trim();
+
+export async function listPendingCleanerPayoutAssignments(
+  cleanerId: string,
+): Promise<AssignmentListRecord[]> {
+  const supabase = await createServerSupabaseClient();
+
+  const { data: payoutEntries } = await supabase
+    .from("payout_entries")
+    .select("assignment_id")
+    .eq("cleaner_id", cleanerId)
+    .eq("status", "included");
+
+  const paidAssignmentIds = new Set(
+    ((payoutEntries as Array<{ assignment_id: string }> | null) ?? []).map(
+      (entry) => entry.assignment_id,
+    ),
+  );
+
+  const { data, error } = await supabase
+    .from("assignments")
+    .select(CLEANER_PENDING_PAYOUT_ASSIGNMENT_SELECT)
+    .eq("cleaner_id", cleanerId)
+    .in("status", ["completed_pending_review", "approved"])
+    .not("fixed_payout_amount", "is", null)
+    .order("due_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (((data as unknown) as AssignmentListRecord[] | null) ?? []).filter(
+    (assignment) => !paidAssignmentIds.has(assignment.id),
+  );
 }
 
 /** Completed assignments in a date range not yet included in any batch. */

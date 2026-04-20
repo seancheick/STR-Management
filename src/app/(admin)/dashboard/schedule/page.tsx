@@ -92,6 +92,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
         <MonthView
           properties={activeProperties}
           assignments={assignments}
+          cleaners={cleaners}
           monthDays={monthDayISOs}
           monthOffset={monthOffset}
           view="month"

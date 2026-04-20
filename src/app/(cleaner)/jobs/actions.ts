@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth/session";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { validateAssignmentCompletion } from "@/lib/services/completion-validator";
 import { createIssue, uploadIssueMedia, createRestockRequest } from "@/lib/services/issue-service";
+import { transitionAssignment } from "@/lib/services/assignment-status-engine";
 
 export type CleanerActionResult = { success: boolean; error?: string };
 
@@ -153,11 +154,22 @@ export async function completeJobAction(
     return { success: false, error: `Cannot complete: ${parts.join("; ")}.` };
   }
 
+  const nextState = transitionAssignment(
+    { status: "in_progress", ackStatus: "accepted" },
+    {
+      action: "mark_unit_ready",
+      proofChecklistComplete: validation.missingChecklistItemIds.length === 0,
+      proofPhotosComplete: validation.missingPhotoCategories.length === 0,
+    },
+  );
+  const now = new Date().toISOString();
+
   const { data, error } = await supabase
     .from("assignments")
     .update({
-      status: "completed_pending_review",
-      completed_at: new Date().toISOString(),
+      status: nextState.status,
+      completed_at: now,
+      approved_at: now,
     })
     .eq("id", assignmentId)
     .eq("cleaner_id", profile.id)
@@ -171,12 +183,90 @@ export async function completeJobAction(
   }
 
   if (!data) {
-    return { success: false, error: "Job cannot be completed in its current state." };
+    return { success: false, error: "Job cannot be marked ready in its current state." };
   }
 
   revalidatePath("/jobs");
   revalidatePath(`/jobs/${assignmentId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/assignments");
+  revalidatePath("/dashboard/schedule");
   return { success: true };
+}
+
+// ─── Cleaner Notes ───────────────────────────────────────────────────────────
+
+const cleanerNoteSchema = z.object({
+  assignmentId: z.string().uuid(),
+  body: z.string().trim().min(1, "Add a note before saving.").max(1000),
+});
+
+export type CleanerNoteState = {
+  status: "idle" | "success" | "error";
+  message: string | null;
+  fieldErrors?: Record<string, string[] | undefined>;
+};
+
+export async function addCleanerNoteAction(
+  _prev: CleanerNoteState,
+  formData: FormData,
+): Promise<CleanerNoteState> {
+  const profile = await requireRole(["cleaner", "owner", "admin", "supervisor"]);
+  const supabase = await createServerSupabaseClient();
+
+  let values: z.infer<typeof cleanerNoteSchema>;
+  try {
+    values = cleanerNoteSchema.parse({
+      assignmentId: formData.get("assignmentId"),
+      body: formData.get("body"),
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return {
+        status: "error",
+        message: "Validation failed.",
+        fieldErrors: error.flatten().fieldErrors as Record<string, string[] | undefined>,
+      };
+    }
+    return { status: "error", message: "Invalid note." };
+  }
+
+  const { data: assignment, error: assignmentError } = await supabase
+    .from("assignments")
+    .select("id, cleaner_id, status")
+    .eq("id", values.assignmentId)
+    .maybeSingle();
+
+  if (assignmentError) {
+    return { status: "error", message: assignmentError.message };
+  }
+
+  if (!assignment) {
+    return { status: "error", message: "Job not found." };
+  }
+
+  if (profile.role === "cleaner" && assignment.cleaner_id !== profile.id) {
+    return { status: "error", message: "You can only add notes to your own jobs." };
+  }
+
+  if (assignment.status !== "in_progress") {
+    return { status: "error", message: "Notes can only be added while the job is in progress." };
+  }
+
+  const { error } = await supabase.from("assignment_notes").insert({
+    assignment_id: values.assignmentId,
+    user_id: profile.id,
+    note_type: "cleaner_note",
+    body: values.body,
+  });
+
+  if (error) {
+    return { status: "error", message: error.message };
+  }
+
+  revalidatePath(`/jobs/${values.assignmentId}`);
+  revalidatePath("/dashboard");
+  return { status: "success", message: "Note saved." };
 }
 
 // ─── Issue Reporting ─────────────────────────────────────────────────────────
@@ -239,6 +329,8 @@ export async function reportIssueAction(
   }
 
   revalidatePath(`/jobs/${values.assignmentId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/issues");
   return { status: "success", message: "Issue reported.", issueId: result.issueId };
 }
 

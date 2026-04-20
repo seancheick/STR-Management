@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { getOwnerIdFromLinkedAssignment } from "@/lib/services/issue-owner";
+
 // ─── markNeedsReclean logic ───────────────────────────────────────────────────
 // Test the guard logic in isolation (not the Supabase call).
 
@@ -40,6 +42,32 @@ describe("markNeedsReclean guard", () => {
 
   it("rejects transition from needs_reclean (already set)", () => {
     expect(canMarkNeedsReclean("needs_reclean")).toBe(false);
+  });
+});
+
+describe("issue owner resolution", () => {
+  it("uses the linked assignment owner when the issue property matches", () => {
+    expect(
+      getOwnerIdFromLinkedAssignment(
+        {
+          owner_id: "owner-1",
+          property_id: "property-1",
+        },
+        "property-1",
+      ),
+    ).toBe("owner-1");
+  });
+
+  it("rejects an assignment from a different property", () => {
+    expect(() =>
+      getOwnerIdFromLinkedAssignment(
+        {
+          owner_id: "owner-1",
+          property_id: "property-1",
+        },
+        "property-2",
+      ),
+    ).toThrowError("Assignment does not belong to this property.");
   });
 });
 

@@ -34,9 +34,8 @@ export function AssignCleanerModal({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Load suggestions on mount
+  // Load suggestions on mount.
   useEffect(() => {
-    setLoading(true);
     getCleanerSuggestionsAction(assignmentId)
       .then(setSuggestions)
       .finally(() => setLoading(false));

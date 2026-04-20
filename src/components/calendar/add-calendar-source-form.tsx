@@ -12,6 +12,7 @@ type Props = {
     formData: FormData,
   ) => Promise<AddCalendarSourceState>;
   properties: PropertyRecord[];
+  defaultPropertyId?: string;
 };
 
 const initial: AddCalendarSourceState = { status: "idle", message: null };
@@ -34,8 +35,12 @@ function FieldError({ errors }: { errors?: string[] }) {
   return <p className="text-xs text-destructive">{errors[0]}</p>;
 }
 
-export function AddCalendarSourceForm({ action, properties }: Props) {
+export function AddCalendarSourceForm({ action, properties, defaultPropertyId }: Props) {
   const [state, formAction] = useActionState(action, initial);
+  const defaultProperty = defaultPropertyId
+    ? properties.find((p) => p.id === defaultPropertyId)
+    : undefined;
+  const defaultName = defaultProperty ? `Airbnb — ${defaultProperty.name}` : "";
 
   return (
     <form action={formAction} className="space-y-4">
@@ -46,6 +51,7 @@ export function AddCalendarSourceForm({ action, properties }: Props) {
           </label>
           <select
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
+            defaultValue={defaultPropertyId ?? ""}
             id="cal-property"
             name="propertyId"
             required
@@ -66,6 +72,7 @@ export function AddCalendarSourceForm({ action, properties }: Props) {
           </label>
           <input
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
+            defaultValue={defaultName}
             id="cal-name"
             name="name"
             placeholder="e.g. Airbnb — Lakeview Loft"

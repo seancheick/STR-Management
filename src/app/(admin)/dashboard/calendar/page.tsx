@@ -27,14 +27,26 @@ function formatDate(iso: string) {
   });
 }
 
-export default async function CalendarPage() {
+type CalendarPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function CalendarPage({ searchParams }: CalendarPageProps) {
   await requireRole(["owner", "admin", "supervisor"]);
+
+  const params = (await searchParams) ?? {};
+  const propertyIdParam =
+    typeof params.propertyId === "string" ? params.propertyId : undefined;
 
   const [sources, syncLogs, propertiesResult] = await Promise.all([
     listCalendarSources(),
     listRecentSyncLogs(15),
     listProperties(),
   ]);
+
+  const preselectedProperty = propertyIdParam
+    ? propertiesResult.data.find((p) => p.id === propertyIdParam)
+    : undefined;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-8 px-6 py-10">
@@ -72,10 +84,20 @@ export default async function CalendarPage() {
       </section>
 
       {/* Add source form */}
-      <section className="rounded-[1.75rem] border border-border/70 bg-card p-6 shadow-sm">
-        <h2 className="mb-4 text-base font-semibold">Add calendar source</h2>
+      <section
+        className="scroll-mt-8 rounded-[1.75rem] border border-border/70 bg-card p-6 shadow-sm"
+        id="add-source"
+      >
+        <h2 className="mb-2 text-base font-semibold">Add calendar source</h2>
+        {preselectedProperty && (
+          <p className="mb-4 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary">
+            Adding a source for <strong className="font-semibold">{preselectedProperty.name}</strong>.
+            Paste the iCal URL from Airbnb → Calendar → Export calendar.
+          </p>
+        )}
         <AddCalendarSourceForm
           action={addCalendarSourceAction}
+          defaultPropertyId={propertyIdParam}
           properties={propertiesResult.data}
         />
       </section>
