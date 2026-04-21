@@ -92,6 +92,39 @@ export async function listCalendarSourcesForSync(): Promise<{
   }));
 }
 
+export type ReservationRecord = {
+  id: string;
+  property_id: string;
+  platform: "airbnb" | "vrbo" | "booking" | "other";
+  guest_name: string | null;
+  start_at: string;
+  end_at: string;
+  summary: string | null;
+  properties: { name: string } | null;
+};
+
+/**
+ * Reservations whose window overlaps the inclusive [startISO, endISO] range —
+ * i.e. any booking that is visible on the calendar grid.
+ */
+export async function listReservationsForRange(
+  startISO: string,
+  endISO: string,
+): Promise<ReservationRecord[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("reservations")
+    .select(`
+      id, property_id, platform, guest_name, start_at, end_at, summary,
+      properties:property_id ( name )
+    `)
+    .lte("start_at", endISO)
+    .gte("end_at", startISO)
+    .order("start_at", { ascending: true });
+
+  return (data as unknown as ReservationRecord[]) ?? [];
+}
+
 export async function listRecentSyncLogs(limit = 20): Promise<SyncLogRecord[]> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase

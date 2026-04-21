@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth/session";
 import { listAssignmentsForSchedule } from "@/lib/queries/assignments";
+import { listReservationsForRange } from "@/lib/queries/calendar";
 import { listProperties } from "@/lib/queries/properties";
 import { listActiveCleaners } from "@/lib/queries/team";
 import { ScheduleGrid } from "@/components/schedule/schedule-grid";
@@ -74,10 +75,11 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
     weekDayISOs = weekDays.map((d) => d.toISOString());
   }
 
-  const [propertiesResult, allAssignments, cleaners] = await Promise.all([
+  const [propertiesResult, allAssignments, cleaners, reservations] = await Promise.all([
     listProperties(),
     listAssignmentsForSchedule(rangeStart.toISOString(), rangeEnd.toISOString()),
     listActiveCleaners(),
+    listReservationsForRange(rangeStart.toISOString(), rangeEnd.toISOString()),
   ]);
 
   const activeProperties = propertiesResult.data.filter((p) => p.active);
@@ -162,6 +164,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           properties={activeProperties}
           assignments={assignments}
           cleaners={cleaners}
+          reservations={reservations}
           monthDays={monthDayISOs}
           monthOffset={monthOffset}
           view="month"

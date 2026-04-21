@@ -15,10 +15,29 @@ export type SyncResult = {
   eventsFound: number;
   assignmentsCreated: number;
   assignmentsSkipped: number;
+  reservationsUpserted: number;
   conflictCount: number;
   conflicts: ConflictWarning[];
   error?: string;
 };
+
+type Platform = "airbnb" | "vrbo" | "booking" | "other";
+
+function detectPlatform(url: string): Platform {
+  const u = url.toLowerCase();
+  if (u.includes("airbnb.com")) return "airbnb";
+  if (u.includes("vrbo.com") || u.includes("homeaway.com")) return "vrbo";
+  if (u.includes("booking.com")) return "booking";
+  return "other";
+}
+
+function extractGuestName(summary: string | null): string | null {
+  if (!summary) return null;
+  // Airbnb summaries look like "Reserved - CODEABC" or "Guest Name (phone)".
+  // Strip any leading "Reserved - " / "Booked - " marker.
+  const cleaned = summary.replace(/^(reserved|booked|booking|guest booking)\s*[-–:]\s*/i, "").trim();
+  return cleaned.length > 0 && cleaned.length < 120 ? cleaned : null;
+}
 
 export type ConflictWarning = {
   uid: string;
@@ -214,11 +233,14 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
       eventsFound: 0,
       assignmentsCreated: 0,
       assignmentsSkipped: 0,
+      reservationsUpserted: 0,
       conflictCount: 0,
       conflicts: [],
       error: "Calendar source not found.",
     };
   }
+
+  const platform = detectPlatform(source.ical_url);
 
   let rawIcal: string;
   try {
@@ -228,6 +250,7 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
       eventsFound: 0,
       assignmentsCreated: 0,
       assignmentsSkipped: 0,
+      reservationsUpserted: 0,
       conflictCount: 0,
       conflicts: [],
       error: `Fetch error: ${err instanceof Error ? err.message : String(err)}`,
@@ -248,7 +271,34 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
 
   let created = 0;
   let skipped = 0;
+  let reservationsUpserted = 0;
   const conflicts: ConflictWarning[] = [];
+
+  // Upsert full reservation rows so the calendar can draw multi-day booking stripes.
+  if (candidates.length > 0) {
+    const reservationRows = candidates.map((c) => ({
+      owner_id: input.ownerId,
+      property_id: input.propertyId,
+      source_type: "ical",
+      source_reference: `ical:${c.uid}`,
+      platform,
+      guest_name: extractGuestName(c.summary),
+      start_at: c.checkinAt,
+      end_at: c.checkoutAt,
+      summary: c.summary,
+    }));
+
+    const { error: resError, count: resCount } = await supabase
+      .from("reservations")
+      .upsert(reservationRows, {
+        onConflict: "property_id,source_reference",
+        count: "exact",
+      });
+
+    if (!resError) {
+      reservationsUpserted = resCount ?? reservationRows.length;
+    }
+  }
 
   for (const candidate of candidates) {
     try {
@@ -289,6 +339,7 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
     eventsFound: candidates.length,
     assignmentsCreated: created,
     assignmentsSkipped: skipped,
+    reservationsUpserted,
     conflictCount: conflicts.length,
     conflicts,
   };

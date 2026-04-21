@@ -32,6 +32,8 @@ export type ParseIcalOptions = {
 export type TurnoverCandidate = {
   /** iCal UID — used as source_reference for dedup */
   uid: string;
+  /** ISO string: guest check-in (DTSTART of this reservation). */
+  checkinAt: string;
   /** ISO string: guest checkout in UTC, representing 11:00 property-local by default */
   checkoutAt: string;
   /**
@@ -207,9 +209,9 @@ export function parseIcal(raw: string, options?: ParseIcalOptions): TurnoverCand
     parsed[i].dueAt = parsed[i + 1].checkinAt;
   }
 
-  // Strip the internal checkinAt field before returning
   return parsed.map((event) => ({
     uid: event.uid,
+    checkinAt: event.checkinAt,
     checkoutAt: event.checkoutAt,
     dueAt: event.dueAt,
     nextCheckinAt: event.nextCheckinAt,
