@@ -201,12 +201,13 @@ export function parseIcal(raw: string, options?: ParseIcalOptions): TurnoverCand
     else if (key === "DESCRIPTION") current.description = value.replace(/\\n/g, "\n");
   }
 
-  // Sort events by check-in date, then pair each checkout with the next check-in
+  // Sort events by check-in date, then record each checkout's next check-in
+  // as metadata ONLY. dueAt stays anchored to the CHECKOUT day at check-in
+  // hour (15:00 local), so the cleaning is scheduled for the day the guest
+  // leaves — even if a last-minute booking later tightens the window.
   parsed.sort((a, b) => a.checkinAt.localeCompare(b.checkinAt));
   for (let i = 0; i < parsed.length - 1; i++) {
     parsed[i].nextCheckinAt = parsed[i + 1].checkinAt;
-    // Cleaning deadline = next guest's check-in time
-    parsed[i].dueAt = parsed[i + 1].checkinAt;
   }
 
   return parsed.map((event) => ({

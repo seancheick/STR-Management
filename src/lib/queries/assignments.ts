@@ -13,9 +13,11 @@ export type AssignmentListRecord = {
   priority: string;
   checkout_at: string | null;
   due_at: string;
+  next_checkin_at: string | null;
   expected_duration_min: number | null;
   fixed_payout_amount: number | null;
   access_code: string | null;
+  source_type: string | null;
   created_at: string;
   properties: { name: string; address_line_1: string | null; city: string | null } | null;
   cleaners: { full_name: string } | null;
@@ -73,8 +75,8 @@ export type AssignmentDetailIssueRecord = {
 
 const ASSIGNMENT_LIST_SELECT = `
   id, owner_id, property_id, cleaner_id, assignment_type,
-  status, ack_status, priority, checkout_at, due_at,
-  expected_duration_min, fixed_payout_amount, access_code, created_at,
+  status, ack_status, priority, checkout_at, due_at, next_checkin_at,
+  expected_duration_min, fixed_payout_amount, access_code, source_type, created_at,
   properties:property_id ( name, address_line_1, city ),
   cleaners:cleaner_id ( full_name )
 `.trim();
@@ -254,6 +256,8 @@ export type AssignmentScheduleRecord = {
   expected_duration_min: number | null;
   fixed_payout_amount: number | null;
   access_code: string | null;
+  source_type: string | null;
+  next_checkin_at: string | null;
   properties: { name: string; address_line_1: string | null; city: string | null } | null;
   cleaners: { full_name: string } | null;
 };
@@ -261,7 +265,7 @@ export type AssignmentScheduleRecord = {
 const SCHEDULE_SELECT = `
   id, property_id, cleaner_id, status, priority,
   checkout_at, due_at, expected_duration_min, fixed_payout_amount,
-  access_code,
+  access_code, source_type, next_checkin_at,
   properties:property_id ( name, address_line_1, city ),
   cleaners:cleaner_id ( full_name )
 `.trim();
@@ -271,11 +275,16 @@ export async function listAssignmentsForSchedule(
   weekEnd: string,
 ): Promise<AssignmentScheduleRecord[]> {
   const supabase = await createServerSupabaseClient();
+  // A cleaning's anchor day is its CHECKOUT day (when the guest leaves).
+  // For manually-added jobs without a checkout, fall back to due_at.
+  // This OR filter catches both shapes.
   const { data } = await supabase
     .from("assignments")
     .select(SCHEDULE_SELECT)
-    .gte("due_at", weekStart)
-    .lte("due_at", weekEnd)
+    .or(
+      `and(checkout_at.gte.${weekStart},checkout_at.lte.${weekEnd}),` +
+        `and(checkout_at.is.null,due_at.gte.${weekStart},due_at.lte.${weekEnd})`,
+    )
     .not("status", "eq", "cancelled")
     .order("due_at", { ascending: true });
 

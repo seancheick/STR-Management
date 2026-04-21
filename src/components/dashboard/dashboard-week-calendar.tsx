@@ -256,7 +256,7 @@ function PillButton({ pill, onClick }: { pill: Pill; onClick: () => void }) {
     : pill.assignment.status === "unassigned"
       ? "Assign"
       : null;
-  const tight = isTightTurnover(pill.assignment.checkout_at, pill.assignment.due_at);
+  const tight = isTightTurnover(pill.assignment.checkout_at, pill.assignment.next_checkin_at);
 
   if (pill.kind === "checkout") {
     return (

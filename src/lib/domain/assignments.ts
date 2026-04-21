@@ -43,24 +43,28 @@ export const terminalAssignmentStatuses = ["approved", "cancelled"] as const;
  */
 export const TIGHT_TURNOVER_THRESHOLD_MINUTES = 360;
 
+/**
+ * Minutes between the guest's checkout and the NEXT guest's arrival.
+ * Accepts null nextArrivalAt (= no upcoming booking known → not tight).
+ */
 export function tightTurnoverMinutes(
   checkoutAt: string | null,
-  dueAt: string,
+  nextArrivalAt: string | null,
 ): number | null {
-  if (!checkoutAt) return null;
+  if (!checkoutAt || !nextArrivalAt) return null;
   const checkoutMs = new Date(checkoutAt).getTime();
-  const dueMs = new Date(dueAt).getTime();
-  if (!Number.isFinite(checkoutMs) || !Number.isFinite(dueMs)) return null;
-  const diff = Math.round((dueMs - checkoutMs) / 60_000);
+  const arriveMs = new Date(nextArrivalAt).getTime();
+  if (!Number.isFinite(checkoutMs) || !Number.isFinite(arriveMs)) return null;
+  const diff = Math.round((arriveMs - checkoutMs) / 60_000);
   return diff >= 0 ? diff : null;
 }
 
 export function isTightTurnover(
   checkoutAt: string | null,
-  dueAt: string,
+  nextArrivalAt: string | null,
   thresholdMinutes: number = TIGHT_TURNOVER_THRESHOLD_MINUTES,
 ): boolean {
-  const minutes = tightTurnoverMinutes(checkoutAt, dueAt);
+  const minutes = tightTurnoverMinutes(checkoutAt, nextArrivalAt);
   return minutes !== null && minutes <= thresholdMinutes;
 }
 

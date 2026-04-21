@@ -79,7 +79,7 @@ export function RightNowHero({
 
   // 2. Tight turnover today
   const tightToday = todaysJobs.find((a) =>
-    isTightTurnover(a.checkout_at, a.due_at),
+    isTightTurnover(a.checkout_at, a.next_checkin_at),
   );
   if (tightToday) {
     return (

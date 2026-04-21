@@ -114,7 +114,7 @@ function atStartOfDay(d: Date): Date {
 /** Priority within a day — lower number = top of list. */
 function priorityRank(a: AssignmentScheduleRecord): number {
   if (a.status === "needs_reclean") return 0;
-  if (isTightTurnover(a.checkout_at, a.due_at)) return 1;
+  if (isTightTurnover(a.checkout_at, a.next_checkin_at)) return 1;
   if (!a.cleaner_id) return 2;
   if (a.status === "in_progress") return 3;
   if (a.status === "assigned" || a.status === "acknowledged") return 4;
@@ -193,7 +193,10 @@ export function MonthView({
   const byDay = useMemo(() => {
     const map = new Map<string, AssignmentScheduleRecord[]>();
     for (const a of assignments) {
-      const key = dayKey(new Date(a.due_at));
+      // Cleaning pill anchors on the CHECKOUT day (guest leaves → cleaner arrives).
+      // Fall back to due_at only for manual jobs without a checkout.
+      const anchor = a.checkout_at ?? a.due_at;
+      const key = dayKey(new Date(anchor));
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(a);
     }
@@ -265,7 +268,7 @@ export function MonthView({
   const todayCounts = useMemo(() => {
     const todayJobs = byDay.get(dayKey(today)) ?? [];
     const unassigned = todayJobs.filter((a) => !a.cleaner_id).length;
-    const tight = todayJobs.filter((a) => isTightTurnover(a.checkout_at, a.due_at)).length;
+    const tight = todayJobs.filter((a) => isTightTurnover(a.checkout_at, a.next_checkin_at)).length;
     const reclean = todayJobs.filter((a) => a.status === "needs_reclean").length;
     return { total: todayJobs.length, unassigned, tight, reclean };
   }, [byDay, today]);
@@ -614,7 +617,7 @@ function WeekRow({
           highlight !== null &&
           !dayJobs.some((a) =>
             highlight === "tight"
-              ? isTightTurnover(a.checkout_at, a.due_at)
+              ? isTightTurnover(a.checkout_at, a.next_checkin_at)
               : highlight === "reclean"
                 ? a.status === "needs_reclean"
                 : !a.cleaner_id,
@@ -656,7 +659,7 @@ function WeekRow({
                   dimmed={
                     highlight !== null &&
                     (highlight === "tight"
-                      ? !isTightTurnover(a.checkout_at, a.due_at)
+                      ? !isTightTurnover(a.checkout_at, a.next_checkin_at)
                       : highlight === "reclean"
                         ? a.status !== "needs_reclean"
                         : a.cleaner_id !== null)
@@ -696,8 +699,8 @@ function CalendarPill({
   onClick: () => void;
   propertyName: string | undefined;
 }) {
-  const tight = isTightTurnover(assignment.checkout_at, assignment.due_at);
-  const gap = tightTurnoverMinutes(assignment.checkout_at, assignment.due_at);
+  const tight = isTightTurnover(assignment.checkout_at, assignment.next_checkin_at);
+  const gap = tightTurnoverMinutes(assignment.checkout_at, assignment.next_checkin_at);
   const needsReclean = assignment.status === "needs_reclean";
   const approved = assignment.status === "approved" || assignment.status === "completed";
   const cleanerFirst = assignment.cleaners?.full_name?.split(" ")[0] ?? null;
@@ -726,7 +729,8 @@ function CalendarPill({
     personLabel = cleanerFirst ?? "Assigned";
   }
 
-  const time = shortTime(assignment.due_at);
+  // Cleaner arrives at checkout; show checkout time on the pill.
+  const time = shortTime(assignment.checkout_at ?? assignment.due_at);
   const propDot = propertyDotFor(assignment.property_id);
   const shortProp = propertyName ? compactShort(propertyName, 14) : "";
   const gapHours = gap !== null ? Math.floor(gap / 60) : null;
@@ -735,6 +739,8 @@ function CalendarPill({
       ? `${gap}m`
       : `${gapHours}h`
     : null;
+  const isFromIcal = assignment.source_type === "ical";
+  const sourceLabel = isFromIcal ? "iCal" : "Manual";
 
   return (
     <button
@@ -758,11 +764,19 @@ function CalendarPill({
           </span>
         )}
       </span>
-      {shortProp && (
-        <span className="truncate pl-3 text-[9px] font-medium uppercase tracking-wide opacity-70">
-          {shortProp}
+      <span className="flex items-center gap-1.5 pl-3 text-[9px] font-medium uppercase tracking-wide opacity-70">
+        {shortProp && <span className="truncate">{shortProp}</span>}
+        <span
+          className={`ml-auto shrink-0 rounded px-1 py-px text-[8px] font-bold tracking-wide ${
+            isFromIcal
+              ? "bg-rose-100 text-rose-700"
+              : "bg-slate-100 text-slate-600"
+          }`}
+          title={isFromIcal ? "Synced from iCal" : "Added manually"}
+        >
+          {sourceLabel}
         </span>
-      )}
+      </span>
     </button>
   );
 }

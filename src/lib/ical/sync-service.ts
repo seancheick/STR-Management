@@ -169,6 +169,7 @@ async function importCandidate(
     priority: "normal",
     checkout_at: candidate.checkoutAt,
     due_at: candidate.dueAt,
+    next_checkin_at: candidate.nextCheckinAt,
     source_type: "ical",
     source_reference: sourceRef,
     created_by_user_id: input.ownerId,

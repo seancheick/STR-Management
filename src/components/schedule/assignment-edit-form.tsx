@@ -27,6 +27,7 @@ export type EditableAssignment = {
   priority: string;
   checkout_at: string | null;
   due_at: string;
+  next_checkin_at: string | null;
   cleaner_id: string | null;
   expected_duration_min: number | null;
   fixed_payout_amount: number | null;
@@ -90,9 +91,9 @@ export function AssignmentEditForm({
   const editableStatuses = ["unassigned", "assigned", "confirmed", "needs_reclean"];
   const canDelete = editableStatuses.includes(assignment.status);
   const isLocked = !editableStatuses.includes(assignment.status);
-  const tight = isTightTurnover(assignment.checkout_at, assignment.due_at);
+  const tight = isTightTurnover(assignment.checkout_at, assignment.next_checkin_at);
   const tightWindow = tight
-    ? formatTurnoverWindow(tightTurnoverMinutes(assignment.checkout_at, assignment.due_at))
+    ? formatTurnoverWindow(tightTurnoverMinutes(assignment.checkout_at, assignment.next_checkin_at))
     : null;
 
   return (

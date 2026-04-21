@@ -107,15 +107,18 @@ describe("parseIcal", () => {
     expect(result[0].checkoutAt).toBe("2026-08-04T15:00:00.000Z");
   });
 
-  it("sets dueAt to the next booking's check-in when consecutive events exist", () => {
+  it("anchors dueAt to the checkout day, records next check-in as metadata only", () => {
     const raw = makeIcal([
       makeEvent({ UID: "a", DTSTART: "20260501", DTEND: "20260503", SUMMARY: "First" }),
       makeEvent({ UID: "b", DTSTART: "20260506", DTEND: "20260510", SUMMARY: "Second" }),
     ]);
     const result = parseIcal(raw);
     const a = result.find((r) => r.uid === "a")!;
-    // dueAt of first event equals next event's check-in (15:00 local)
-    expect(a.dueAt).toBe(nyIso(2026, 5, 6, 15));
+    // dueAt anchors to the first booking's checkout day (May 3, 15:00 local) —
+    // NOT the next guest's check-in. This guarantees the cleaning is scheduled
+    // even if a last-minute booking is added.
+    expect(a.dueAt).toBe(nyIso(2026, 5, 3, 15));
+    // nextCheckinAt still points at the upcoming guest for tight-turn detection.
     expect(a.nextCheckinAt).toBe(nyIso(2026, 5, 6, 15));
   });
 
