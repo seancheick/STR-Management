@@ -268,6 +268,12 @@ export function AssignmentsList({ assignments, cleaners }: AssignmentsListProps)
                   >
                     {formatStatus(a.status)}
                   </span>
+                  {a.paid_at && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700">
+                      Paid
+                      {a.payment_method ? ` · ${a.payment_method.charAt(0).toUpperCase()}${a.payment_method.slice(1)}` : ""}
+                    </span>
+                  )}
                   {canEdit && (
                     <button
                       className="inline-flex h-8 items-center gap-1 rounded-full bg-primary px-3 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"

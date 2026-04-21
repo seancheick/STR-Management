@@ -1,15 +1,26 @@
 /**
- * Web Push delivery via VAPID.
- * Uses the Web Push Protocol (RFC 8030) directly — no external library needed
- * for the basic send path since Next.js runs in Node 20 with crypto support.
- *
- * For production, install `web-push` or use Resend/Knock if volume grows.
- * This implementation stubs the actual send and logs to the notifications table.
+ * Web Push delivery via VAPID. Real delivery through the web-push library.
+ * Failures update device_subscriptions.active when the endpoint returns 410/404
+ * so dead subscriptions are cleaned up automatically.
  */
 
 import "server-only";
 
+import webpush from "web-push";
+
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
+
+let vapidConfigured = false;
+
+function configureVapid() {
+  if (vapidConfigured) return;
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const subject = process.env.VAPID_SUBJECT ?? "mailto:admin@turnflow.app";
+  if (!publicKey || !privateKey) return;
+  webpush.setVapidDetails(subject, publicKey, privateKey);
+  vapidConfigured = true;
+}
 
 export type PushPayload = {
   title: string;
@@ -61,29 +72,25 @@ export async function sendPushToUser(
   return results;
 }
 
-/**
- * Stub: in production replace with `webpush.sendNotification()` or equivalent.
- * Returns success=true when VAPID_PRIVATE_KEY is configured, otherwise stubs.
- */
 async function sendToEndpoint(
   endpoint: string,
   p256dh: string,
   authKey: string,
   payload: PushPayload,
 ): Promise<SendPushResult> {
-  const vapidKey = process.env.VAPID_PRIVATE_KEY;
+  configureVapid();
 
-  if (!vapidKey) {
-    // Dev stub: log and return success so notification records are created
-    console.log("[push-stub]", { endpoint: endpoint.slice(0, 40), payload });
-    return { success: true };
+  if (!vapidConfigured) {
+    console.log("[push:no-vapid]", { endpoint: endpoint.slice(0, 40), payload });
+    return { success: false, error: "VAPID keys not configured on server." };
   }
 
   try {
-    // Production: integrate web-push library here
-    // const webpush = await import('web-push');
-    // await webpush.sendNotification({ endpoint, keys: { p256dh, auth: authKey } }, JSON.stringify(payload));
-    void p256dh; void authKey; // used by real implementation
+    await webpush.sendNotification(
+      { endpoint, keys: { p256dh, auth: authKey } },
+      JSON.stringify(payload),
+      { TTL: 60 * 60 * 24 }, // 24-hour TTL
+    );
     return { success: true };
   } catch (err: unknown) {
     const statusCode = (err as { statusCode?: number }).statusCode;

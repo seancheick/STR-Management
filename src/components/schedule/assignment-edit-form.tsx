@@ -164,6 +164,10 @@ export function AssignmentEditForm({
             />
           </label>
         </div>
+        <p className="text-[11px] leading-4 text-muted-foreground">
+          Defaults: <span className="font-medium">11 AM</span> checkout, <span className="font-medium">3 PM</span> next check-in
+          — the standard Airbnb/VRBO times your feed uses. Override if your listing is different.
+        </p>
 
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Cleaner</span>

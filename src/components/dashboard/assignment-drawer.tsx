@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 
 import type { AssignmentDetailAction } from "@/app/actions/assignments";
+import { MarkPaidControl } from "@/components/assignments/mark-paid-control";
 
 // ─── Status helpers ────────────────────────────────────────────────────────────
 
@@ -269,6 +270,21 @@ export function AssignmentDrawer({ detail, onClose, onAssignClick }: Props) {
 
           </dl>
         </div>
+
+        {/* Payment — only for jobs that can be paid (approved/completed) */}
+        {(detail.status === "approved" ||
+          detail.status === "completed" ||
+          detail.status === "completed_pending_review" ||
+          detail.paidAt) && (
+          <div className="border-t border-border/60 px-5 py-4">
+            <MarkPaidControl
+              assignmentId={detail.id}
+              paidAt={detail.paidAt}
+              paymentMethod={detail.paymentMethod}
+              paymentReference={detail.paymentReference}
+            />
+          </div>
+        )}
 
         {/* Footer */}
         <div className="border-t border-border/60 px-5 py-4">

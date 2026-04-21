@@ -4,7 +4,39 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireRole } from "@/lib/auth/session";
+import { sendNotification } from "@/lib/notifications/notification-service";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+/** Look up the data we need to personalise an assignment notification. */
+async function fetchAssignmentNotificationContext(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  assignmentId: string,
+) {
+  const { data } = await supabase
+    .from("assignments")
+    .select(
+      "id, owner_id, property_id, due_at, checkout_at, properties:property_id ( name )",
+    )
+    .eq("id", assignmentId)
+    .maybeSingle();
+  return data as
+    | {
+        id: string;
+        owner_id: string;
+        property_id: string;
+        due_at: string;
+        checkout_at: string | null;
+        properties: { name: string } | null;
+      }
+    | null;
+}
+
+function formatAnchorDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
 
 const quickAssignSchema = z.object({
   assignmentId: z.string().uuid(),
@@ -46,11 +78,29 @@ export async function quickAssignAction(
     return { status: "error", message: error.message };
   }
 
+  // Notify the cleaner. sendNotification inserts a notifications row AND
+  // attempts a web-push delivery; failures are tolerated so the assign
+  // operation itself never regresses because of delivery trouble.
+  const ctx = await fetchAssignmentNotificationContext(supabase, parsed.data.assignmentId);
+  if (ctx) {
+    const anchor = ctx.checkout_at ?? ctx.due_at;
+    await sendNotification({
+      ownerId: ctx.owner_id,
+      recipientId: parsed.data.cleanerId,
+      assignmentId: ctx.id,
+      type: "new_assignment",
+      title: `New job: ${ctx.properties?.name ?? "Cleaning"}`,
+      body: `${formatAnchorDate(anchor)} — tap to review and accept.`,
+      url: `/jobs/${ctx.id}`,
+    }).catch(() => undefined);
+  }
+
   revalidatePath("/dashboard/schedule");
   revalidatePath("/dashboard");
   revalidatePath("/jobs");
   revalidatePath("/jobs/schedule");
-  return { status: "success", message: "Cleaner assigned." };
+  revalidatePath("/dashboard/notifications");
+  return { status: "success", message: "Cleaner assigned. Notification sent." };
 }
 
 // ─── Reschedule ────────────────────────────────────────────────────────────────
@@ -159,12 +209,14 @@ export async function rescheduleAssignmentAction(
     access_code: data.accessCode,
   };
 
+  const cleanerChanged =
+    data.cleanerId !== current.cleaner_id && data.cleanerId !== null;
+
   if (data.cleanerId === null && current.cleaner_id !== null) {
     patch.status = "unassigned";
     patch.ack_status = "pending";
   } else if (
-    data.cleanerId !== null &&
-    data.cleanerId !== current.cleaner_id &&
+    cleanerChanged &&
     (current.status === "unassigned" || current.cleaner_id === null)
   ) {
     patch.status = "assigned";
@@ -180,11 +232,30 @@ export async function rescheduleAssignmentAction(
     return { status: "error", message: error.message };
   }
 
+  // Notify the newly-assigned cleaner. Also fires when the cleaner is
+  // re-assigned from a different cleaner (they need to know too).
+  if (cleanerChanged && data.cleanerId) {
+    const ctx = await fetchAssignmentNotificationContext(supabase, data.assignmentId);
+    if (ctx) {
+      const anchor = ctx.checkout_at ?? ctx.due_at;
+      await sendNotification({
+        ownerId: ctx.owner_id,
+        recipientId: data.cleanerId,
+        assignmentId: ctx.id,
+        type: "new_assignment",
+        title: `New job: ${ctx.properties?.name ?? "Cleaning"}`,
+        body: `${formatAnchorDate(anchor)} — tap to review and accept.`,
+        url: `/jobs/${ctx.id}`,
+      }).catch(() => undefined);
+    }
+  }
+
   revalidatePath("/dashboard/schedule");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/assignments");
   revalidatePath("/jobs");
   revalidatePath("/jobs/schedule");
+  revalidatePath("/dashboard/notifications");
   return { status: "success", message: "Assignment updated." };
 }
 
@@ -232,6 +303,87 @@ export async function cancelAssignmentAction(
   revalidatePath("/jobs");
   revalidatePath("/jobs/schedule");
   return { status: "success", message: "Assignment deleted." };
+}
+
+// ─── Mark paid (Zelle / Venmo / Cash / …) ──────────────────────────────────────
+
+const markPaidSchema = z.object({
+  assignmentId: z.string().uuid(),
+  paymentMethod: z.enum(["zelle", "venmo", "cash", "check", "bank_transfer", "other"]),
+  paymentReference: z
+    .string()
+    .trim()
+    .max(120)
+    .transform((v) => (v.length > 0 ? v : null))
+    .nullable(),
+});
+
+export type MarkPaidState = {
+  status: "idle" | "success" | "error";
+  message: string | null;
+};
+
+export async function markPaidAction(
+  _prev: MarkPaidState,
+  formData: FormData,
+): Promise<MarkPaidState> {
+  const profile = await requireRole(["owner", "admin"]);
+
+  const parsed = markPaidSchema.safeParse({
+    assignmentId: formData.get("assignmentId"),
+    paymentMethod: formData.get("paymentMethod"),
+    paymentReference: (formData.get("paymentReference") as string | null) ?? "",
+  });
+
+  if (!parsed.success) {
+    return { status: "error", message: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+
+  // Only approved / completed jobs can be paid. Re-paying is a no-op update.
+  const { error } = await supabase
+    .from("assignments")
+    .update({
+      paid_at: new Date().toISOString(),
+      payment_method: parsed.data.paymentMethod,
+      payment_reference: parsed.data.paymentReference,
+      marked_paid_by_user_id: profile.id,
+    })
+    .eq("id", parsed.data.assignmentId)
+    .in("status", ["approved", "completed", "completed_pending_review"]);
+
+  if (error) {
+    return { status: "error", message: error.message };
+  }
+
+  revalidatePath("/dashboard/schedule");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/assignments");
+  revalidatePath("/dashboard/payouts");
+  return { status: "success", message: "Marked paid." };
+}
+
+export async function markUnpaidAction(
+  assignmentId: string,
+): Promise<{ error: string | null }> {
+  await requireRole(["owner", "admin"]);
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase
+    .from("assignments")
+    .update({
+      paid_at: null,
+      payment_method: null,
+      payment_reference: null,
+      marked_paid_by_user_id: null,
+    })
+    .eq("id", assignmentId);
+
+  revalidatePath("/dashboard/schedule");
+  revalidatePath("/dashboard/assignments");
+  revalidatePath("/dashboard/payouts");
+  return { error: error?.message ?? null };
 }
 
 // ─── Unassign cleaner ──────────────────────────────────────────────────────────
