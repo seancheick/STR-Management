@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 export type CalendarSourceRecord = {
   id: string;
@@ -68,7 +69,9 @@ export async function listCalendarSourcesForSync(): Promise<{
   ical_url: string;
   primary_checklist_template_id: string | null;
 }[]> {
-  const supabase = await createServerSupabaseClient();
+  // Cron/system context — no user session, so RLS would block this.
+  // Service-role bypasses RLS; callers are gated by CRON_SECRET.
+  const supabase = createServiceSupabaseClient();
   const { data } = await supabase
     .from("property_calendar_sources")
     .select(`

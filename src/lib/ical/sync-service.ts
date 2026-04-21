@@ -2,7 +2,7 @@ import "server-only";
 
 import { parseIcal, type TurnoverCandidate } from "./parser";
 import { DEFAULT_TIMEZONE } from "./timezone";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 export type SyncSourceInput = {
   calendarSourceId: string;
@@ -63,7 +63,7 @@ async function fetchIcal(url: string): Promise<string> {
  * Check for overlapping assignments at the same property within ±4 hours of dueAt.
  */
 async function detectOverlap(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  supabase: ReturnType<typeof createServiceSupabaseClient>,
   propertyId: string,
   dueAt: string,
 ): Promise<boolean> {
@@ -85,7 +85,7 @@ async function detectOverlap(
  * Check if the property's default cleaner already has another job within ±2 hours.
  */
 async function detectCleanerOverload(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  supabase: ReturnType<typeof createServiceSupabaseClient>,
   propertyId: string,
   dueAt: string,
 ): Promise<boolean> {
@@ -117,7 +117,7 @@ async function detectCleanerOverload(
  * Dedup key: (property_id, source_reference) — the UNIQUE constraint in the schema.
  */
 async function importCandidate(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  supabase: ReturnType<typeof createServiceSupabaseClient>,
   input: SyncSourceInput,
   candidate: TurnoverCandidate,
 ): Promise<{ created: boolean; conflict: ConflictWarning | null }> {
@@ -219,7 +219,7 @@ async function importCandidate(
 }
 
 export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncResult> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = createServiceSupabaseClient();
 
   // Fetch the source record for the URL
   const { data: source } = await supabase
