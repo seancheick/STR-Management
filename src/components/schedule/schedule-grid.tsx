@@ -467,7 +467,7 @@ export function ScheduleGrid({
                   return (
                     <th
                       key={i}
-                      className={`px-2 py-3 text-center text-xs font-medium uppercase tracking-wider ${
+                      className={`border-r border-border/40 px-2 py-3 text-center text-xs font-medium uppercase tracking-wider last:border-r-0 ${
                         isToday
                           ? "bg-primary/5 text-primary"
                           : "text-muted-foreground"
@@ -500,7 +500,7 @@ export function ScheduleGrid({
                       return (
                         <td
                           key={dayIndex}
-                          className={`px-2 py-2 align-top ${isToday ? "bg-primary/[0.03]" : ""}`}
+                          className={`border-r border-border/40 px-2 py-2 align-top last:border-r-0 ${isToday ? "bg-primary/[0.03]" : ""}`}
                         >
                           <div className="flex flex-col gap-1">
                             {cell.map((a) => (
