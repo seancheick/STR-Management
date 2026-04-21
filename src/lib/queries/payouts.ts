@@ -222,6 +222,7 @@ export async function getPendingPayoutTotal(): Promise<{
       .from("assignments")
       .select("fixed_payout_amount")
       .eq("status", "approved")
+      .is("paid_at", null)
       .not("fixed_payout_amount", "is", null)
       .not(
         "id",

@@ -1,0 +1,17 @@
+{
+  "name": "TurnFlow",
+  "short_name": "TurnFlow",
+  "description": "Short-term rental cleaning operations",
+  "start_url": "/jobs",
+  "display": "standalone",
+  "background_color": "#f4f1ea",
+  "theme_color": "#16423c",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

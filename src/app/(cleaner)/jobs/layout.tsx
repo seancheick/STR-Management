@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { CleanerNav } from "@/components/cleaner/cleaner-nav";
+import { InstallBanner } from "@/components/cleaner/install-banner";
 import { requireRole } from "@/lib/auth/session";
 import { countUnreadNotifications } from "@/lib/queries/notifications";
 
@@ -15,6 +16,7 @@ export default async function CleanerJobsLayout({
   return (
     <div className="min-h-screen pb-24">
       {children}
+      <InstallBanner />
       <CleanerNav unreadCount={unread} />
     </div>
   );
