@@ -23,9 +23,9 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: payload.body ?? "",
-    icon: "/icon-192.png",
-    badge: "/badge-72.png",
-    tag: payload.tag ?? "airbnb-ops",
+    icon: "/icon-192.svg",
+    badge: "/badge-72.svg",
+    tag: payload.tag ?? "turnflow",
     data: { url: payload.url ?? "/" },
     requireInteraction: false,
   };

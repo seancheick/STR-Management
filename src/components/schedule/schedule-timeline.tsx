@@ -63,10 +63,14 @@ function localDateKey(iso: string): string {
   return dayKeyUTC(new Date(iso));
 }
 
-/** Column index (0..days.length-1) a date falls on, or null if outside the window. */
+/** Column index (0..days.length-1) a date falls on, or null if outside the window.
+ *  Uses Math.floor on local-day math; DST transitions produce 23h or 25h days,
+ *  so Math.round would land on the wrong column. */
 function dayIndex(date: Date, windowStart: Date, windowLength: number): number | null {
   const ms = atStartOfDay(date).getTime() - windowStart.getTime();
-  const idx = Math.round(ms / (24 * 60 * 60 * 1000));
+  if (ms < 0) return null;
+  // 22h catches 23h DST-spring days correctly; 26h catches 25h DST-fall days.
+  const idx = Math.floor((ms + 2 * 3_600_000) / 86_400_000);
   if (idx < 0 || idx >= windowLength) return null;
   return idx;
 }

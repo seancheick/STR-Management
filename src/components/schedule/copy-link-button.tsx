@@ -1,11 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Link as LinkIcon } from "lucide-react";
 
 /** Copies a shareable URL for the current schedule view to the clipboard. */
 export function CopyLinkButton({ href, label = "Share view" }: { href?: string; label?: string }) {
   const [copied, setCopied] = useState(false);
+  const resetTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimer.current !== null) {
+        window.clearTimeout(resetTimer.current);
+        resetTimer.current = null;
+      }
+    };
+  }, []);
 
   async function onClick() {
     const url =
@@ -17,7 +27,11 @@ export function CopyLinkButton({ href, label = "Share view" }: { href?: string; 
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      if (resetTimer.current !== null) window.clearTimeout(resetTimer.current);
+      resetTimer.current = window.setTimeout(() => {
+        setCopied(false);
+        resetTimer.current = null;
+      }, 1600);
     } catch {
       // Clipboard blocked (older Safari / no-permission). Fall back to prompt.
       window.prompt("Copy this URL:", url);
