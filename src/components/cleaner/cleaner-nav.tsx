@@ -2,13 +2,13 @@
 
 import type { Route } from "next";
 import Link from "next/link";
-import { Banknote, CalendarDays, CheckCircle2, ClipboardList, Settings } from "lucide-react";
+import { Banknote, Bell, CalendarDays, ClipboardList, Settings } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/jobs", label: "Jobs", icon: ClipboardList, exact: true },
   { href: "/jobs/schedule", label: "Schedule", icon: CalendarDays },
-  { href: "/jobs/history", label: "History", icon: CheckCircle2 },
+  { href: "/jobs/inbox", label: "Inbox", icon: Bell },
   { href: "/jobs/pay", label: "Pay", icon: Banknote },
   { href: "/jobs/settings", label: "Settings", icon: Settings },
 ] as const;

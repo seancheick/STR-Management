@@ -195,6 +195,15 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
         >
           + New job
         </a>
+
+        <a
+          className="inline-flex h-9 items-center gap-2 rounded-full border border-border/70 bg-card px-3 text-xs font-medium transition hover:bg-muted"
+          download
+          href={`/api/schedule/export.csv?start=${rangeStart.toISOString().slice(0, 10)}&end=${rangeEnd.toISOString().slice(0, 10)}${propertyFilter ? `&property=${propertyFilter}` : ""}`}
+          title="Download the current window as CSV for bookkeeping"
+        >
+          ⬇ CSV
+        </a>
       </div>
 
       {/* Cleaner filter chips */}

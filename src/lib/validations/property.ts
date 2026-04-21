@@ -66,6 +66,12 @@ export const propertyFormSchema = z.object({
   cleanerNotes: nullableTrimmedString(),
   guestWelcomeTemplate: nullableTrimmedString(),
   cleanerAccessCode: nullableTrimmedString(),
+  // Create-only: optional iCal URL to auto-import bookings on save.
+  icalUrl: z.preprocess((value) => {
+    if (typeof value !== "string") return null;
+    const t = value.trim();
+    return t.length === 0 ? null : t;
+  }, z.string().url("Enter a valid iCal URL.").nullable().optional()),
 });
 
 export type PropertyFormValues = z.infer<typeof propertyFormSchema>;

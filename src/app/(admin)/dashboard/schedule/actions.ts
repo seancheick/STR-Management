@@ -232,8 +232,9 @@ export async function rescheduleAssignmentAction(
     return { status: "error", message: error.message };
   }
 
-  // Notify the newly-assigned cleaner. Also fires when the cleaner is
-  // re-assigned from a different cleaner (they need to know too).
+  // Notify the newly-assigned cleaner when the cleaner changes.
+  // Also notify the PREVIOUS cleaner when they're being swapped out or
+  // unassigned — they were expecting this job and need to know it's gone.
   if (cleanerChanged && data.cleanerId) {
     const ctx = await fetchAssignmentNotificationContext(supabase, data.assignmentId);
     if (ctx) {
@@ -246,6 +247,33 @@ export async function rescheduleAssignmentAction(
         title: `New job: ${ctx.properties?.name ?? "Cleaning"}`,
         body: `${formatAnchorDate(anchor)} — tap to review and accept.`,
         url: `/jobs/${ctx.id}`,
+      }).catch(() => undefined);
+
+      if (current.cleaner_id && current.cleaner_id !== data.cleanerId) {
+        await sendNotification({
+          ownerId: ctx.owner_id,
+          recipientId: current.cleaner_id,
+          assignmentId: ctx.id,
+          type: "new_assignment",
+          title: `Job reassigned`,
+          body: `${ctx.properties?.name ?? "Cleaning"} on ${formatAnchorDate(anchor)} is no longer on your schedule.`,
+          url: `/jobs`,
+        }).catch(() => undefined);
+      }
+    }
+  } else if (data.cleanerId === null && current.cleaner_id !== null) {
+    // Cleaner was removed entirely (back to unassigned).
+    const ctx = await fetchAssignmentNotificationContext(supabase, data.assignmentId);
+    if (ctx) {
+      const anchor = ctx.checkout_at ?? ctx.due_at;
+      await sendNotification({
+        ownerId: ctx.owner_id,
+        recipientId: current.cleaner_id,
+        assignmentId: ctx.id,
+        type: "new_assignment",
+        title: `Job unassigned`,
+        body: `${ctx.properties?.name ?? "Cleaning"} on ${formatAnchorDate(anchor)} was removed from your schedule.`,
+        url: `/jobs`,
       }).catch(() => undefined);
     }
   }

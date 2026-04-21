@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { Calendar, Clock, Lock, MessageSquareText, Sparkles } from "lucide-react";
 
@@ -83,6 +84,7 @@ export function ScheduleTimeline({
 }: ScheduleTimelineProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (!selectedId) return;
@@ -92,6 +94,34 @@ export function ScheduleTimeline({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [selectedId]);
+
+  // Keyboard nav: ←/→ jump ±2 weeks, Home = today, End = +8 weeks.
+  // Only fires when no text input has focus so typing doesn't hijack it.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && target.matches("input, textarea, select, [contenteditable]")) return;
+      // Ignore modifier combos (user may be copying etc.)
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const params = new URLSearchParams(window.location.search);
+      if (e.key === "ArrowLeft") {
+        params.set("week", String(weekOffset - 2));
+        params.set("view", "week");
+        router.push(`?${params.toString()}`);
+      } else if (e.key === "ArrowRight") {
+        params.set("week", String(weekOffset + 2));
+        params.set("view", "week");
+        router.push(`?${params.toString()}`);
+      } else if (e.key === "Home") {
+        params.set("week", "0");
+        params.set("view", "week");
+        router.push(`?${params.toString()}`);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router, weekOffset]);
 
   // Pointer-drag-to-scroll for desktop mice / trackpads. Native touch-pan
   // already works on mobile.
@@ -303,8 +333,11 @@ export function ScheduleTimeline({
             gridTemplateColumns: `220px repeat(${days.length}, minmax(140px, 1fr))`,
           }}
         >
-          {/* Header row: blank property cell + day labels */}
-          <div className="sticky left-0 z-20 flex items-end border-b border-r border-border/60 bg-card px-4 py-3">
+          {/* Header row: blank property cell + day labels.
+              Sticky to the top of the viewport so long portfolios don't lose
+              the day labels as the user scrolls down. The corner cell is
+              sticky in both directions with higher z-index. */}
+          <div className="sticky left-0 top-0 z-30 flex items-end border-b border-r border-border/60 bg-card px-4 py-3">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Property
             </span>
@@ -313,7 +346,7 @@ export function ScheduleTimeline({
             const isToday = sameLocalDay(d, today);
             return (
               <div
-                className={`border-b border-r border-border/50 px-2 py-2 text-center last:border-r-0 ${
+                className={`sticky top-0 z-20 border-b border-r border-border/50 bg-card px-2 py-2 text-center last:border-r-0 ${
                   isToday ? "bg-primary/5" : ""
                 }`}
                 key={i}
@@ -488,25 +521,11 @@ function PropertyRow({
                   Blocked
                 </div>
               ) : (
-                <button
-                  className={`flex items-center gap-1.5 truncate px-3 text-[11px] font-semibold text-white transition hover:opacity-90 ${style.barBg} ${
-                    clip.startsInWindow ? "rounded-l-full" : ""
-                  } ${clip.endsInWindow ? "rounded-r-full" : ""}`}
+                <BookingBar
+                  clip={clip}
                   key={`res-${clip.res.id}-${i}`}
-                  style={{
-                    gridColumn: `${clip.startCol + 1} / span ${clip.endCol - clip.startCol + 1}`,
-                    minHeight: "28px",
-                  }}
-                  title={`${style.label}${clip.res.guest_name ? ` · ${clip.res.guest_name}` : ""}`}
-                  type="button"
-                >
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
-                  <span className="truncate">
-                    {clip.startsInWindow
-                      ? `#${clip.res.id.slice(0, 3)} ${style.label}`
-                      : `…${style.label}`}
-                  </span>
-                </button>
+                  style={style}
+                />
               );
             })}
           </div>
@@ -597,5 +616,117 @@ function Legend({ color, label }: { color: string; label: string }) {
       <span className={`inline-block h-2 w-2 rounded-full ${color}`} aria-hidden="true" />
       <span>{label}</span>
     </span>
+  );
+}
+
+// ─── Booking bar with click popover ───────────────────────────────────────────
+
+function BookingBar({
+  clip,
+  style,
+}: {
+  clip: {
+    res: ReservationRecord;
+    startCol: number;
+    endCol: number;
+    startsInWindow: boolean;
+    endsInWindow: boolean;
+  };
+  style: { barBg: string; dot: string; label: string };
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("mousedown", onClick);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const start = new Date(clip.res.start_at);
+  const end = new Date(clip.res.end_at);
+  const nights = Math.max(
+    1,
+    Math.round((atStartOfDay(end).getTime() - atStartOfDay(start).getTime()) / 86400000),
+  );
+  const dateFmt = (d: Date) =>
+    d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const timeFmt = (d: Date) =>
+    d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+  return (
+    <div
+      className="relative min-w-0"
+      ref={ref}
+      style={{
+        gridColumn: `${clip.startCol + 1} / span ${clip.endCol - clip.startCol + 1}`,
+      }}
+    >
+      <button
+        className={`flex w-full items-center gap-1.5 truncate px-3 text-[11px] font-semibold text-white transition hover:opacity-90 ${style.barBg} ${
+          clip.startsInWindow ? "rounded-l-full" : ""
+        } ${clip.endsInWindow ? "rounded-r-full" : ""}`}
+        onClick={() => setOpen((v) => !v)}
+        style={{ minHeight: "28px" }}
+        title={`${style.label} · ${nights} night${nights === 1 ? "" : "s"} · ${dateFmt(start)} → ${dateFmt(end)}`}
+        type="button"
+      >
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
+        <span className="truncate">
+          {clip.startsInWindow
+            ? `${style.label}${clip.res.guest_name ? ` · ${clip.res.guest_name}` : ""}`
+            : `…${style.label}`}
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-2 w-64 rounded-2xl border border-border/70 bg-card p-4 text-xs shadow-xl">
+          <div className="flex items-center justify-between">
+            <span className={`inline-flex h-6 items-center gap-1.5 rounded-full px-2.5 text-[10px] font-bold uppercase tracking-wider text-white ${style.barBg}`}>
+              {style.label}
+            </span>
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+              {nights} night{nights === 1 ? "" : "s"}
+            </span>
+          </div>
+          {clip.res.guest_name && (
+            <p className="mt-3 text-sm font-semibold">{clip.res.guest_name}</p>
+          )}
+          <dl className="mt-3 space-y-2 text-xs">
+            <div className="flex items-start justify-between gap-3">
+              <dt className="text-muted-foreground">Check-in</dt>
+              <dd className="text-right font-medium">
+                {dateFmt(start)}
+                <br />
+                <span className="text-muted-foreground">{timeFmt(start)}</span>
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt className="text-muted-foreground">Checkout</dt>
+              <dd className="text-right font-medium">
+                {dateFmt(end)}
+                <br />
+                <span className="text-muted-foreground">{timeFmt(end)}</span>
+              </dd>
+            </div>
+          </dl>
+          {clip.res.summary && (
+            <p className="mt-3 rounded-xl bg-muted/60 px-3 py-2 text-[11px] leading-5 text-muted-foreground">
+              {clip.res.summary}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

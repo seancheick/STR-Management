@@ -46,6 +46,7 @@ describe("parsePropertyFormData", () => {
       cleanerNotes: null,
       guestWelcomeTemplate: null,
       cleanerAccessCode: null,
+      icalUrl: null,
     });
   });
 

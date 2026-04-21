@@ -33,6 +33,26 @@ export async function listRecentNotifications(limit = 50): Promise<NotificationR
   return (data as unknown as NotificationRecord[]) ?? [];
 }
 
+/** Notifications addressed to a specific cleaner — their personal inbox. */
+export async function listNotificationsForCleaner(
+  cleanerId: string,
+  limit = 50,
+): Promise<NotificationRecord[]> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("notifications")
+    .select(`
+      id, recipient_id, assignment_id, channel, status,
+      notification_type, title, body, sent_at, error_message, created_at,
+      recipient:recipient_id ( full_name ),
+      assignment:assignment_id ( properties:property_id ( name ) )
+    `)
+    .eq("recipient_id", cleanerId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return (data as unknown as NotificationRecord[]) ?? [];
+}
+
 export async function getNotificationStats(): Promise<{
   total: number;
   sent: number;

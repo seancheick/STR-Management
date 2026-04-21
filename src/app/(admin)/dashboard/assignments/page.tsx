@@ -21,25 +21,45 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
 
   const showCancelled = params.cancelled === "1";
   const showApproved = params.approved === "1";
+  const unpaidOnly = params.unpaid === "1";
 
   const [allAssignments, cleaners] = await Promise.all([
     listAssignmentsForAdmin(),
     listActiveCleaners(),
   ]);
 
-  const assignments = allAssignments.filter((a) => {
+  const PAYABLE_STATUSES = new Set(["approved", "completed", "completed_pending_review"]);
+
+  let assignments = allAssignments.filter((a) => {
     if (a.status === "cancelled") return showCancelled;
     if (a.status === "approved") return showApproved;
     return true;
   });
 
+  if (unpaidOnly) {
+    assignments = assignments.filter(
+      (a) => PAYABLE_STATUSES.has(a.status) && a.paid_at === null,
+    );
+  }
+
   const cancelledCount = allAssignments.filter((a) => a.status === "cancelled").length;
   const approvedCount = allAssignments.filter((a) => a.status === "approved").length;
+  const unpaidCount = allAssignments.filter(
+    (a) => PAYABLE_STATUSES.has(a.status) && a.paid_at === null,
+  ).length;
 
-  function buildHref(over: { cancelled: string | null; approved: string | null }): string {
+  function buildHref(over: {
+    cancelled?: string | null;
+    approved?: string | null;
+    unpaid?: string | null;
+  }): string {
     const entries: string[] = [];
-    if (over.cancelled) entries.push(`cancelled=${over.cancelled}`);
-    if (over.approved) entries.push(`approved=${over.approved}`);
+    const cancelledVal = "cancelled" in over ? over.cancelled : showCancelled ? "1" : null;
+    const approvedVal = "approved" in over ? over.approved : showApproved ? "1" : null;
+    const unpaidVal = "unpaid" in over ? over.unpaid : unpaidOnly ? "1" : null;
+    if (cancelledVal) entries.push(`cancelled=${cancelledVal}`);
+    if (approvedVal) entries.push(`approved=${approvedVal}`);
+    if (unpaidVal) entries.push(`unpaid=${unpaidVal}`);
     return entries.length > 0
       ? `/dashboard/assignments?${entries.join("&")}`
       : "/dashboard/assignments";
@@ -76,20 +96,28 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
         </span>
         {[
           {
+            label: "Unpaid only",
+            count: unpaidCount,
+            on: unpaidOnly,
+            href: (unpaidOnly
+              ? buildHref({ unpaid: null })
+              : buildHref({ unpaid: "1" })) as Route,
+          },
+          {
             label: "Cancelled",
             count: cancelledCount,
             on: showCancelled,
             href: (showCancelled
-              ? buildHref({ cancelled: null, approved: showApproved ? "1" : null })
-              : buildHref({ cancelled: "1", approved: showApproved ? "1" : null })) as Route,
+              ? buildHref({ cancelled: null })
+              : buildHref({ cancelled: "1" })) as Route,
           },
           {
             label: "Approved",
             count: approvedCount,
             on: showApproved,
             href: (showApproved
-              ? buildHref({ cancelled: showCancelled ? "1" : null, approved: null })
-              : buildHref({ cancelled: showCancelled ? "1" : null, approved: "1" })) as Route,
+              ? buildHref({ approved: null })
+              : buildHref({ approved: "1" })) as Route,
           },
         ].map((chip) => (
           <Link

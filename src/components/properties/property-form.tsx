@@ -318,6 +318,31 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
         </div>
       </section>
 
+      {!property && (
+        <section className="rounded-2xl border border-border/70 bg-card p-5">
+          <div className="mb-2 flex items-center gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Booking calendar
+            </h2>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              Optional · auto-syncs on save
+            </span>
+          </div>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Paste the iCal URL from Airbnb / VRBO / Booking.com for this unit and we&apos;ll auto-import
+            upcoming bookings and generate cleanings. You can also add or change this later under
+            <span className="font-medium"> Calendar sources</span>.
+          </p>
+          <input
+            className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
+            name="icalUrl"
+            placeholder="https://www.airbnb.com/calendar/ical/…"
+            type="url"
+          />
+          <FieldError errors={state.fieldErrors?.icalUrl} />
+        </section>
+      )}
+
       <label className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3">
         <input
           defaultChecked={property?.active ?? true}
