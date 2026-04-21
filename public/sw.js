@@ -1,5 +1,15 @@
-// Service Worker for Web Push notifications
-// Receives push events and displays notifications to the user.
+// Service Worker for Web Push notifications + PWA install eligibility.
+//
+// Chrome / Edge only fire the `beforeinstallprompt` event when the SW has
+// a `fetch` event listener (even a trivial pass-through counts). Without
+// this, the Install banner on cleaner mobile never offers the in-page
+// install button. The handler deliberately does no caching — we rely on
+// Next.js for static asset delivery.
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener("fetch", () => {
+  // No-op pass-through: browsers go to network normally.
+});
 
 self.addEventListener("push", (event) => {
   if (!event.data) return;

@@ -44,6 +44,8 @@ export async function acceptJobAction(
   }
 
   revalidatePath("/jobs");
+  revalidatePath("/jobs/inbox");
+  revalidatePath("/jobs/schedule");
   revalidatePath(`/jobs/${assignmentId}`);
   return { success: true };
 }
@@ -132,6 +134,8 @@ export async function declineJobAction(
   }
 
   revalidatePath("/jobs");
+  revalidatePath("/jobs/inbox");
+  revalidatePath("/jobs/schedule");
   revalidatePath(`/jobs/${assignmentId}`);
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/assignments");

@@ -16,7 +16,14 @@ export type NotificationRecord = {
   error_message: string | null;
   created_at: string;
   recipient: { full_name: string } | null;
-  assignment: { properties: { name: string } | null } | null;
+  assignment:
+    | {
+        status: string;
+        ack_status: string;
+        cleaner_id: string | null;
+        properties: { name: string } | null;
+      }
+    | null;
 };
 
 /** Count of unread (seen_at is null) notifications for a given user. */
@@ -36,9 +43,9 @@ export async function listRecentNotifications(limit = 50): Promise<NotificationR
     .from("notifications")
     .select(`
       id, recipient_id, assignment_id, channel, status,
-      notification_type, title, body, sent_at, error_message, created_at,
+      notification_type, title, body, sent_at, seen_at, error_message, created_at,
       recipient:recipient_id ( full_name ),
-      assignment:assignment_id ( properties:property_id ( name ) )
+      assignment:assignment_id ( status, ack_status, cleaner_id, properties:property_id ( name ) )
     `)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -55,9 +62,9 @@ export async function listNotificationsForCleaner(
     .from("notifications")
     .select(`
       id, recipient_id, assignment_id, channel, status,
-      notification_type, title, body, sent_at, error_message, created_at,
+      notification_type, title, body, sent_at, seen_at, error_message, created_at,
       recipient:recipient_id ( full_name ),
-      assignment:assignment_id ( properties:property_id ( name ) )
+      assignment:assignment_id ( status, ack_status, cleaner_id, properties:property_id ( name ) )
     `)
     .eq("recipient_id", cleanerId)
     .order("created_at", { ascending: false })

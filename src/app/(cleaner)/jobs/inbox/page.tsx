@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { Bell, Inbox } from "lucide-react";
 
+import { InboxAcceptDecline } from "@/components/cleaner/inbox-accept-decline";
 import { requireRole } from "@/lib/auth/session";
 import { listNotificationsForCleaner } from "@/lib/queries/notifications";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
@@ -60,10 +61,18 @@ export default async function CleanerInboxPage() {
             const href: Route = n.assignment_id
               ? (`/jobs/${n.assignment_id}` as Route)
               : ("/jobs" as Route);
+            const showActions =
+              n.assignment_id &&
+              n.assignment?.status === "assigned" &&
+              n.assignment?.ack_status === "pending" &&
+              n.assignment?.cleaner_id === profile.id;
             return (
-              <li key={n.id}>
+              <li
+                className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-sm"
+                key={n.id}
+              >
                 <Link
-                  className="flex items-start gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-sm transition hover:border-primary/30 hover:shadow-md"
+                  className="flex items-start gap-3 transition hover:opacity-90"
                   href={href}
                 >
                   <span
@@ -89,6 +98,13 @@ export default async function CleanerInboxPage() {
                     </p>
                   </div>
                 </Link>
+                {/* Accept/Decline sits OUTSIDE the anchor so the buttons
+                    aren't nested inside a link (invalid HTML). */}
+                {showActions && (
+                  <div className="pl-11">
+                    <InboxAcceptDecline assignmentId={n.assignment_id!} />
+                  </div>
+                )}
               </li>
             );
           })}

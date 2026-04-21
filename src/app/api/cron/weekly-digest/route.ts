@@ -22,16 +22,20 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServiceSupabaseClient();
 
-  // Active owners/admins are the recipients
-  const { data: hosts } = await supabase
+  // Every active user with a stake in the schedule: owners, admins, cleaners.
+  // Each role gets its own tailored summary (see per-user branch below).
+  const { data: users } = await supabase
     .from("users")
-    .select("id, full_name")
-    .in("role", ["owner", "admin"])
+    .select("id, full_name, role")
+    .in("role", ["owner", "admin", "cleaner"])
     .eq("active", true);
 
-  if (!hosts?.length) {
-    return NextResponse.json({ sent: 0, message: "No active hosts." });
+  if (!users?.length) {
+    return NextResponse.json({ sent: 0, message: "No active users." });
   }
+
+  const hosts = users.filter((u) => u.role === "owner" || u.role === "admin");
+  const cleaners = users.filter((u) => u.role === "cleaner");
 
   // Compute the week window (today through +7 days)
   const now = new Date();
@@ -39,7 +43,7 @@ export async function GET(req: NextRequest) {
 
   // Aggregate stats per host. Querying per-host lets RLS-free service
   // role filter by owner_id so one host never sees another's data.
-  const results = await Promise.allSettled(
+  const hostResults = await Promise.allSettled(
     hosts.map(async (h) => {
       const [assignmentsRes, unpaidRes] = await Promise.all([
         supabase
@@ -89,7 +93,7 @@ export async function GET(req: NextRequest) {
         ownerId: h.id as string,
         recipientId: h.id as string,
         assignmentId: null,
-        type: "reminder_24h",
+        type: "weekly_digest",
         title: "Week ahead — TurnFlow",
         body,
         url: "/dashboard",
@@ -99,18 +103,66 @@ export async function GET(req: NextRequest) {
     }),
   );
 
-  const summary = results.reduce(
-    (acc, r) => {
-      if (r.status === "fulfilled") {
-        if ("delivered" in r.value) acc.sent++;
-        else if ("skipped" in r.value) acc.skipped++;
-      } else {
-        acc.errors++;
+  // Cleaner digest — jobs on THEIR schedule this week.
+  const cleanerResults = await Promise.allSettled(
+    cleaners.map(async (c) => {
+      const { data: jobs } = await supabase
+        .from("assignments")
+        .select("id, status, ack_status, due_at, checkout_at, properties:property_id ( name )")
+        .eq("cleaner_id", c.id as string)
+        .gte("due_at", now.toISOString())
+        .lte("due_at", end.toISOString())
+        .not("status", "in", '("cancelled")')
+        .order("due_at", { ascending: true });
+
+      const rows =
+        (jobs as unknown as Array<{
+          status: string;
+          ack_status: string;
+        }> | null) ?? [];
+
+      if (rows.length === 0) {
+        return { userId: c.id, skipped: true };
       }
-      return acc;
-    },
-    { sent: 0, skipped: 0, errors: 0 },
+
+      const pendingAck = rows.filter((r) => r.ack_status !== "accepted").length;
+      const body = [
+        `${rows.length} job${rows.length === 1 ? "" : "s"} on your schedule this week`,
+        pendingAck > 0 ? `${pendingAck} waiting for you to accept` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      await sendNotification({
+        ownerId: null,
+        recipientId: c.id as string,
+        assignmentId: null,
+        type: "weekly_digest",
+        title: "Your week — TurnFlow",
+        body,
+        url: "/jobs",
+      });
+
+      return { userId: c.id, delivered: true };
+    }),
   );
 
-  return NextResponse.json(summary);
+  const reduce = (rs: PromiseSettledResult<{ delivered?: boolean; skipped?: boolean }>[]) =>
+    rs.reduce(
+      (acc, r) => {
+        if (r.status === "fulfilled") {
+          if ("delivered" in r.value) acc.sent++;
+          else if ("skipped" in r.value) acc.skipped++;
+        } else {
+          acc.errors++;
+        }
+        return acc;
+      },
+      { sent: 0, skipped: 0, errors: 0 },
+    );
+
+  return NextResponse.json({
+    hosts: reduce(hostResults as PromiseSettledResult<{ delivered?: boolean; skipped?: boolean }>[]),
+    cleaners: reduce(cleanerResults as PromiseSettledResult<{ delivered?: boolean; skipped?: boolean }>[]),
+  });
 }

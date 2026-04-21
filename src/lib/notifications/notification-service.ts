@@ -5,6 +5,7 @@ import { sendPushToUser } from "./push";
 
 export type NotificationType =
   | "new_assignment"
+  | "weekly_digest"
   | "reminder_24h"
   | "reminder_2h"
   | "overdue"
