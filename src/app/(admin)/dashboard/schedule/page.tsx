@@ -3,6 +3,7 @@ import { listAssignmentsForSchedule } from "@/lib/queries/assignments";
 import { listReservationsForRange } from "@/lib/queries/calendar";
 import { listProperties } from "@/lib/queries/properties";
 import { listActiveCleaners } from "@/lib/queries/team";
+import { CopyLinkButton } from "@/components/schedule/copy-link-button";
 import { ScheduleTimeline } from "@/components/schedule/schedule-timeline";
 import { MonthView } from "@/components/schedule/month-view";
 
@@ -204,6 +205,10 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
         >
           ⬇ CSV
         </a>
+
+        <CopyLinkButton
+          label={propertyFilter ? "Share this unit" : "Share view"}
+        />
       </div>
 
       {/* Cleaner filter chips */}

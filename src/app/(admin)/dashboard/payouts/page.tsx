@@ -2,8 +2,10 @@ import type { Route } from "next";
 import Link from "next/link";
 
 import { requireRole } from "@/lib/auth/session";
+import { listUnpaidPayableJobs } from "@/lib/queries/assignments";
 import { listPayoutBatches } from "@/lib/queries/payouts";
 import { listActiveCleaners } from "@/lib/queries/team";
+import { BulkMarkPaid } from "@/components/payouts/bulk-mark-paid";
 import { CreatePayoutBatchForm } from "@/components/payouts/create-payout-batch-form";
 
 const statusColors: Record<string, string> = {
@@ -37,9 +39,10 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
   const params = (await searchParams) ?? {};
   const rangeKey = typeof params.range === "string" ? params.range : "all";
 
-  const [allBatches, cleaners] = await Promise.all([
+  const [allBatches, cleaners, unpaidJobs] = await Promise.all([
     listPayoutBatches(),
     listActiveCleaners(),
+    listUnpaidPayableJobs(),
   ]);
 
   // Filter in-memory — payout_batches is a small table per owner.
@@ -71,6 +74,9 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
           </h1>
         </div>
       </div>
+
+      {/* Quick-pay: individual jobs (Zelle/Venmo/cash) outside the batch flow */}
+      <BulkMarkPaid jobs={unpaidJobs} />
 
       {/* Create new report */}
       <section className="rounded-2xl border border-border/70 bg-card p-6">

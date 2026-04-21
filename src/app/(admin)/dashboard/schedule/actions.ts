@@ -414,6 +414,58 @@ export async function markUnpaidAction(
   return { error: error?.message ?? null };
 }
 
+// ─── Bulk mark paid ────────────────────────────────────────────────────────────
+
+const bulkMarkPaidSchema = z.object({
+  assignmentIds: z.array(z.string().uuid()).min(1, "Pick at least one job."),
+  paymentMethod: z.enum(["zelle", "venmo", "cash", "check", "bank_transfer", "other"]),
+  paymentReference: z
+    .string()
+    .trim()
+    .max(120)
+    .transform((v) => (v.length > 0 ? v : null))
+    .nullable(),
+});
+
+export async function bulkMarkPaidAction(input: {
+  assignmentIds: string[];
+  paymentMethod: string;
+  paymentReference?: string | null;
+}): Promise<{ ok: boolean; error?: string; count?: number }> {
+  const profile = await requireRole(["owner", "admin"]);
+
+  const parsed = bulkMarkPaidSchema.safeParse({
+    assignmentIds: input.assignmentIds,
+    paymentMethod: input.paymentMethod,
+    paymentReference: input.paymentReference ?? "",
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("assignments")
+    .update({
+      paid_at: new Date().toISOString(),
+      payment_method: parsed.data.paymentMethod,
+      payment_reference: parsed.data.paymentReference,
+      marked_paid_by_user_id: profile.id,
+    })
+    .in("id", parsed.data.assignmentIds)
+    .in("status", ["approved", "completed", "completed_pending_review"])
+    .select("id");
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/dashboard/payouts");
+  revalidatePath("/dashboard/assignments");
+  revalidatePath("/dashboard/schedule");
+  return { ok: true, count: (data ?? []).length };
+}
+
 // ─── Unassign cleaner ──────────────────────────────────────────────────────────
 
 export async function unassignCleanerAction(
