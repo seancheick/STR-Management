@@ -350,8 +350,10 @@ export function MonthView({
         ))}
       </div>
 
-      {/* Month grid — 6 fixed week rows, each with stripe layer + day cells */}
-      <div className="flex flex-col gap-[1px] overflow-hidden rounded-b-2xl border border-t-0 border-border/60 bg-border/60">
+      {/* Month grid — 6 fixed week rows, each with stripe layer + day cells.
+          max-h keeps the whole calendar inside the viewport so hosts don't
+          scroll to see the last row. */}
+      <div className="flex flex-col gap-[1px] overflow-hidden rounded-b-2xl border border-t-0 border-border/60 bg-border/60 max-h-[calc(100vh-19rem)] min-h-[420px]">
         {weeks.map((week, weekIdx) => (
           <WeekRow
             byDay={byDay}
@@ -557,7 +559,7 @@ function WeekRow({
     stripeRows > 0 ? stripeRows * (STRIPE_HEIGHT + STRIPE_GAP) + 4 : 0;
 
   return (
-    <div className="relative grid grid-cols-7 gap-[1px] bg-border/60">
+    <div className="relative grid flex-1 grid-cols-7 gap-[1px] bg-border/60">
       {/* Stripe layer */}
       {stripeRows > 0 && (
         <div
@@ -625,7 +627,7 @@ function WeekRow({
 
         return (
           <div
-            className={`flex min-h-[128px] flex-col bg-card p-2 transition ${
+            className={`flex min-h-[64px] flex-col overflow-hidden bg-card p-2 transition ${
               isToday ? "ring-2 ring-primary/50 ring-inset" : ""
             } ${shouldDimCell ? "opacity-40" : ""}`}
             key={idx}
