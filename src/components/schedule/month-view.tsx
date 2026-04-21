@@ -52,10 +52,10 @@ const PLATFORM_STYLE: Record<
   ReservationRecord["platform"],
   { bar: string; label: string; dot: string }
 > = {
-  airbnb: { bar: "bg-rose-100/70 text-rose-900/90", label: "Airbnb", dot: "bg-rose-500" },
-  vrbo: { bar: "bg-amber-100/70 text-amber-900/90", label: "VRBO", dot: "bg-amber-500" },
-  booking: { bar: "bg-blue-100/70 text-blue-900/90", label: "Booking", dot: "bg-blue-500" },
-  other: { bar: "bg-slate-100/70 text-slate-800/90", label: "Direct", dot: "bg-slate-500" },
+  airbnb: { bar: "bg-rose-500 text-white shadow-sm", label: "Airbnb", dot: "bg-white/90" },
+  vrbo: { bar: "bg-amber-500 text-white shadow-sm", label: "VRBO", dot: "bg-white/90" },
+  booking: { bar: "bg-blue-600 text-white shadow-sm", label: "Booking", dot: "bg-white/90" },
+  other: { bar: "bg-slate-500 text-white shadow-sm", label: "Direct", dot: "bg-white/90" },
 };
 
 const MAX_STRIPES_PER_WEEK = 3;

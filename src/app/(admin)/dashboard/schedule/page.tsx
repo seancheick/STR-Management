@@ -85,13 +85,26 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
   ]);
 
   const activeProperties = propertiesResult.data.filter((p) => p.active);
+
+  // Property filter applies to every downstream array so the Month view,
+  // Timeline, booking stripes, and cleaner count all react.
+  const propFilteredAssignments = propertyFilter
+    ? allAssignments.filter((a) => a.property_id === propertyFilter)
+    : allAssignments;
+  const propFilteredReservations = propertyFilter
+    ? reservations.filter((r) => r.property_id === propertyFilter)
+    : reservations;
+  const propFilteredProperties = propertyFilter
+    ? activeProperties.filter((p) => p.id === propertyFilter)
+    : activeProperties;
+
   const assignments = cleanerFilter
-    ? allAssignments.filter((a) =>
+    ? propFilteredAssignments.filter((a) =>
         cleanerFilter === "unassigned"
           ? a.cleaner_id === null
           : a.cleaner_id === cleanerFilter,
       )
-    : allAssignments;
+    : propFilteredAssignments;
 
   const preserveParams = (over: Record<string, string | null>) => {
     const entries: Array<[string, string]> = [];
@@ -226,20 +239,20 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
 
       {view === "month" ? (
         <MonthView
-          properties={activeProperties}
+          properties={propFilteredProperties}
           assignments={assignments}
           cleaners={cleaners}
-          reservations={reservations}
+          reservations={propFilteredReservations}
           monthDays={monthDayISOs}
           monthOffset={monthOffset}
           view="month"
         />
       ) : (
         <ScheduleTimeline
-          properties={activeProperties}
+          properties={propFilteredProperties}
           assignments={assignments}
           cleaners={cleaners}
-          reservations={reservations}
+          reservations={propFilteredReservations}
           days={timelineDayISOs}
           weekOffset={weekOffset}
           selectedPropertyId={propertyFilter}

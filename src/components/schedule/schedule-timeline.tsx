@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import { Clock, Lock, MessageSquareText, Sparkles } from "lucide-react";
+import { Calendar, Clock, Lock, MessageSquareText, Sparkles } from "lucide-react";
 
 import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { ReservationRecord } from "@/lib/queries/calendar";
@@ -82,6 +82,7 @@ export function ScheduleTimeline({
   selectedPropertyId,
 }: ScheduleTimelineProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -91,6 +92,71 @@ export function ScheduleTimeline({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [selectedId]);
+
+  // Pointer-drag-to-scroll for desktop mice / trackpads. Native touch-pan
+  // already works on mobile.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+
+    let isDown = false;
+    let startX = 0;
+    let startScroll = 0;
+
+    function onDown(e: PointerEvent) {
+      // Don't hijack drags starting on interactive elements (buttons, links)
+      const target = e.target as HTMLElement;
+      if (target.closest("button,a,input,select")) return;
+      isDown = true;
+      startX = e.clientX;
+      startScroll = el!.scrollLeft;
+      el!.setPointerCapture(e.pointerId);
+      el!.style.cursor = "grabbing";
+    }
+    function onMove(e: PointerEvent) {
+      if (!isDown) return;
+      el!.scrollLeft = startScroll - (e.clientX - startX);
+    }
+    function onUp(e: PointerEvent) {
+      isDown = false;
+      el!.releasePointerCapture(e.pointerId);
+      el!.style.cursor = "";
+    }
+
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
+    return () => {
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+    };
+  }, []);
+
+  // Auto-scroll to today's column on first paint so hosts don't have to hunt
+  // for it when the window opens on past/future days.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || !days.length) return;
+    const todayCol = dayIndex(new Date(), new Date(days[0]), days.length);
+    if (todayCol === null || todayCol < 3) return;
+    // Each day ≈ (el.scrollWidth - propertyCol) / days.length
+    const propertyColPx = 220;
+    const perDay = (el.scrollWidth - propertyColPx) / days.length;
+    el.scrollLeft = Math.max(0, perDay * (todayCol - 2));
+  }, [days]);
+
+  function scrollToToday() {
+    const el = scrollerRef.current;
+    if (!el || !days.length) return;
+    const todayCol = dayIndex(new Date(), new Date(days[0]), days.length);
+    if (todayCol === null) return;
+    const propertyColPx = 220;
+    const perDay = (el.scrollWidth - propertyColPx) / days.length;
+    el.scrollTo({ left: Math.max(0, perDay * (todayCol - 2)), behavior: "smooth" });
+  }
 
   const today = new Date();
   const dayDates = useMemo(() => days.map((iso) => new Date(iso)), [days]);
@@ -203,6 +269,14 @@ export function ScheduleTimeline({
           >
             →
           </Link>
+          <button
+            className="ml-1 inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 text-xs font-medium transition hover:bg-muted"
+            onClick={scrollToToday}
+            type="button"
+          >
+            <Calendar className="h-3 w-3" aria-hidden="true" />
+            Today
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
@@ -214,12 +288,19 @@ export function ScheduleTimeline({
       </div>
 
       {/* Timeline — grid with property column + N day columns.
-          Scroll horizontally when narrow; rows wrap in a card. */}
-      <div className="overflow-x-auto rounded-2xl border border-border/70 bg-card shadow-sm">
+          Horizontal scroll enabled: trackpad / touch pan, mouse wheel shift,
+          and pointer-drag. Each day column is wide enough that a 14-day
+          window always requires scrolling on laptop viewports (2-week wide:
+          220 + 14 * 140 = 2180px minimum). */}
+      <div
+        className="cursor-grab select-none overflow-x-auto rounded-2xl border border-border/70 bg-card shadow-sm"
+        ref={scrollerRef}
+        style={{ scrollSnapType: "none", overscrollBehaviorX: "contain" }}
+      >
         <div
-          className="grid min-w-[1000px]"
+          className="grid min-w-[2180px]"
           style={{
-            gridTemplateColumns: `220px repeat(${days.length}, minmax(80px, 1fr))`,
+            gridTemplateColumns: `220px repeat(${days.length}, minmax(140px, 1fr))`,
           }}
         >
           {/* Header row: blank property cell + day labels */}
