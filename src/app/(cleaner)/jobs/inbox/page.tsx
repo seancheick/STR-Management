@@ -4,6 +4,7 @@ import { Bell, Inbox } from "lucide-react";
 
 import { requireRole } from "@/lib/auth/session";
 import { listNotificationsForCleaner } from "@/lib/queries/notifications";
+import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
@@ -20,6 +21,21 @@ function formatWhen(iso: string): string {
 export default async function CleanerInboxPage() {
   const profile = await requireRole(["cleaner", "owner", "admin", "supervisor"]);
   const notifications = await listNotificationsForCleaner(profile.id, 50);
+
+  // Visiting the inbox implicitly marks everything as seen. We use the
+  // service client because RLS would otherwise block the update (cleaners
+  // don't have update rights on the notifications table directly). The
+  // eq on recipient_id scopes it so one cleaner can never clear another's.
+  try {
+    const supabase = createServiceSupabaseClient();
+    await supabase
+      .from("notifications")
+      .update({ seen_at: new Date().toISOString() })
+      .eq("recipient_id", profile.id)
+      .is("seen_at", null);
+  } catch {
+    // non-blocking — a failed mark-as-seen shouldn't prevent rendering
+  }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col gap-6 px-5 py-8">

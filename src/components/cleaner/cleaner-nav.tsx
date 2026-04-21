@@ -13,7 +13,7 @@ const navItems = [
   { href: "/jobs/settings", label: "Settings", icon: Settings },
 ] as const;
 
-export function CleanerNav() {
+export function CleanerNav({ unreadCount = 0 }: { unreadCount?: number }) {
   const pathname = usePathname();
 
   return (
@@ -23,17 +23,29 @@ export function CleanerNav() {
           const { href, label, icon: Icon } = item;
           const exact = "exact" in item && item.exact;
           const active = exact ? pathname === href : pathname.startsWith(href);
+          const isInbox = href === "/jobs/inbox";
+          const showDot = isInbox && unreadCount > 0 && !active;
           return (
             <li key={href}>
               <Link
-                className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[11px] font-medium transition ${
+                className={`relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[11px] font-medium transition ${
                   active
                     ? "bg-primary text-[#f7f5ef]"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
                 href={href as Route}
               >
-                <Icon className="h-4 w-4" aria-hidden="true" />
+                <span className="relative">
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                  {showDot && (
+                    <span
+                      aria-label={`${unreadCount} unread`}
+                      className="absolute -right-1.5 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white tabular-nums"
+                    >
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </span>
                 <span>{label}</span>
               </Link>
             </li>

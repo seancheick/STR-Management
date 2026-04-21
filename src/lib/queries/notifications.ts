@@ -12,11 +12,23 @@ export type NotificationRecord = {
   title: string;
   body: string;
   sent_at: string | null;
+  seen_at: string | null;
   error_message: string | null;
   created_at: string;
   recipient: { full_name: string } | null;
   assignment: { properties: { name: string } | null } | null;
 };
+
+/** Count of unread (seen_at is null) notifications for a given user. */
+export async function countUnreadNotifications(userId: string): Promise<number> {
+  const supabase = await createServerSupabaseClient();
+  const { count } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("recipient_id", userId)
+    .is("seen_at", null);
+  return count ?? 0;
+}
 
 export async function listRecentNotifications(limit = 50): Promise<NotificationRecord[]> {
   const supabase = await createServerSupabaseClient();
