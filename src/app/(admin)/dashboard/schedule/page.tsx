@@ -3,25 +3,23 @@ import { listAssignmentsForSchedule } from "@/lib/queries/assignments";
 import { listReservationsForRange } from "@/lib/queries/calendar";
 import { listProperties } from "@/lib/queries/properties";
 import { listActiveCleaners } from "@/lib/queries/team";
-import { ScheduleGrid } from "@/components/schedule/schedule-grid";
+import { ScheduleTimeline } from "@/components/schedule/schedule-timeline";
 import { MonthView } from "@/components/schedule/month-view";
 
 type SchedulePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-function getWeekDays(weekOffset: number): Date[] {
-  // Start from the current Monday, offset by weekOffset weeks
+/** 14 days starting from yesterday, shifted by weekOffset weeks. */
+function getTimelineDays(weekOffset: number): Date[] {
   const now = new Date();
-  const dayOfWeek = now.getDay(); // 0 = Sun, 1 = Mon, ...
-  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + diffToMonday + weekOffset * 7);
-  monday.setHours(0, 0, 0, 0);
+  const start = new Date(now);
+  start.setDate(now.getDate() - 1 + weekOffset * 7);
+  start.setHours(0, 0, 0, 0);
 
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
+  return Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
     return d;
   });
 }
@@ -53,10 +51,14 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
     typeof params.cleaner === "string" && params.cleaner.length > 0
       ? params.cleaner
       : null;
+  const propertyFilter =
+    typeof params.property === "string" && params.property.length > 0
+      ? params.property
+      : null;
 
   let rangeStart: Date;
   let rangeEnd: Date;
-  let weekDayISOs: string[] = [];
+  let timelineDayISOs: string[] = [];
   let monthDayISOs: string[] = [];
 
   if (view === "month") {
@@ -67,12 +69,12 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
     rangeEnd.setHours(23, 59, 59, 999);
     monthDayISOs = monthDays.map((d) => d.toISOString());
   } else {
-    const weekDays = getWeekDays(weekOffset);
-    rangeStart = new Date(weekDays[0]);
+    const timelineDays = getTimelineDays(weekOffset);
+    rangeStart = new Date(timelineDays[0]);
     rangeStart.setHours(0, 0, 0, 0);
-    rangeEnd = new Date(weekDays[6]);
+    rangeEnd = new Date(timelineDays[timelineDays.length - 1]);
     rangeEnd.setHours(23, 59, 59, 999);
-    weekDayISOs = weekDays.map((d) => d.toISOString());
+    timelineDayISOs = timelineDays.map((d) => d.toISOString());
   }
 
   const [propertiesResult, allAssignments, cleaners, reservations] = await Promise.all([
@@ -97,6 +99,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
     if (weekOffset) entries.push(["week", String(weekOffset)]);
     if (monthOffset) entries.push(["month", String(monthOffset)]);
     if (cleanerFilter) entries.push(["cleaner", cleanerFilter]);
+    if (propertyFilter) entries.push(["property", propertyFilter]);
     for (const [k, v] of Object.entries(over)) {
       const idx = entries.findIndex(([ek]) => ek === k);
       if (idx >= 0) entries.splice(idx, 1);
@@ -119,10 +122,72 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
         </p>
       </div>
 
+      {/* View + property selector + cleaner filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1 rounded-full border border-border/70 bg-card p-1">
+          <a
+            className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-medium transition ${
+              view === "week"
+                ? "bg-primary text-[#f7f5ef]"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+            href={preserveParams({ view: "week", month: null })}
+          >
+            Timeline
+          </a>
+          <a
+            className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-medium transition ${
+              view === "month"
+                ? "bg-primary text-[#f7f5ef]"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+            href={preserveParams({ view: "month", week: null })}
+          >
+            Month
+          </a>
+        </div>
+
+        <form className="contents" action="">
+          <select
+            className="h-9 rounded-full border border-border/70 bg-card px-3 text-xs font-medium"
+            defaultValue={propertyFilter ?? ""}
+            name="property"
+          >
+            <option value="">All properties</option>
+            {activeProperties.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          {view === "week" && weekOffset !== 0 && (
+            <input name="week" type="hidden" value={weekOffset} />
+          )}
+          {view === "month" && monthOffset !== 0 && (
+            <input name="month" type="hidden" value={monthOffset} />
+          )}
+          {cleanerFilter && <input name="cleaner" type="hidden" value={cleanerFilter} />}
+          <input name="view" type="hidden" value={view} />
+          <button
+            className="inline-flex h-9 items-center rounded-full border border-border/70 bg-card px-3 text-xs font-medium hover:bg-muted"
+            type="submit"
+          >
+            Filter
+          </button>
+        </form>
+
+        <a
+          className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
+          href="/dashboard/assignments/new"
+        >
+          + New job
+        </a>
+      </div>
+
       {/* Cleaner filter chips */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="mr-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Filter
+          Cleaner
         </span>
         {[
           { key: null, label: "All", count: allAssignments.length },
@@ -170,13 +235,14 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           view="month"
         />
       ) : (
-        <ScheduleGrid
+        <ScheduleTimeline
           properties={activeProperties}
           assignments={assignments}
           cleaners={cleaners}
-          weekDays={weekDayISOs}
+          reservations={reservations}
+          days={timelineDayISOs}
           weekOffset={weekOffset}
-          view="week"
+          selectedPropertyId={propertyFilter}
         />
       )}
     </main>

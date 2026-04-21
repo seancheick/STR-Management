@@ -63,7 +63,7 @@ function turnoverWindow(checkoutAt: string | null, dueAt: string): string {
 function statusConfig(status: string) {
   const map: Record<string, { label: string; bg: string; border: string; text: string; dot: string }> = {
     unassigned:               { label: "Unassigned",        bg: "bg-amber-50",   border: "border-amber-300",  text: "text-amber-700",  dot: "bg-amber-400" },
-    assigned:                 { label: "Assigned",          bg: "bg-blue-50",    border: "border-blue-200",   text: "text-blue-700",   dot: "bg-blue-400" },
+    assigned:                 { label: "Assigned",          bg: "bg-emerald-50", border: "border-emerald-200",text: "text-emerald-700",dot: "bg-emerald-500" },
     confirmed:                { label: "Confirmed",         bg: "bg-indigo-50",  border: "border-indigo-200", text: "text-indigo-700", dot: "bg-indigo-400" },
     in_progress:              { label: "In Progress",       bg: "bg-orange-50",  border: "border-orange-200", text: "text-orange-700", dot: "bg-orange-400" },
     completed_pending_review: { label: "Pending Review",    bg: "bg-purple-50",  border: "border-purple-200", text: "text-purple-700", dot: "bg-purple-400" },
@@ -88,7 +88,7 @@ function propertyStatus(
   if (statuses.some((s) => s === "needs_reclean")) return { label: "Re-clean", color: "text-red-600" };
   if (statuses.some((s) => s === "completed_pending_review")) return { label: "Pending Review", color: "text-purple-600" };
   if (statuses.every((s) => s === "approved")) return { label: "Ready", color: "text-green-600" };
-  if (statuses.some((s) => s === "assigned" || s === "confirmed")) return { label: "Assigned", color: "text-blue-600" };
+  if (statuses.some((s) => s === "assigned" || s === "confirmed")) return { label: "Assigned", color: "text-emerald-600" };
   return { label: "Active", color: "text-primary" };
 }
 

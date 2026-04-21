@@ -17,7 +17,7 @@ function statusDot(status: string): string {
   const map: Record<string, string> = {
     unassigned:               "bg-amber-400",
     needs_reclean:            "bg-amber-400",
-    assigned:                 "bg-blue-400",
+    assigned:                 "bg-emerald-500",
     confirmed:                "bg-indigo-400",
     in_progress:              "bg-orange-400",
     completed_pending_review: "bg-purple-400",

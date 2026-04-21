@@ -18,7 +18,7 @@ import type { AssignmentDetailAction } from "@/app/actions/assignments";
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   unassigned:               { label: "Unassigned",        cls: "bg-amber-50 text-amber-700 border-amber-200" },
-  assigned:                 { label: "Assigned",          cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  assigned:                 { label: "Assigned",          cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   confirmed:                { label: "Confirmed",         cls: "bg-indigo-50 text-indigo-700 border-indigo-200" },
   in_progress:              { label: "In Progress",       cls: "bg-orange-50 text-orange-700 border-orange-200" },
   completed_pending_review: { label: "Pending Review",    cls: "bg-purple-50 text-purple-700 border-purple-200" },

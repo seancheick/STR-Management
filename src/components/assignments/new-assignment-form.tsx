@@ -106,6 +106,20 @@ export function NewAssignmentForm({
     return toDatetimeLocal(d);
   });
 
+  // Property-driven defaults: picking a property pre-fills the default cleaner
+  // and the default clean price so hosts don't have to re-type the same numbers.
+  const [propertyId, setPropertyId] = useState("");
+  const [cleanerId, setCleanerId] = useState("");
+  const [payout, setPayout] = useState("");
+  const selectedProperty = properties.find((p) => p.id === propertyId) ?? null;
+
+  function handlePropertyChange(id: string) {
+    setPropertyId(id);
+    const prop = properties.find((p) => p.id === id) ?? null;
+    if (prop?.default_cleaner_id) setCleanerId(prop.default_cleaner_id);
+    if (prop?.default_clean_price != null) setPayout(String(prop.default_clean_price));
+  }
+
   function handleCheckoutChange(val: string) {
     setCheckoutVal(val);
     if (activeChip && val) {
@@ -147,7 +161,9 @@ export function NewAssignmentForm({
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
             id="propertyId"
             name="propertyId"
+            onChange={(e) => handlePropertyChange(e.target.value)}
             required
+            value={propertyId}
           >
             <option value="">Select a property…</option>
             {properties.map((p) => (
@@ -157,6 +173,11 @@ export function NewAssignmentForm({
               </option>
             ))}
           </select>
+          {selectedProperty?.default_clean_price != null && (
+            <p className="text-xs text-muted-foreground">
+              Default payout for this property: ${Number(selectedProperty.default_clean_price).toFixed(2)}
+            </p>
+          )}
           <FieldError errors={state.fieldErrors?.propertyId} />
         </div>
 
@@ -235,6 +256,8 @@ export function NewAssignmentForm({
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
             id="cleanerId"
             name="cleanerId"
+            onChange={(e) => setCleanerId(e.target.value)}
+            value={cleanerId}
           >
             <option value="">Leave unassigned</option>
             {cleaners.map((c) => (
@@ -311,8 +334,15 @@ export function NewAssignmentForm({
             id="fixedPayoutAmount"
             min="0"
             name="fixedPayoutAmount"
+            onChange={(e) => setPayout(e.target.value)}
+            placeholder={
+              selectedProperty?.default_clean_price != null
+                ? `Default $${Number(selectedProperty.default_clean_price).toFixed(2)}`
+                : undefined
+            }
             step="0.01"
             type="number"
+            value={payout}
           />
         </div>
       </section>
