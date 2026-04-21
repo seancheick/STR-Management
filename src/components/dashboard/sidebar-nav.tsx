@@ -46,9 +46,9 @@ export function SidebarNav() {
       {/* Brand */}
       <div className="border-b border-border/60 px-5 py-5">
         <p className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-          Ops Portal
+          Operator console
         </p>
-        <p className="mt-0.5 text-lg font-semibold tracking-tight">STR Manager</p>
+        <p className="mt-0.5 text-lg font-semibold tracking-tight">TurnFlow</p>
       </div>
 
       {/* Nav links */}

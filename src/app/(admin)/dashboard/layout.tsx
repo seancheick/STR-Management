@@ -31,7 +31,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
       {/* Mobile top bar */}
       <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-border/60 bg-card px-4 lg:hidden">
-        <p className="font-semibold tracking-tight">STR Manager</p>
+        <p className="font-semibold tracking-tight">TurnFlow</p>
         <HeaderBell counts={bellCounts} />
       </header>
 

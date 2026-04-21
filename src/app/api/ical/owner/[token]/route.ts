@@ -52,10 +52,10 @@ export async function GET(
   const icsLines: string[] = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//STR Manager//Owner feed//EN",
+    "PRODID:-//TurnFlow//Owner feed//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    `X-WR-CALNAME:STR Cleanings — ${owner.full_name}`,
+    `X-WR-CALNAME:TurnFlow — ${owner.full_name}`,
     "X-WR-TIMEZONE:UTC",
     `X-WR-CALDESC:Upcoming cleaning turnovers for ${owner.full_name}`,
   ];
@@ -91,7 +91,7 @@ export async function GET(
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
       "Cache-Control": "public, max-age=600",
-      "Content-Disposition": 'inline; filename="str-cleanings.ics"',
+      "Content-Disposition": 'inline; filename="turnflow.ics"',
     },
   });
 }
