@@ -14,6 +14,8 @@ type UserProfile = {
   role: UserRole;
   active: boolean;
   availability: string | null;
+  /** Tenant the user belongs to. Owners self-reference (owner_id === id). */
+  owner_id: string;
 };
 
 export async function getSessionUser() {
@@ -35,7 +37,7 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, phone, full_name, role, active, availability")
+    .select("id, email, phone, full_name, role, active, availability, owner_id")
     .eq("id", user.id)
     .maybeSingle();
 

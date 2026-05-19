@@ -16,7 +16,12 @@ export async function inviteTeamMemberAction(
   _prev: TeamActionResult,
   formData: FormData,
 ): Promise<TeamActionResult> {
-  await requireRole(["owner", "admin"]);
+  // Capture the inviter's tenant — every new team member is stamped with it.
+  const inviter = await requireRole(["owner", "admin"]);
+  const tenantId = inviter.owner_id;
+  if (!tenantId) {
+    return { error: "Your account has no tenant. Re-sign in and try again." };
+  }
 
   const email = (formData.get("email") as string | null)?.trim().toLowerCase() ?? "";
   const fullName = (formData.get("full_name") as string | null)?.trim() ?? "";
@@ -30,12 +35,14 @@ export async function inviteTeamMemberAction(
 
   // Invite via Supabase Auth — sends magic link email
   const { data, error: inviteError } = await service.auth.admin.inviteUserByEmail(email, {
-    data: { full_name: fullName, role },
+    data: { full_name: fullName, role, owner_id: tenantId },
   });
 
   if (inviteError) return { error: inviteError.message };
 
-  // Pre-create the public.users record so the member appears in team lists immediately
+  // Pre-create the public.users record so the member appears in team lists immediately.
+  // owner_id is REQUIRED post-multi-tenancy — without it the NOT NULL constraint
+  // would reject the upsert and the invite would arrive at a broken account.
   if (data.user) {
     await service.from("users").upsert(
       {
@@ -44,6 +51,7 @@ export async function inviteTeamMemberAction(
         full_name: fullName,
         role,
         active: true,
+        owner_id: tenantId,
       },
       { onConflict: "id" },
     );

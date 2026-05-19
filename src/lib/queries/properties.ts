@@ -110,23 +110,13 @@ export async function resolveOwnerId() {
     throw new Error("You must be signed in to manage properties.");
   }
 
-  if (profile.role === "owner") {
-    return profile.id;
+  // Multi-tenant: every user has owner_id (owners self-reference). This is
+  // the only correct way to resolve the tenant — falling back to "the first
+  // active owner" would mean Tenant B's admins stamp Tenant A's id on their
+  // inserts and trip the new RLS write-check.
+  if (!profile.owner_id) {
+    throw new Error("User has no tenant — multi-tenancy not configured for this account.");
   }
-
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("users")
-    .select("id")
-    .eq("role", "owner")
-    .eq("active", true)
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !data) {
-    throw new Error("Could not resolve the owner account for this workspace.");
-  }
-
-  return data.id;
+  return profile.owner_id;
 }
 

@@ -143,6 +143,16 @@ export function SignInForm({ redirectTo }: SignInFormProps) {
           "Sign In"
         )}
       </Button>
+
+      <p className="pt-1 text-center text-sm text-muted-foreground">
+        New to TurnFlow?{" "}
+        <Link
+          className="font-medium text-primary underline-offset-2 hover:underline"
+          href={"/sign-up" as Route}
+        >
+          Create your workspace
+        </Link>
+      </p>
     </form>
   );
 }
