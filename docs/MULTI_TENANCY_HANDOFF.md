@@ -1,10 +1,19 @@
 # Multi-Tenancy Handoff · Path B Implementation Plan
 
-> **Status**: Planning · not yet implemented
+> **Status**: ✅ Implemented · 2026-05-19 (commit `d0a3f62`)
 > **Owner**: Sean (seancheick@gmail.com)
 > **Target**: Real multi-tenant SaaS where each host has isolated data
-> **Estimated effort**: 1 focused day (8-10 hours) for MVP + half a day for polish
-> **Last updated**: 2026-04-21
+> **Estimated effort**: 1 focused day (actual: ~3 hours, single sitting)
+> **Last updated**: 2026-05-19
+>
+> **Live verification**: Tenant B account created via Supabase Auth → signed in
+> with real JWT → saw `[]` for properties/reservations/assignments/notifications
+> → could insert own property → rejected with `42501` when trying to inject
+> Sean's tenant id. Sean's data unchanged (3 properties, 26 assignments,
+> 21 reservations preserved).
+>
+> Skipped from MVP and tracked under [Beyond MVP](#beyond-mvp):
+> billing, custom subdomains, co-owners, cross-tenant cleaner accounts.
 
 ---
 
