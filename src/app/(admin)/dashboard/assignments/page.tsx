@@ -28,7 +28,7 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
     listActiveCleaners(),
   ]);
 
-  const PAYABLE_STATUSES = new Set(["approved", "completed", "completed_pending_review"]);
+  const PAYABLE_STATUSES = new Set(["approved", "completed_pending_review"]);
 
   let assignments = allAssignments.filter((a) => {
     if (a.status === "cancelled") return showCancelled;

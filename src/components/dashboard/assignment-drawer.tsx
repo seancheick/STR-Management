@@ -271,9 +271,8 @@ export function AssignmentDrawer({ detail, onClose, onAssignClick }: Props) {
           </dl>
         </div>
 
-        {/* Payment — only for jobs that can be paid (approved/completed) */}
+        {/* Payment — only for jobs that can be paid (approved or pending review) */}
         {(detail.status === "approved" ||
-          detail.status === "completed" ||
           detail.status === "completed_pending_review" ||
           detail.paidAt) && (
           <div className="border-t border-border/60 px-5 py-4">

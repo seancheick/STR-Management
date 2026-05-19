@@ -117,8 +117,8 @@ function priorityRank(a: AssignmentScheduleRecord): number {
   if (isTightTurnover(a.checkout_at, a.next_checkin_at)) return 1;
   if (!a.cleaner_id) return 2;
   if (a.status === "in_progress") return 3;
-  if (a.status === "assigned" || a.status === "acknowledged") return 4;
-  if (a.status === "approved" || a.status === "completed") return 5;
+  if (a.status === "assigned" || a.status === "confirmed") return 4;
+  if (a.status === "approved" || a.status === "completed_pending_review") return 5;
   return 4;
 }
 
@@ -704,7 +704,7 @@ function CalendarPill({
   const tight = isTightTurnover(assignment.checkout_at, assignment.next_checkin_at);
   const gap = tightTurnoverMinutes(assignment.checkout_at, assignment.next_checkin_at);
   const needsReclean = assignment.status === "needs_reclean";
-  const approved = assignment.status === "approved" || assignment.status === "completed";
+  const approved = assignment.status === "approved" || assignment.status === "completed_pending_review";
   const cleanerFirst = assignment.cleaners?.full_name?.split(" ")[0] ?? null;
 
   let paletteClass: string;

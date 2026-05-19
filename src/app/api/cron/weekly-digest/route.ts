@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
           .from("assignments")
           .select("fixed_payout_amount")
           .eq("owner_id", h.id as string)
-          .in("status", ["approved", "completed", "completed_pending_review"])
+          .in("status", ["approved", "completed_pending_review"])
           .is("paid_at", null)
           .not("fixed_payout_amount", "is", null),
       ]);

@@ -101,7 +101,7 @@ export async function listUnpaidPayableJobs(): Promise<AssignmentListRecord[]> {
   const { data } = await supabase
     .from("assignments")
     .select(ASSIGNMENT_LIST_SELECT)
-    .in("status", ["approved", "completed", "completed_pending_review"])
+    .in("status", ["approved", "completed_pending_review"])
     .is("paid_at", null)
     .order("due_at", { ascending: true });
   return (data as AssignmentListRecord[] | null) ?? [];

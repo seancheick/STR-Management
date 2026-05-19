@@ -379,7 +379,7 @@ export async function markPaidAction(
       marked_paid_by_user_id: profile.id,
     })
     .eq("id", parsed.data.assignmentId)
-    .in("status", ["approved", "completed", "completed_pending_review"]);
+    .in("status", ["approved", "completed_pending_review"]);
 
   if (error) {
     return { status: "error", message: error.message };
@@ -453,7 +453,7 @@ export async function bulkMarkPaidAction(input: {
       marked_paid_by_user_id: profile.id,
     })
     .in("id", parsed.data.assignmentIds)
-    .in("status", ["approved", "completed", "completed_pending_review"])
+    .in("status", ["approved", "completed_pending_review"])
     .select("id");
 
   if (error) {

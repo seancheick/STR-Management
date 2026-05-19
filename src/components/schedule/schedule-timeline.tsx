@@ -587,7 +587,7 @@ function CleaningChip({
   } else if (tight) {
     style = "border-red-300 bg-red-50 text-red-700";
     label = `Tight · ${cleanerFirst ?? "?"}`;
-  } else if (assignment.status === "approved" || assignment.status === "completed") {
+  } else if (assignment.status === "approved" || assignment.status === "completed_pending_review") {
     style = "border-green-300 bg-green-50 text-green-700";
     label = `Clean · ${cleanerFirst ?? "✓"}`;
   } else if (!assignment.cleaner_id) {
