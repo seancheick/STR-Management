@@ -44,7 +44,7 @@ export async function inviteTeamMemberAction(
   // owner_id is REQUIRED post-multi-tenancy — without it the NOT NULL constraint
   // would reject the upsert and the invite would arrive at a broken account.
   if (data.user) {
-    await service.from("users").upsert(
+    const { error: upsertError } = await service.from("users").upsert(
       {
         id: data.user.id,
         email,
@@ -55,6 +55,14 @@ export async function inviteTeamMemberAction(
       },
       { onConflict: "id" },
     );
+
+    if (upsertError) {
+      // Roll back the auth invite so the user isn't stranded with a working
+      // login that has no tenant binding. Swallow the cleanup error — surfacing
+      // the original upsert error is more useful to the caller.
+      await service.auth.admin.deleteUser(data.user.id).catch(() => undefined);
+      return { error: upsertError.message };
+    }
   }
 
   revalidatePath("/dashboard/team");

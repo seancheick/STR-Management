@@ -42,8 +42,11 @@ export async function createPayoutBatchAction(
     return { error: parsed.error.errors[0].message };
   }
 
+  // CRITICAL: this must be the tenant id, not the auth user id. For owners
+  // those happen to coincide; for admins / supervisors they don't, and using
+  // profile.id would stamp a non-tenant uuid that RLS then hides forever.
   const result = await generatePayoutBatch({
-    ownerId: profile.id,
+    ownerId: profile.owner_id,
     label: parsed.data.label,
     periodStart: parsed.data.period_start,
     periodEnd: parsed.data.period_end,

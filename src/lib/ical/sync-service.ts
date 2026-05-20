@@ -64,15 +64,19 @@ async function fetchIcal(url: string): Promise<string> {
  */
 async function detectOverlap(
   supabase: ReturnType<typeof createServiceSupabaseClient>,
+  ownerId: string,
   propertyId: string,
   dueAt: string,
 ): Promise<boolean> {
   const windowStart = new Date(new Date(dueAt).getTime() - 4 * 60 * 60 * 1000).toISOString();
   const windowEnd = new Date(new Date(dueAt).getTime() + 4 * 60 * 60 * 1000).toISOString();
 
+  // Tenant-scope explicitly. The service-role client bypasses RLS, and
+  // property_id alone could collide if a future migration ever shares IDs.
   const { count } = await supabase
     .from("assignments")
     .select("id", { count: "exact", head: true })
+    .eq("owner_id", ownerId)
     .eq("property_id", propertyId)
     .not("status", "in", '("cancelled","needs_reclean")')
     .gte("due_at", windowStart)
@@ -86,14 +90,17 @@ async function detectOverlap(
  */
 async function detectCleanerOverload(
   supabase: ReturnType<typeof createServiceSupabaseClient>,
+  ownerId: string,
   propertyId: string,
   dueAt: string,
 ): Promise<boolean> {
-  // Get default_cleaner_id
+  // Get default_cleaner_id — scoped by owner so we can't accidentally read
+  // a different tenant's property if id collisions ever happen.
   const { data: property } = await supabase
     .from("properties")
     .select("default_cleaner_id")
     .eq("id", propertyId)
+    .eq("owner_id", ownerId)
     .maybeSingle();
 
   if (!property?.default_cleaner_id) return false;
@@ -104,6 +111,7 @@ async function detectCleanerOverload(
   const { count } = await supabase
     .from("assignments")
     .select("id", { count: "exact", head: true })
+    .eq("owner_id", ownerId)
     .eq("cleaner_id", property.default_cleaner_id)
     .not("status", "in", '("cancelled","needs_reclean")')
     .gte("due_at", windowStart)
@@ -137,8 +145,8 @@ async function importCandidate(
 
   // Conflict detection
   const [hasOverlap, hasOverload] = await Promise.all([
-    detectOverlap(supabase, input.propertyId, candidate.dueAt),
-    detectCleanerOverload(supabase, input.propertyId, candidate.dueAt),
+    detectOverlap(supabase, input.ownerId, input.propertyId, candidate.dueAt),
+    detectCleanerOverload(supabase, input.ownerId, input.propertyId, candidate.dueAt),
   ]);
 
   let conflict: ConflictWarning | null = null;

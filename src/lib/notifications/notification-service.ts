@@ -24,17 +24,31 @@ type SendNotificationInput = {
 export async function sendNotification(input: SendNotificationInput): Promise<void> {
   const supabase = createServiceSupabaseClient();
 
-  // Insert notification record first
-  await supabase.from("notifications").insert({
-    owner_id: input.ownerId,
-    recipient_id: input.recipientId,
-    assignment_id: input.assignmentId,
-    channel: "push",
-    status: "pending",
-    notification_type: input.type,
-    title: input.title,
-    body: input.body,
-  });
+  // Insert notification record and capture its id so the status update
+  // later targets THIS exact row. The previous "match by recipient + type +
+  // sent_at IS NULL" pattern raced under concurrent crons and could flip
+  // the status of an unrelated row.
+  const { data: inserted, error: insertError } = await supabase
+    .from("notifications")
+    .insert({
+      owner_id: input.ownerId,
+      recipient_id: input.recipientId,
+      assignment_id: input.assignmentId,
+      channel: "push",
+      status: "pending",
+      notification_type: input.type,
+      title: input.title,
+      body: input.body,
+    })
+    .select("id")
+    .single();
+
+  // If the insert failed (e.g., RLS rejected, FK violation) there's nothing
+  // to update — log and bail. Push delivery still happens so users with
+  // legacy subscriptions aren't blocked by a logging failure.
+  if (insertError || !inserted) {
+    console.error("[sendNotification] insert failed", insertError);
+  }
 
   // Attempt push delivery
   const results = await sendPushToUser(input.recipientId, {
@@ -44,24 +58,20 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
     tag: input.assignmentId ?? undefined,
   });
 
+  if (!inserted) return;
+
   const allFailed = results.every((r) => !r.success);
   const firstError = results.find((r) => !r.success && "error" in r);
 
-  // Update notification status
   await supabase
     .from("notifications")
     .update({
       status: allFailed ? "failed" : "sent",
       sent_at: allFailed ? null : new Date().toISOString(),
-      error_message: allFailed && firstError && "error" in firstError
-        ? firstError.error
-        : null,
+      error_message:
+        allFailed && firstError && "error" in firstError ? firstError.error : null,
     })
-    .eq("recipient_id", input.recipientId)
-    .eq("notification_type", input.type)
-    .is("sent_at", null)
-    .order("created_at", { ascending: false })
-    .limit(1);
+    .eq("id", inserted.id);
 }
 
 // ─── SLA helpers ─────────────────────────────────────────────────────────────

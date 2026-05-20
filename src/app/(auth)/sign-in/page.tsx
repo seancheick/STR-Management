@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, MailCheck } from "lucide-react";
 
 import { SignInForm } from "@/components/auth/sign-in-form";
 
@@ -12,6 +12,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
     typeof params.redirectTo === "string" ? params.redirectTo : undefined;
   const authError =
     typeof params.authError === "string" ? params.authError : undefined;
+  const justSignedUp = params.signedUp === "1";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md items-center px-6 py-12">
@@ -25,6 +26,15 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             Use your team credentials to access the admin dashboard or cleaner jobs.
           </p>
         </div>
+        {justSignedUp && !authError && (
+          <div className="mb-5 flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+            <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+            <span>
+              <strong>Check your inbox.</strong> We sent a confirmation link to the
+              email you registered with. Click it, then sign in below.
+            </span>
+          </div>
+        )}
         {authError && (
           <div className="mb-5 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />

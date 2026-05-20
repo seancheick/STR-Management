@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   // Each role gets its own tailored summary (see per-user branch below).
   const { data: users } = await supabase
     .from("users")
-    .select("id, full_name, role")
+    .select("id, full_name, role, owner_id")
     .in("role", ["owner", "admin", "cleaner"])
     .eq("active", true);
 
@@ -34,7 +34,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ sent: 0, message: "No active users." });
   }
 
-  const hosts = users.filter((u) => u.role === "owner" || u.role === "admin");
+  // For the host digest we want ONE message per tenant, not one per
+  // admin+owner — otherwise a tenant with one owner and two admins triples
+  // the inbox. De-duplicate by owner_id and pick the owner row as the
+  // canonical recipient (falls back to first admin if no owner exists).
+  const tenantHosts = new Map<
+    string,
+    { id: string; full_name: string; role: string; owner_id: string }
+  >();
+  for (const u of users) {
+    if (u.role !== "owner" && u.role !== "admin") continue;
+    const existing = tenantHosts.get(u.owner_id as string);
+    if (!existing || u.role === "owner") tenantHosts.set(u.owner_id as string, u);
+  }
+  const hosts = Array.from(tenantHosts.values());
   const cleaners = users.filter((u) => u.role === "cleaner");
 
   // Compute the week window (today through +7 days)
@@ -45,18 +58,19 @@ export async function GET(req: NextRequest) {
   // role filter by owner_id so one host never sees another's data.
   const hostResults = await Promise.allSettled(
     hosts.map(async (h) => {
+      const tenantId = h.owner_id as string;
       const [assignmentsRes, unpaidRes] = await Promise.all([
         supabase
           .from("assignments")
           .select("id, status, cleaner_id, checkout_at, due_at")
-          .eq("owner_id", h.id as string)
+          .eq("owner_id", tenantId)
           .gte("due_at", now.toISOString())
           .lte("due_at", end.toISOString())
           .not("status", "in", '("cancelled")'),
         supabase
           .from("assignments")
           .select("fixed_payout_amount")
-          .eq("owner_id", h.id as string)
+          .eq("owner_id", tenantId)
           .in("status", ["approved", "completed_pending_review"])
           .is("paid_at", null)
           .not("fixed_payout_amount", "is", null),
@@ -90,7 +104,7 @@ export async function GET(req: NextRequest) {
         .join(" · ");
 
       await sendNotification({
-        ownerId: h.id as string,
+        ownerId: tenantId,
         recipientId: h.id as string,
         assignmentId: null,
         type: "weekly_digest",
@@ -134,7 +148,9 @@ export async function GET(req: NextRequest) {
         .join(" · ");
 
       await sendNotification({
-        ownerId: null,
+        // Stamp the cleaner's tenant so admins in that tenant can see the
+        // digest in their notifications log too.
+        ownerId: (c.owner_id as string) ?? null,
         recipientId: c.id as string,
         assignmentId: null,
         type: "weekly_digest",
