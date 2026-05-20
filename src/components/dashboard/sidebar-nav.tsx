@@ -14,14 +14,17 @@ import {
   LayoutDashboard,
   LogOut,
   RefreshCw,
+  Settings as SettingsIcon,
   Users,
 } from "lucide-react";
 import type { Route } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTransition } from "react";
 
 import { signOutAction } from "@/app/actions/auth";
+import type { TenantBranding } from "@/lib/queries/tenant";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -37,20 +40,41 @@ const NAV_ITEMS = [
   { href: "/dashboard/payouts", label: "Payouts", icon: Banknote, exact: false },
   { href: "/dashboard/notifications", label: "Notification log", icon: Bell, exact: false },
   { href: "/dashboard/health", label: "System health", icon: Activity, exact: false },
+  { href: "/dashboard/settings", label: "Settings", icon: SettingsIcon, exact: false },
 ];
 
-export function SidebarNav() {
+export function SidebarNav({ branding }: { branding: TenantBranding | null }) {
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
 
   return (
     <div className="flex h-full flex-col border-r border-border/60 bg-card">
-      {/* Brand */}
-      <div className="border-b border-border/60 px-5 py-5">
-        <p className="text-xs font-medium uppercase tracking-[0.25em] text-muted-foreground">
-          Operator console
-        </p>
-        <p className="mt-0.5 text-lg font-semibold tracking-tight">TurnFlow</p>
+      {/* Brand — tenant logo + workspace name (falls back to TurnFlow) */}
+      <div className="flex items-center gap-3 border-b border-border/60 px-5 py-5">
+        {branding?.logoUrl ? (
+          <Image
+            alt=""
+            className="h-9 w-9 shrink-0 rounded-xl object-cover"
+            height={36}
+            src={branding.logoUrl}
+            unoptimized
+            width={36}
+          />
+        ) : (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <span className="text-sm font-bold">
+              {(branding?.name ?? "TurnFlow").slice(0, 1).toUpperCase()}
+            </span>
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            Workspace
+          </p>
+          <p className="mt-0.5 truncate text-sm font-semibold tracking-tight">
+            {branding?.name ?? "TurnFlow"}
+          </p>
+        </div>
       </div>
 
       {/* Nav links */}
