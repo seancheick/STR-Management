@@ -11,6 +11,7 @@ import type { AssignmentListRecord } from "@/lib/queries/assignments";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
 import { showToast } from "@/components/ui/toast";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 function priorityBadgeClass(priority: string) {
   const map: Record<string, string> = {
@@ -40,7 +41,7 @@ function formatStatus(status: string) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -51,14 +52,24 @@ function formatDate(iso: string) {
 type AssignmentsListProps = {
   assignments: AssignmentListRecord[];
   cleaners: TeamMemberRecord[];
+  /** Bulk assign/delete are owner/admin-only actions; supervisors don't get them. */
+  canManage: boolean;
 };
 
-export function AssignmentsList({ assignments, cleaners }: AssignmentsListProps) {
+export function AssignmentsList({ assignments, cleaners, canManage }: AssignmentsListProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [bulkCleaner, setBulkCleaner] = useState("");
   const [isPending, startTransition] = useTransition();
   const selected = assignments.find((a) => a.id === selectedId) ?? null;
+
+  // Filters are URL navigations that keep this component mounted; drop
+  // selections for jobs no longer shown so "N selected" and bulk actions
+  // only cover visible jobs.
+  const visibleIds = useMemo(() => new Set(assignments.map((a) => a.id)), [assignments]);
+  if ([...checkedIds].some((id) => !visibleIds.has(id))) {
+    setCheckedIds(new Set([...checkedIds].filter((id) => visibleIds.has(id))));
+  }
 
   const unassignedIds = useMemo(
     () => assignments.filter((a) => a.status === "unassigned").map((a) => a.id),
@@ -152,7 +163,7 @@ export function AssignmentsList({ assignments, cleaners }: AssignmentsListProps)
 
   return (
     <>
-      {(unassignedIds.length > 0 || deletableIds.length > 0) && (
+      {canManage && (unassignedIds.length > 0 || deletableIds.length > 0) && (
         <div className="sticky top-0 z-20 -mx-2 mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-card/95 px-4 py-3 shadow-sm backdrop-blur">
           {unassignedIds.length > 0 && (
             <label className="flex items-center gap-2 text-xs font-medium">
@@ -203,7 +214,7 @@ export function AssignmentsList({ assignments, cleaners }: AssignmentsListProps)
                   ))}
                 </select>
                 <button
-                  className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
                   disabled={
                     !selection.allUnassigned || !bulkCleaner || isPending
                   }
@@ -240,7 +251,7 @@ export function AssignmentsList({ assignments, cleaners }: AssignmentsListProps)
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-1 items-start gap-3">
-                  {selectable && (
+                  {canManage && selectable && (
                     <input
                       aria-label={`Select ${a.properties?.name ?? "assignment"}`}
                       checked={isChecked}
@@ -276,7 +287,7 @@ export function AssignmentsList({ assignments, cleaners }: AssignmentsListProps)
                   )}
                   {canEdit && (
                     <button
-                      className="inline-flex h-8 items-center gap-1 rounded-full bg-primary px-3 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
+                      className="inline-flex h-8 items-center gap-1 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
                       onClick={() => setSelectedId(a.id)}
                       type="button"
                     >

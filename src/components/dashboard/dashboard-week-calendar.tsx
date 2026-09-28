@@ -8,6 +8,7 @@ import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { isTightTurnover } from "@/lib/domain/assignments";
 import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 type Pill =
   | {
@@ -22,7 +23,7 @@ type Pill =
     };
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", {
+  return formatInTimeZone(iso, {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -46,7 +47,7 @@ type DashboardWeekCalendarProps = {
   properties: PropertyRecord[];
   assignments: AssignmentScheduleRecord[];
   cleaners: TeamMemberRecord[];
-  days: string[]; // 7 ISO strings at midnight UTC
+  days: string[]; // 7 ISO strings at local noon (operator zone)
 };
 
 const FOCUS_STORAGE_KEY = "dashboard-focus-today";
@@ -63,6 +64,7 @@ export function DashboardWeekCalendar({
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(FOCUS_STORAGE_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-only localStorage read; effect avoids SSR hydration mismatch
       if (stored === "1") setFocusToday(true);
     } catch {
       // ignore
@@ -127,7 +129,7 @@ export function DashboardWeekCalendar({
         <div>
           <h2 className="text-base font-semibold">This week at a glance</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Checkouts, check-ins, and cleanings due. Tap any pill to edit.
+            Checkouts and cleanings due. Tap any pill to edit.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
@@ -135,7 +137,7 @@ export function DashboardWeekCalendar({
             aria-pressed={focusToday}
             className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition ${
               focusToday
-                ? "border-primary bg-primary text-[#f7f5ef]"
+                ? "border-primary bg-primary text-primary-foreground"
                 : "border-border/70 bg-card text-foreground hover:bg-muted"
             }`}
             onClick={toggleFocus}
@@ -172,7 +174,7 @@ export function DashboardWeekCalendar({
                     </span>
                     <span
                       className={`mx-auto mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold tabular-nums ${
-                        today ? "bg-primary text-[#f7f5ef]" : "text-foreground"
+                        today ? "bg-primary text-primary-foreground" : "text-foreground"
                       }`}
                     >
                       {d.getDate()}

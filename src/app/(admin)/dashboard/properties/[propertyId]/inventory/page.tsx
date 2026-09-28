@@ -52,7 +52,8 @@ export default async function PropertyInventoryPage({ params }: Props) {
         {items.length === 0 ? (
           <p className="text-sm text-muted-foreground">No inventory items yet.</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[36rem] text-sm">
             <thead>
               <tr className="border-b border-border/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <th className="pb-3 font-medium">Item</th>
@@ -69,6 +70,7 @@ export default async function PropertyInventoryPage({ params }: Props) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </section>
 

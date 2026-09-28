@@ -1,36 +1,31 @@
+import { dateKeyInTimeZone } from "@/lib/ical/timezone";
+
 export type CleanerPortalAssignment = {
   id: string;
   due_at: string;
   status: string;
   fixed_payout_amount: number | null;
+  properties?: { timezone?: string | null } | null;
 };
 
 export type CleanerPortalPayoutEntry = {
   amount: number;
   status: string;
+  paid_at?: string | null;
 };
 
 export type CleanerPortalPendingPayout = {
   fixed_payout_amount: number | null;
+  paid_at?: string | null;
 };
 
 const ACTIVE_STATUSES = new Set(["assigned", "confirmed", "in_progress"]);
 const HISTORY_STATUSES = new Set(["completed_pending_review", "approved", "needs_reclean"]);
 
-function isSameLocalDate(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-function localDateKey(iso: string) {
-  const date = new Date(iso);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+// "Today" and date groups follow the property's calendar, not the server's
+// (Vercel runs in UTC, which rolled the cleaner's day over at 8pm Eastern).
+function propertyDateKey(assignment: CleanerPortalAssignment, date: Date) {
+  return dateKeyInTimeZone(date, assignment.properties?.timezone);
 }
 
 export function getCleanerAssignmentBuckets<T extends CleanerPortalAssignment>(
@@ -45,7 +40,10 @@ export function getCleanerAssignmentBuckets<T extends CleanerPortalAssignment>(
     if (assignment.status === "cancelled") continue;
 
     const dueAt = new Date(assignment.due_at);
-    if (ACTIVE_STATUSES.has(assignment.status) && isSameLocalDate(dueAt, now)) {
+    if (
+      ACTIVE_STATUSES.has(assignment.status) &&
+      propertyDateKey(assignment, dueAt) === propertyDateKey(assignment, now)
+    ) {
       active.push(assignment);
       continue;
     }
@@ -73,7 +71,7 @@ export function groupCleanerAssignmentsByDate<T extends CleanerPortalAssignment>
   const grouped = new Map<string, T[]>();
 
   for (const assignment of assignments) {
-    const key = localDateKey(assignment.due_at);
+    const key = propertyDateKey(assignment, new Date(assignment.due_at));
     grouped.set(key, [...(grouped.get(key) ?? []), assignment]);
   }
 
@@ -92,17 +90,27 @@ export function calculateCleanerPaySummary({
   payoutEntries: CleanerPortalPayoutEntry[];
   pendingAssignments: CleanerPortalPendingPayout[];
 }) {
-  const paidTotal = payoutEntries
-    .filter((entry) => entry.status === "included")
+  // Cleaners can't read payout_batches (RLS), so a report's paid status is
+  // unknowable here. Only a paid_at stamp (entry or job) proves payment.
+  const included = payoutEntries.filter((entry) => entry.status === "included");
+  const inReportsTotal = included.reduce((sum, entry) => sum + Number(entry.amount), 0);
+  const paidInReportsTotal = included
+    .filter((entry) => entry.paid_at)
     .reduce((sum, entry) => sum + Number(entry.amount), 0);
-  const pendingTotal = pendingAssignments.reduce(
-    (sum, assignment) => sum + Number(assignment.fixed_payout_amount ?? 0),
-    0,
-  );
+  const paidDirectTotal = pendingAssignments
+    .filter((assignment) => assignment.paid_at)
+    .reduce((sum, assignment) => sum + Number(assignment.fixed_payout_amount ?? 0), 0);
+  const awaitingTotal = pendingAssignments
+    .filter((assignment) => !assignment.paid_at)
+    .reduce((sum, assignment) => sum + Number(assignment.fixed_payout_amount ?? 0), 0);
 
   return {
-    paidTotal,
-    pendingTotal,
-    projectedTotal: paidTotal + pendingTotal,
+    /** Jobs in an approved or paid payout report. */
+    inReportsTotal,
+    /** Confirmed paid: stamped entries plus jobs marked paid outside a report. */
+    paidTotal: paidInReportsTotal + paidDirectTotal,
+    /** Completed jobs not yet in a report and not marked paid. */
+    awaitingTotal,
+    projectedTotal: inReportsTotal + paidDirectTotal + awaitingTotal,
   };
 }

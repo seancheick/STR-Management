@@ -317,7 +317,7 @@ function AssignmentDetailPanel({
               <button
                 type="submit"
                 disabled={isPending}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
               >
                 {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 Assign cleaner
@@ -331,7 +331,7 @@ function AssignmentDetailPanel({
               <button
                 type="button"
                 onClick={() => setMode("edit")}
-                className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90"
+                className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
               >
                 <Pencil className="h-3.5 w-3.5" />
                 Edit
@@ -426,7 +426,7 @@ export function ScheduleGrid({
             href={`?week=${weekOffset}` as Route}
             className={`inline-flex h-9 items-center rounded-full px-4 text-sm font-medium transition ${
               view === "week"
-                ? "bg-primary text-[#f7f5ef]"
+                ? "bg-primary text-primary-foreground"
                 : "border border-border/70 bg-card text-foreground hover:bg-muted"
             }`}
           >
@@ -436,7 +436,7 @@ export function ScheduleGrid({
             href="?view=month"
             className={`inline-flex h-9 items-center rounded-full px-4 text-sm font-medium transition ${
               view === "month"
-                ? "bg-primary text-[#f7f5ef]"
+                ? "bg-primary text-primary-foreground"
                 : "border border-border/70 bg-card text-foreground hover:bg-muted"
             }`}
           >
@@ -444,7 +444,7 @@ export function ScheduleGrid({
           </Link>
           <Link
             href="/dashboard/assignments/new"
-            className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90"
+            className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
           >
             + New job
           </Link>

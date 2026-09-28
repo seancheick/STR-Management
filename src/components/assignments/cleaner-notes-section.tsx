@@ -6,6 +6,8 @@ import { useFormStatus } from "react-dom";
 
 import type { CleanerNoteState } from "@/app/(cleaner)/jobs/actions";
 import type { ReviewEvidenceNote } from "@/lib/services/review-evidence";
+import { formatInTimeZone } from "@/lib/ical/timezone";
+import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
 
 type Props = {
   action: (state: CleanerNoteState, formData: FormData) => Promise<CleanerNoteState>;
@@ -20,7 +22,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -30,7 +32,7 @@ function SubmitButton() {
 }
 
 function formatNoteDate(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -40,7 +42,7 @@ function formatNoteDate(iso: string) {
 
 export function CleanerNotesSection({ action, assignmentId, notes, readOnly }: Props) {
   const router = useRouter();
-  const [state, formAction] = useActionState(action, initial);
+  const [state, formAction] = useActionState(keepValuesOnError(action), initial as WithSubmitted<typeof initial>);
 
   useEffect(() => {
     if (state.status === "success") {
@@ -83,6 +85,7 @@ export function CleanerNotesSection({ action, assignmentId, notes, readOnly }: P
           <textarea
             className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm"
             maxLength={1000}
+            defaultValue={state.submitted?.["body"]}
             name="body"
             placeholder="Add anything the manager should know before the next guest arrives."
             rows={3}

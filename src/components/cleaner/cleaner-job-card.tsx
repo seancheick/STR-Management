@@ -2,7 +2,8 @@ import type { Route } from "next";
 import Link from "next/link";
 import { Clock, DollarSign, MapPin } from "lucide-react";
 
-import { acceptJobAction, startJobAction } from "@/app/(cleaner)/jobs/actions";
+import { JobStatusButton } from "@/components/cleaner/job-status-button";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -32,14 +33,13 @@ const STATUS_BARS: Record<string, string> = {
   needs_reclean: "bg-red-400",
 };
 
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+// Rendered on the server (UTC on Vercel): always show the property's local time.
+function formatDateTime(iso: string, timeZone?: string | null) {
+  return formatInTimeZone(
+    iso,
+    { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
+    timeZone,
+  );
 }
 
 function addressForAssignment(assignment: AssignmentListRecord) {
@@ -63,6 +63,7 @@ export function CleanerJobCard({
   const statusClass =
     STATUS_CLASSES[assignment.status] ?? "border-border bg-muted text-muted-foreground";
   const statusBar = STATUS_BARS[assignment.status] ?? "bg-border";
+  const timeZone = assignment.properties?.timezone;
 
   return (
     <article className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
@@ -96,18 +97,18 @@ export function CleanerJobCard({
               </div>
               <p className="text-xs leading-5 text-foreground">
                 <span className="text-muted-foreground">Start after</span>{" "}
-                <span className="font-semibold">{formatDateTime(assignment.checkout_at)}</span>
+                <span className="font-semibold">{formatDateTime(assignment.checkout_at, timeZone)}</span>
               </p>
               <p className="text-xs leading-5 text-foreground">
                 <span className="text-muted-foreground">Done by</span>{" "}
-                <span className="font-semibold">{formatDateTime(assignment.due_at)}</span>
+                <span className="font-semibold">{formatDateTime(assignment.due_at, timeZone)}</span>
               </p>
             </div>
           ) : (
             <div className="flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2">
               <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <span className="text-sm font-medium">
-                Done by {formatDateTime(assignment.due_at)}
+                Done by {formatDateTime(assignment.due_at, timeZone)}
               </span>
             </div>
           )}
@@ -124,30 +125,16 @@ export function CleanerJobCard({
         {showActions && (
           <div className="mt-5 flex flex-col gap-3">
             {assignment.status === "assigned" && (
-              <form action={async () => { await acceptJobAction(assignment.id); }}>
-                <button
-                  className="h-12 w-full rounded-xl bg-primary text-sm font-semibold text-[#f7f5ef]"
-                  type="submit"
-                >
-                  Accept
-                </button>
-              </form>
+              <JobStatusButton assignmentId={assignment.id} kind="accept" />
             )}
 
             {assignment.status === "confirmed" && (
-              <form action={async () => { await startJobAction(assignment.id); }}>
-                <button
-                  className="h-12 w-full rounded-xl bg-primary text-sm font-semibold text-[#f7f5ef]"
-                  type="submit"
-                >
-                  Start job
-                </button>
-              </form>
+              <JobStatusButton assignmentId={assignment.id} kind="start" />
             )}
 
             {assignment.status === "in_progress" && (
               <Link
-                className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-sm font-semibold text-[#f7f5ef]"
+                className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground"
                 href={`/jobs/${assignment.id}` as Route}
               >
                 Execute checklist

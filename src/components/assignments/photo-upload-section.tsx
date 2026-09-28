@@ -5,8 +5,36 @@ import { useRef, useState, useTransition } from "react";
 import { uploadPhotoAction } from "@/app/(cleaner)/jobs/actions";
 import type { AssignmentPhotoRecord } from "@/lib/queries/assignments";
 
-const MAX_SIZE_MB = 5;
+// Server Actions accept 4MB (next.config) and Vercel caps bodies at 4.5MB.
+const MAX_SIZE_MB = 4;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+const RESIZE_ABOVE_BYTES = 1024 * 1024;
+const MAX_EDGE_PX = 2000;
+
+/**
+ * Phone photos are often 2-5MB. Re-encode large ones as a 2000px JPEG so they
+ * fit the upload limit and send quickly on weak signal. Falls back to the
+ * original file when the browser can't decode it (e.g. HEIC outside Safari).
+ */
+export async function shrinkPhoto(file: File): Promise<File> {
+  if (file.size <= RESIZE_ABOVE_BYTES || !file.type.startsWith("image/")) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_EDGE_PX / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.82),
+    );
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
 
 type PhotoUploadSectionProps = {
   assignmentId: string;
@@ -37,28 +65,33 @@ export function PhotoUploadSection({
       : ["general", "before", "after", "issue", "other"];
 
   function handleUpload() {
-    const file = fileRef.current?.files?.[0];
-    if (!file) {
+    const picked = fileRef.current?.files?.[0];
+    if (!picked) {
       setError("Choose a photo first.");
-      return;
-    }
-    if (file.size > MAX_SIZE_BYTES) {
-      setError(`File is too large. Max ${MAX_SIZE_MB}MB.`);
       return;
     }
 
     setError(null);
-    const formData = new FormData();
-    formData.set("photo", file);
-    formData.set("photoCategory", selectedCategory);
-    formData.set("assignmentId", assignmentId);
-
     startTransition(async () => {
-      const result = await uploadPhotoAction(assignmentId, formData);
-      if (!result.success) {
-        setError(result.error ?? "Upload failed.");
-      } else if (fileRef.current) {
-        fileRef.current.value = "";
+      const file = await shrinkPhoto(picked);
+      if (file.size > MAX_SIZE_BYTES) {
+        setError(`File is too large. Max ${MAX_SIZE_MB}MB.`);
+        return;
+      }
+      const formData = new FormData();
+      formData.set("photo", file);
+      formData.set("photoCategory", selectedCategory);
+      formData.set("assignmentId", assignmentId);
+
+      try {
+        const result = await uploadPhotoAction(assignmentId, formData);
+        if (!result.success) {
+          setError(result.error ?? "Upload failed.");
+        } else if (fileRef.current) {
+          fileRef.current.value = "";
+        }
+      } catch {
+        setError("Upload failed. Check your signal and try again.");
       }
     });
   }
@@ -110,8 +143,12 @@ export function PhotoUploadSection({
         <div className="rounded-[1.5rem] border border-border/70 bg-card p-5">
           <p className="mb-3 text-sm font-medium">Add photo ({photos.length}/10)</p>
           <div className="flex flex-col gap-3">
+            <label className="sr-only" htmlFor="photo-category">
+              Photo category
+            </label>
             <select
               className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
+              id="photo-category"
               onChange={(e) => setSelectedCategory(e.target.value)}
               value={selectedCategory}
             >
@@ -122,10 +159,14 @@ export function PhotoUploadSection({
               ))}
             </select>
 
+            <label className="sr-only" htmlFor="photo-file">
+              Photo
+            </label>
             <input
               accept="image/*"
               capture="environment"
-              className="text-sm file:mr-3 file:rounded-full file:border file:border-border/70 file:px-3 file:py-1 file:text-xs file:font-medium"
+              className="text-sm file:mr-3 file:rounded-full file:border file:border-border/70 file:px-4 file:py-2.5 file:text-sm file:font-medium"
+              id="photo-file"
               ref={fileRef}
               type="file"
             />
@@ -133,7 +174,7 @@ export function PhotoUploadSection({
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <button
-              className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] disabled:opacity-60"
+              className="inline-flex h-12 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground disabled:opacity-60"
               disabled={isPending}
               onClick={handleUpload}
               type="button"

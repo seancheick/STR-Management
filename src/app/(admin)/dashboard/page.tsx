@@ -34,11 +34,12 @@ import { getWeeklyRecap } from "@/lib/queries/recap";
 import { getPendingPayoutTotal } from "@/lib/queries/payouts";
 import { listCalendarSources } from "@/lib/queries/calendar";
 import { listAllTeamMembers } from "@/lib/queries/team";
+import { formatInTimeZone, zonedDayTime } from "@/lib/ical/timezone";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(d: Date) {
-  return d.toLocaleDateString("en-US", {
+  return formatInTimeZone(d, {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -62,20 +63,18 @@ const PROPERTY_STATUS_CONFIG: Record<
 
 export default async function DashboardPage() {
   const profile = await requireRole(["owner", "admin", "supervisor"]);
+  const canManage = profile.role === "owner" || profile.role === "admin";
 
+  // Week window in the operator's zone. The server runs in UTC, whose
+  // midnight is the previous evening in US zones (first column = yesterday).
   const today = new Date();
-  const weekStart = new Date(today);
-  weekStart.setUTCHours(0, 0, 0, 0);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setUTCDate(weekStart.getUTCDate() + 7);
-  weekEnd.setUTCHours(23, 59, 59, 999);
+  const weekStart = zonedDayTime(today, 0, 0);
+  const weekEnd = new Date(zonedDayTime(today, 7, 0).getTime() - 1);
 
-  // 7 day ISO strings (midnight UTC) for the strip
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStart);
-    d.setUTCDate(weekStart.getUTCDate() + i);
-    return d.toISOString();
-  });
+  // 7 days as local-noon instants, so every US browser reads the same date.
+  const weekDays = Array.from({ length: 7 }, (_, i) =>
+    zonedDayTime(today, i, 12).toISOString(),
+  );
 
   const [
     stats,
@@ -152,7 +151,7 @@ export default async function DashboardPage() {
             <p className="hidden text-sm text-muted-foreground sm:block">{formatDate(today)}</p>
             <Link
               href={"/dashboard/schedule" as Route}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
+              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
             >
               <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
               Schedule
@@ -311,7 +310,7 @@ export default async function DashboardPage() {
                           </p>
                           {p.dueAt && (
                             <p className="text-[11px] text-muted-foreground/70">
-                              Due {new Date(p.dueAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                              Due {formatInTimeZone(p.dueAt, { hour: "numeric", minute: "2-digit" })}
                             </p>
                           )}
                         </div>
@@ -387,11 +386,11 @@ export default async function DashboardPage() {
                   Full schedule <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
-              <TodayJobsTimeline jobs={todaysJobs} />
+              <TodayJobsTimeline canManage={canManage} jobs={todaysJobs} />
             </section>
 
             {/* At-risk / overdue — interactive, drawer on click */}
-            <AtRiskSection jobs={atRiskJobs} />
+            <AtRiskSection canManage={canManage} jobs={atRiskJobs} />
 
             {/* Pending review */}
             {stats.pendingReview > 0 && (

@@ -7,13 +7,14 @@ import { requireRole } from "@/lib/auth/session";
 import { getProperty } from "@/lib/queries/properties";
 import { listAssignmentsForAdmin } from "@/lib/queries/assignments";
 import { listCalendarSourcesForProperty } from "@/lib/queries/calendar";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 type PropertyPageProps = {
   params: Promise<{ propertyId: string }>;
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -65,12 +66,16 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
 
   const property = propertyResult.data;
   const propertyAssignments = allAssignments.filter((a) => a.property_id === propertyId);
-  const assignments = propertyAssignments.slice(0, 10);
+  // The admin list is sorted oldest-first; "recent" means newest-first.
+  const assignments = [...propertyAssignments]
+    .sort((a, b) => b.due_at.localeCompare(a.due_at))
+    .slice(0, 10);
 
-  const activeAssignments = assignments.filter(
+  const activeAssignments = propertyAssignments.filter(
     (a) => !["approved", "cancelled"].includes(a.status),
   );
 
+  // eslint-disable-next-line react-hooks/purity -- server component renders once per request
   const now = Date.now();
   const upcomingCount = propertyAssignments.filter(
     (a) =>
@@ -212,7 +217,7 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
       {/* Quick shortcuts — smaller pill row, secondary rhythm */}
       <section className="flex flex-wrap gap-2">
         <Link
-          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
+          className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
           href={`/dashboard/assignments/new?propertyId=${propertyId}` as Route}
         >
           <ClipboardList className="h-3.5 w-3.5" /> New assignment
@@ -266,7 +271,7 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
             <p className="text-sm text-muted-foreground">No assignments yet for this property.</p>
             <Link
               href={`/dashboard/assignments/new?propertyId=${propertyId}` as Route}
-              className="mt-3 inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-[#f7f5ef]"
+              className="mt-3 inline-flex h-9 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
             >
               Create first assignment
             </Link>

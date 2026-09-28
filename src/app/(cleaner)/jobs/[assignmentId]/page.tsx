@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { Info } from "lucide-react";
 
 import { requireRole } from "@/lib/auth/session";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 import { getAssignmentDetail } from "@/lib/queries/assignments";
 import { listInventoryForProperty } from "@/lib/queries/issues";
 import { listJobMessages } from "@/lib/queries/job-messages";
 import { getProperty } from "@/lib/queries/properties";
 import { JobMessageThread } from "@/components/chat/job-message-thread";
 import { JobQuickActions } from "@/components/cleaner/job-quick-actions";
+import { JobStatusButton } from "@/components/cleaner/job-status-button";
 import { AccessCodeCard } from "@/components/cleaner/access-code-card";
 import { addCleanerNoteAction, reportIssueAction, requestRestockAction } from "@/app/(cleaner)/jobs/actions";
 import { summarizeReviewEvidence } from "@/lib/services/review-evidence";
@@ -23,14 +25,13 @@ type JobExecutionPageProps = {
   params: Promise<{ assignmentId: string }>;
 };
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+// Rendered on the server (UTC on Vercel): always show the property's local time.
+function formatDate(iso: string, timeZone?: string | null) {
+  return formatInTimeZone(
+    iso,
+    { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" },
+    timeZone,
+  );
 }
 
 export default async function JobExecutionPage({ params }: JobExecutionPageProps) {
@@ -105,20 +106,36 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
             </p>
             <p className="mt-1 leading-6">
               <span className="font-semibold text-foreground">Start anytime after</span>{" "}
-              {formatDate(assignment.checkout_at)}
+              {formatDate(assignment.checkout_at, assignment.properties?.timezone)}
             </p>
             <p className="leading-6">
               <span className="font-semibold text-foreground">Must be done by</span>{" "}
-              {formatDate(assignment.due_at)}
+              {formatDate(assignment.due_at, assignment.properties?.timezone)}
             </p>
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Must be done by</span>{" "}
-            {formatDate(assignment.due_at)}
+            {formatDate(assignment.due_at, assignment.properties?.timezone)}
           </p>
         )}
       </div>
+
+      {/* Not started yet — say why the checklist is locked and offer the next step */}
+      {(assignment.status === "assigned" || assignment.status === "confirmed") &&
+        assignment.cleaner_id === profile.id && (
+          <section className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
+            <p className="text-sm text-muted-foreground">
+              {assignment.status === "assigned"
+                ? "Accept this job to confirm you're on it. The checklist unlocks once you start."
+                : "The checklist and photo uploads unlock when you start the job."}
+            </p>
+            <JobStatusButton
+              assignmentId={assignment.id}
+              kind={assignment.status === "assigned" ? "accept" : "start"}
+            />
+          </section>
+        )}
 
       {/* Quick actions — maps, running late, decline */}
       <JobQuickActions

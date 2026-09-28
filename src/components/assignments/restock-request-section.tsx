@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 
 import type { RestockState } from "@/app/(cleaner)/jobs/actions";
 import type { InventoryItemRecord } from "@/lib/queries/issues";
+import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
 
 type Props = {
   action: (state: RestockState, formData: FormData) => Promise<RestockState>;
@@ -18,7 +19,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -27,9 +28,28 @@ function SubmitButton() {
   );
 }
 
-export function RestockRequestSection({ action, assignmentId, inventoryItems }: Props) {
-  const [open, setOpen] = useState(false);
-  const [state, formAction] = useActionState(action, initial);
+/** Remounts the form after each request so a cleaner can send more than one. */
+export function RestockRequestSection(props: Props) {
+  const [round, setRound] = useState(0);
+  return (
+    <RestockRequestForm
+      key={round}
+      {...props}
+      onAnother={() => setRound((r) => r + 1)}
+      startOpen={round > 0}
+    />
+  );
+}
+
+function RestockRequestForm({
+  action,
+  assignmentId,
+  inventoryItems,
+  onAnother,
+  startOpen,
+}: Props & { onAnother: () => void; startOpen: boolean }) {
+  const [open, setOpen] = useState(startOpen);
+  const [state, formAction] = useActionState(keepValuesOnError(action), initial as WithSubmitted<typeof initial>);
 
   if (!inventoryItems.length) return null;
 
@@ -40,7 +60,16 @@ export function RestockRequestSection({ action, assignmentId, inventoryItems }: 
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold">Request restock</h2>
         {state.status === "success" ? (
-          <span className="text-sm text-green-600">Request sent</span>
+          <span className="flex items-center gap-3 text-sm">
+            <span className="text-green-600">Request sent</span>
+            <button
+              className="font-medium text-primary underline-offset-2 hover:underline"
+              onClick={onAnother}
+              type="button"
+            >
+              Request more
+            </button>
+          </span>
         ) : (
           <button
             className="text-sm text-muted-foreground underline-offset-2 hover:underline"
@@ -80,6 +109,7 @@ export function RestockRequestSection({ action, assignmentId, inventoryItems }: 
             <select
               className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
               id="inventory-item"
+              defaultValue={state.submitted?.["inventoryItemId"]}
               name="inventoryItemId"
               required
             >
@@ -98,7 +128,7 @@ export function RestockRequestSection({ action, assignmentId, inventoryItems }: 
             </label>
             <input
               className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
-              defaultValue="1"
+              defaultValue={state.submitted?.["quantityNeeded"] ?? "1"}
               id="quantity-needed"
               min="1"
               name="quantityNeeded"
@@ -114,6 +144,7 @@ export function RestockRequestSection({ action, assignmentId, inventoryItems }: 
             <textarea
               className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm"
               id="restock-notes"
+              defaultValue={state.submitted?.["notes"]}
               name="notes"
               rows={2}
               placeholder="Any extra context…"

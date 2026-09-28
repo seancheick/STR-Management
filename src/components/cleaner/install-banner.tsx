@@ -26,6 +26,7 @@ export function InstallBanner() {
       "standalone" in window.navigator &&
       (window.navigator as unknown as { standalone?: boolean }).standalone === true;
     if (displayMode || iosStandalone) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-only browser feature detection; effect avoids SSR hydration mismatch
       setStandalone(true);
       return;
     }
@@ -96,7 +97,7 @@ export function InstallBanner() {
                 in the browser tab.
               </p>
               <button
-                className="mt-2 inline-flex h-9 items-center gap-2 rounded-full bg-primary px-3 text-xs font-semibold text-[#f7f5ef]"
+                className="mt-2 inline-flex h-9 items-center gap-2 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground"
                 onClick={install}
                 type="button"
               >

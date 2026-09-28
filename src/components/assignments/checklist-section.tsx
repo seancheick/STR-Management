@@ -1,8 +1,9 @@
 "use client";
 
-import { useTransition } from "react";
+import { useOptimistic, useTransition } from "react";
 
 import { toggleChecklistItemAction } from "@/app/(cleaner)/jobs/actions";
+import { showToast } from "@/components/ui/toast";
 import type { AssignmentChecklistItemRecord } from "@/lib/queries/assignments";
 
 type ChecklistSectionProps = {
@@ -18,12 +19,24 @@ export function ChecklistSection({
   items,
   readOnly,
 }: ChecklistSectionProps) {
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  // Tick instantly on weak signal; reverts to server state if the save fails.
+  const [optimisticItems, setOptimisticItem] = useOptimistic(
+    items,
+    (state, change: { id: string; completed: boolean }) =>
+      state.map((item) => (item.id === change.id ? { ...item, completed: change.completed } : item)),
+  );
 
   function handleToggle(itemId: string, checked: boolean) {
     if (readOnly) return;
     startTransition(async () => {
-      await toggleChecklistItemAction(itemId, assignmentId, checked);
+      setOptimisticItem({ id: itemId, completed: checked });
+      try {
+        const res = await toggleChecklistItemAction(itemId, assignmentId, checked);
+        if (!res.success) showToast(res.error ?? "Couldn't save that item. Try again.", "error");
+      } catch {
+        showToast("Couldn't save — check your signal and try again.", "error");
+      }
     });
   }
 
@@ -33,12 +46,12 @@ export function ChecklistSection({
         {section}
       </h3>
       <ul className="flex flex-col gap-3">
-        {items.map((item) => (
+        {optimisticItems.map((item) => (
           <li key={item.id} className="flex items-start gap-3">
             <input
               checked={item.completed}
               className="mt-0.5 h-5 w-5 flex-shrink-0 cursor-pointer accent-primary disabled:opacity-50"
-              disabled={readOnly || isPending}
+              disabled={readOnly}
               id={item.id}
               onChange={(e) => handleToggle(item.id, e.target.checked)}
               type="checkbox"

@@ -36,7 +36,7 @@ export default async function HomePage() {
       {/* ── Navbar ─────────────────────────────────────────── */}
       <nav className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border/60 bg-card/85 px-6 backdrop-blur">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-[#f7f5ef]">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <ShieldCheck className="h-4 w-4" aria-hidden="true" />
           </div>
           <span className="text-base font-semibold tracking-tight">TurnFlow</span>
@@ -82,7 +82,7 @@ export default async function HomePage() {
           {/* Primary action dominates; secondary is a text link */}
           <div className="flex flex-wrap items-center gap-3">
             <a
-              className="inline-flex h-12 items-center gap-2 rounded-full bg-primary px-7 text-sm font-semibold text-[#f7f5ef] shadow-md shadow-primary/15 transition hover:opacity-90"
+              className="inline-flex h-12 items-center gap-2 rounded-full bg-primary px-7 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/15 transition hover:opacity-90"
               href="#access"
             >
               Get early access <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -353,13 +353,13 @@ export default async function HomePage() {
 
       {/* ── Early access ──────────────────────────────────── */}
       <section className="mx-auto max-w-4xl px-6 pb-20" id="access">
-        <div className="rounded-[1.75rem] border border-primary/20 bg-primary px-8 py-10 text-[#f7f5ef] md:px-12 md:py-14">
+        <div className="rounded-[1.75rem] border border-primary/20 bg-primary px-8 py-10 text-primary-foreground md:px-12 md:py-14">
           <div className="flex flex-col gap-3">
-            <Sparkles className="h-6 w-6 text-[#f7f5ef]/80" aria-hidden="true" />
+            <Sparkles className="h-6 w-6 text-primary-foreground/80" aria-hidden="true" />
             <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
               Get early access to TurnFlow.
             </h2>
-            <p className="max-w-xl text-sm leading-6 text-[#f7f5ef]/80">
+            <p className="max-w-xl text-sm leading-6 text-primary-foreground/80">
               Only onboarding a small number of operators this month. Drop your
               email + portfolio size and we&apos;ll personally walk you through
               setup — no credit card, no spam.
@@ -375,7 +375,7 @@ export default async function HomePage() {
       <footer className="border-t border-border/60 bg-card/40">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-4 px-6 py-8 text-xs text-muted-foreground sm:flex-row sm:items-center">
           <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-[#f7f5ef]">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <ShieldCheck className="h-3 w-3" aria-hidden="true" />
             </div>
             <span className="font-semibold tracking-tight text-foreground">TurnFlow</span>
@@ -562,7 +562,7 @@ function MockHotelCalendar() {
                   <div>{weekdayAbbr(d)}</div>
                   <div
                     className={`mx-auto mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${
-                      d === today ? "bg-primary text-[#f7f5ef]" : "text-foreground"
+                      d === today ? "bg-primary text-primary-foreground" : "text-foreground"
                     }`}
                   >
                     {d}
@@ -756,7 +756,7 @@ function MockCleanerJob() {
       </div>
 
       {/* Primary CTA */}
-      <div className="mt-3 flex h-10 w-full items-center justify-center rounded-xl bg-primary text-xs font-semibold text-[#f7f5ef]">
+      <div className="mt-3 flex h-10 w-full items-center justify-center rounded-xl bg-primary text-xs font-semibold text-primary-foreground">
         Start job
       </div>
 

@@ -93,3 +93,66 @@ export function snapToLocalHour(
     timeZone,
   );
 }
+
+/**
+ * Display helpers. Vercel functions run in UTC (TZ is reserved), so any
+ * server-rendered date must name the property's zone explicitly; a null
+ * property timezone means the app default (see the properties.timezone
+ * column comment).
+ */
+// properties.timezone is free text server-side; an invalid zone would make
+// Intl throw a RangeError and take the whole page down.
+function validTimeZone(timeZone?: string | null): string {
+  if (!timeZone) return DEFAULT_TIMEZONE;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    return timeZone;
+  } catch {
+    return DEFAULT_TIMEZONE;
+  }
+}
+
+export function formatInTimeZone(
+  iso: string | Date,
+  options: Intl.DateTimeFormatOptions,
+  timeZone?: string | null,
+): string {
+  return new Date(iso).toLocaleString("en-US", {
+    ...options,
+    timeZone: validTimeZone(timeZone),
+  });
+}
+
+/** Calendar date ("YYYY-MM-DD") of an instant as seen in the given zone. */
+export function dateKeyInTimeZone(date: Date, timeZone?: string | null): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: validTimeZone(timeZone),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+/**
+ * The UTC instant of `hour`:00 local time, `offsetDays` days after the local
+ * calendar day containing `date`, in the given zone (app default if null).
+ * Use for "today" / "this week" windows on the server, which runs in UTC.
+ */
+export function zonedDayTime(
+  date: Date,
+  offsetDays: number,
+  hour: number,
+  timeZone?: string | null,
+): Date {
+  const zone = validTimeZone(timeZone);
+  const [y, m, d] = dateKeyInTimeZone(date, zone).split("-").map(Number);
+  const day = new Date(Date.UTC(y, m - 1, d + offsetDays));
+  return zonedTimeToUtc(
+    day.getUTCFullYear(),
+    day.getUTCMonth() + 1,
+    day.getUTCDate(),
+    hour,
+    0,
+    zone,
+  );
+}

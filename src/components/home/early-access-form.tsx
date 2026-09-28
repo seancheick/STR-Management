@@ -8,6 +8,7 @@ import {
   requestEarlyAccessAction,
   type EarlyAccessState,
 } from "@/app/actions/early-access";
+import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
 
 const initial: EarlyAccessState = { status: "idle", message: null };
 
@@ -15,7 +16,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60 sm:w-auto"
+      className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60 sm:w-auto"
       disabled={pending}
       type="submit"
     >
@@ -30,7 +31,7 @@ function SubmitButton() {
 }
 
 export function EarlyAccessForm() {
-  const [state, action] = useActionState(requestEarlyAccessAction, initial);
+  const [state, action] = useActionState(keepValuesOnError(requestEarlyAccessAction), initial as WithSubmitted<typeof initial>);
 
   if (state.status === "success" || state.status === "duplicate") {
     return (
@@ -54,6 +55,7 @@ export function EarlyAccessForm() {
           autoComplete="email"
           className="h-12 rounded-xl border border-input bg-background px-4 text-sm"
           maxLength={200}
+          defaultValue={state.submitted?.["email"]}
           name="email"
           placeholder="you@example.com"
           required
@@ -61,7 +63,7 @@ export function EarlyAccessForm() {
         />
         <select
           className="h-12 rounded-xl border border-input bg-background px-4 text-sm"
-          defaultValue=""
+          defaultValue={state.submitted?.["propertyCount"] ?? ""}
           name="propertyCount"
         >
           <option value="">How many properties?</option>

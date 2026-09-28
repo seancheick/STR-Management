@@ -104,7 +104,7 @@ export function ResetPasswordForm() {
           </div>
         </div>
         <Link
-          className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary text-sm font-semibold text-[#f7f5ef]"
+          className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground"
           href={"/forgot-password" as Route}
         >
           Request a new reset link

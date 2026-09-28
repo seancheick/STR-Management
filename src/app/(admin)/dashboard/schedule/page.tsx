@@ -42,7 +42,9 @@ function getMonthDays(monthOffset: number): Date[] {
 }
 
 export default async function SchedulePage({ searchParams }: SchedulePageProps) {
-  await requireRole(["owner", "admin", "supervisor"]);
+  const profile = await requireRole(["owner", "admin", "supervisor"]);
+  // Creating jobs is owner/admin-only (createAssignmentAction).
+  const canManage = profile.role === "owner" || profile.role === "admin";
 
   const params = (await searchParams) ?? {};
   const view = params.view === "month" ? "month" : "week";
@@ -64,9 +66,13 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
 
   if (view === "month") {
     const monthDays = getMonthDays(monthOffset);
+    // Fetch the whole 6-week grid (Sunday-start, 42 cells) that MonthView
+    // draws, so adjacent-month days show their jobs instead of looking empty.
     rangeStart = new Date(monthDays[0]);
+    rangeStart.setDate(rangeStart.getDate() - rangeStart.getDay());
     rangeStart.setHours(0, 0, 0, 0);
-    rangeEnd = new Date(monthDays[monthDays.length - 1]);
+    rangeEnd = new Date(rangeStart);
+    rangeEnd.setDate(rangeStart.getDate() + 41);
     rangeEnd.setHours(23, 59, 59, 999);
     monthDayISOs = monthDays.map((d) => d.toISOString());
   } else {
@@ -107,6 +113,13 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
       )
     : propFilteredAssignments;
 
+  // Active filters, appended to the views' own prev/next links so paging
+  // doesn't silently drop them.
+  const filterQuery = [
+    cleanerFilter ? `&cleaner=${encodeURIComponent(cleanerFilter)}` : "",
+    propertyFilter ? `&property=${encodeURIComponent(propertyFilter)}` : "",
+  ].join("");
+
   const preserveParams = (over: Record<string, string | null>) => {
     const entries: Array<[string, string]> = [];
     if (view) entries.push(["view", view]);
@@ -124,7 +137,8 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
       : "";
   };
 
-  const unassignedCount = allAssignments.filter((a) => a.cleaner_id === null).length;
+  // Chip counts follow the property filter, matching what each chip will show.
+  const unassignedCount = propFilteredAssignments.filter((a) => a.cleaner_id === null).length;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-[1400px] flex-col gap-6 px-6 py-10">
@@ -142,7 +156,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           <a
             className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-medium transition ${
               view === "week"
-                ? "bg-primary text-[#f7f5ef]"
+                ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted"
             }`}
             href={preserveParams({ view: "week", month: null })}
@@ -152,7 +166,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           <a
             className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-medium transition ${
               view === "month"
-                ? "bg-primary text-[#f7f5ef]"
+                ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted"
             }`}
             href={preserveParams({ view: "month", week: null })}
@@ -190,12 +204,14 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           </button>
         </form>
 
-        <a
-          className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
-          href="/dashboard/assignments/new"
-        >
-          + New job
-        </a>
+        {canManage && (
+          <a
+            className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
+            href="/dashboard/assignments/new"
+          >
+            + New job
+          </a>
+        )}
 
         <a
           className="inline-flex h-9 items-center gap-2 rounded-full border border-border/70 bg-card px-3 text-xs font-medium transition hover:bg-muted"
@@ -217,12 +233,12 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           Cleaner
         </span>
         {[
-          { key: null, label: "All", count: allAssignments.length },
+          { key: null, label: "All", count: propFilteredAssignments.length },
           { key: "unassigned", label: "Unassigned", count: unassignedCount },
           ...cleaners.map((c) => ({
             key: c.id,
             label: c.full_name,
-            count: allAssignments.filter((a) => a.cleaner_id === c.id).length,
+            count: propFilteredAssignments.filter((a) => a.cleaner_id === c.id).length,
           })),
         ].map(({ key, label, count }) => {
           const active = cleanerFilter === key || (key === null && !cleanerFilter);
@@ -230,7 +246,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
             <a
               className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition ${
                 active
-                  ? "bg-primary text-[#f7f5ef]"
+                  ? "bg-primary text-primary-foreground"
                   : "border border-border/70 bg-card text-foreground hover:bg-muted"
               }`}
               href={preserveParams({ cleaner: key })}
@@ -258,6 +274,8 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           cleaners={cleaners}
           reservations={propFilteredReservations}
           monthDays={monthDayISOs}
+          canManage={canManage}
+          filterQuery={filterQuery}
           monthOffset={monthOffset}
           view="month"
         />
@@ -268,6 +286,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           cleaners={cleaners}
           reservations={propFilteredReservations}
           days={timelineDayISOs}
+          filterQuery={filterQuery}
           weekOffset={weekOffset}
           selectedPropertyId={propertyFilter}
         />

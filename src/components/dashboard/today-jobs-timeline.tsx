@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCallback, useState, useTransition } from "react";
 
 import { fetchAssignmentDetail, type AssignmentDetailAction } from "@/app/actions/assignments";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
 import { AssignmentDrawer } from "./assignment-drawer";
 import { AssignCleanerModal } from "./assign-cleaner-modal";
@@ -30,19 +31,23 @@ function formatStatus(s: string) {
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+// Explicit zone: this renders on the server (UTC) and then in the browser,
+// which must agree, and times should read as property-local.
+function formatTime(iso: string, timeZone?: string | null) {
+  return formatInTimeZone(iso, { hour: "numeric", minute: "2-digit" }, timeZone);
 }
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
 
 type Props = {
   jobs: AssignmentListRecord[];
+  /** Owner/admin: may mark jobs paid from the drawer. */
+  canManage: boolean;
 };
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
-export function TodayJobsTimeline({ jobs }: Props) {
+export function TodayJobsTimeline({ jobs, canManage }: Props) {
   const [drawerDetail, setDrawerDetail] = useState<NonNullable<AssignmentDetailAction> | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -84,7 +89,7 @@ export function TodayJobsTimeline({ jobs }: Props) {
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Link
             href={"/dashboard/schedule" as Route}
-            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
           >
             <CalendarDays className="h-3.5 w-3.5" />
             View schedule
@@ -118,7 +123,7 @@ export function TodayJobsTimeline({ jobs }: Props) {
                 {/* Time */}
                 <div className="w-16 shrink-0 text-right">
                   <p className="text-xs font-medium tabular-nums text-muted-foreground">
-                    {formatTime(a.due_at)}
+                    {formatTime(a.due_at, a.properties?.timezone)}
                   </p>
                 </div>
 
@@ -173,6 +178,7 @@ export function TodayJobsTimeline({ jobs }: Props) {
       {/* Drawer */}
       {drawerDetail && !showAssignModal && (
         <AssignmentDrawer
+          canManage={canManage}
           detail={drawerDetail}
           onClose={closeDrawer}
           onAssignClick={handleAssignClick}
@@ -197,9 +203,10 @@ export function TodayJobsTimeline({ jobs }: Props) {
 
 type AtRiskProps = {
   jobs: AssignmentListRecord[];
+  canManage: boolean;
 };
 
-export function AtRiskSection({ jobs }: AtRiskProps) {
+export function AtRiskSection({ jobs, canManage }: AtRiskProps) {
   const [drawerDetail, setDrawerDetail] = useState<NonNullable<AssignmentDetailAction> | null>(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -251,7 +258,13 @@ export function AtRiskSection({ jobs }: AtRiskProps) {
                   <div className="flex-1">
                     <p className="text-sm font-semibold">{a.properties?.name ?? "Property"}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Due {formatTime(a.due_at)}
+                      Due{" "}
+                      {/* Overdue jobs can be from earlier days, so include the date. */}
+                      {formatInTimeZone(
+                        a.due_at,
+                        { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
+                        a.properties?.timezone,
+                      )}
                       {a.cleaners ? ` · ${a.cleaners.full_name}` : " · Unassigned"}
                     </p>
                   </div>
@@ -267,6 +280,7 @@ export function AtRiskSection({ jobs }: AtRiskProps) {
 
       {drawerDetail && !showAssignModal && (
         <AssignmentDrawer
+          canManage={canManage}
           detail={drawerDetail}
           onClose={() => { setDrawerDetail(null); setShowAssignModal(false); }}
           onAssignClick={() => setShowAssignModal(true)}

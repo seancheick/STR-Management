@@ -5,7 +5,14 @@ import { Bell, BellOff, Check, Loader2 } from "lucide-react";
 
 import { registerPush, unregisterPush } from "@/lib/notifications/push-client";
 
-type Status = "unknown" | "granted" | "denied" | "prompt" | "subscribed" | "unsupported";
+type Status =
+  | "unknown"
+  | "granted"
+  | "denied"
+  | "prompt"
+  | "subscribed"
+  | "unsupported"
+  | "ios-install";
 
 export function EnablePushButton() {
   const [status, setStatus] = useState<Status>("unknown");
@@ -15,7 +22,9 @@ export function EnablePushButton() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-      setStatus("unsupported");
+      // iPhone Safari only exposes web push to Home Screen apps (iOS 16.4+).
+      const ios = /iPhone|iPad|iPod/.test(window.navigator.userAgent);
+      setStatus(ios ? "ios-install" : "unsupported");
       return;
     }
 
@@ -54,9 +63,25 @@ export function EnablePushButton() {
 
   async function disable() {
     setBusy(true);
-    await unregisterPush();
-    setBusy(false);
-    setStatus("granted");
+    setError(null);
+    try {
+      await unregisterPush();
+      setStatus("granted");
+    } catch {
+      setError("Could not turn off notifications. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (status === "ios-install") {
+    return (
+      <p className="text-sm text-muted-foreground">
+        On iPhone, notifications need the app on your Home Screen: tap{" "}
+        <span className="font-semibold">Share</span>, then{" "}
+        <span className="font-semibold">Add to Home Screen</span>, and open TurnFlow from there.
+      </p>
+    );
   }
 
   if (status === "unsupported") {
@@ -99,7 +124,7 @@ export function EnablePushButton() {
   return (
     <div className="flex flex-col gap-2">
       <button
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-95 disabled:opacity-60"
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
         disabled={busy}
         onClick={enable}
         type="button"

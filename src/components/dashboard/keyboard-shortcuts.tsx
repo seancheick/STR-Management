@@ -3,19 +3,20 @@
 import { Keyboard, X } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Shortcut = {
   keys: string[];
   label: string;
   href?: Route;
+  managerOnly?: boolean;
 };
 
 const SHORTCUTS: Shortcut[] = [
   { keys: ["g", "t"], label: "Dashboard (today)", href: "/dashboard" as Route },
   { keys: ["g", "s"], label: "Schedule", href: "/dashboard/schedule" as Route },
   { keys: ["g", "a"], label: "Assignments", href: "/dashboard/assignments" as Route },
-  { keys: ["g", "p"], label: "Properties", href: "/dashboard/properties" as Route },
+  { keys: ["g", "p"], label: "Properties", href: "/dashboard/properties" as Route, managerOnly: true },
   { keys: ["g", "i"], label: "Issues", href: "/dashboard/issues" as Route },
   { keys: ["g", "r"], label: "Review queue", href: "/dashboard/review" as Route },
   { keys: ["g", "y"], label: "Payout reports", href: "/dashboard/payouts" as Route },
@@ -28,16 +29,22 @@ const SHORTCUTS: Shortcut[] = [
  * Uses "g, then x" chords (classic Gmail/Linear pattern) so single-letter
  * keys aren't stolen from typed text. "?" toggles the help overlay.
  */
-export function KeyboardShortcuts() {
+export function KeyboardShortcuts({ canManage }: { canManage: boolean }) {
+  const shortcuts = useMemo(
+    () => SHORTCUTS.filter((s) => canManage || !s.managerOnly),
+    [canManage],
+  );
   const router = useRouter();
   const [overlayOpen, setOverlayOpen] = useState(false);
-  const [gLeader, setGLeader] = useState(false);
+  // A ref, not state: as an effect dependency, every "g" re-ran the effect,
+  // whose cleanup cleared the 1.5s reset timer, so the leader never expired.
+  const gLeader = useRef(false);
 
   useEffect(() => {
     let leaderTimer: number | undefined;
 
     function resetLeader() {
-      setGLeader(false);
+      gLeader.current = false;
       if (leaderTimer) window.clearTimeout(leaderTimer);
     }
 
@@ -63,16 +70,16 @@ export function KeyboardShortcuts() {
         return;
       }
 
-      if (!gLeader) {
+      if (!gLeader.current) {
         if (e.key === "g") {
-          setGLeader(true);
+          gLeader.current = true;
           leaderTimer = window.setTimeout(resetLeader, 1500);
         }
         return;
       }
 
       // In "g" chord
-      const match = SHORTCUTS.find(
+      const match = shortcuts.find(
         (s) => s.keys.length === 2 && s.keys[0] === "g" && s.keys[1] === e.key,
       );
       resetLeader();
@@ -86,9 +93,9 @@ export function KeyboardShortcuts() {
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
-      if (leaderTimer) window.clearTimeout(leaderTimer);
+      resetLeader();
     };
-  }, [router, gLeader, overlayOpen]);
+  }, [router, overlayOpen, shortcuts]);
 
   if (!overlayOpen) return null;
 
@@ -120,7 +127,7 @@ export function KeyboardShortcuts() {
         </div>
 
         <ul className="mt-4 flex flex-col gap-2">
-          {SHORTCUTS.map((s) => (
+          {shortcuts.map((s) => (
             <li className="flex items-center justify-between gap-3" key={s.label}>
               <span className="text-sm text-muted-foreground">{s.label}</span>
               <span className="flex items-center gap-1">

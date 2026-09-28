@@ -38,7 +38,7 @@ export function AccessCodeCard({ accessCode, perBooking }: Props) {
         </p>
       </div>
       <button
-        className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-primary/30 bg-white px-3 text-xs font-semibold text-primary transition hover:bg-primary/10"
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full border border-primary/30 bg-white px-4 text-sm font-semibold text-primary transition hover:bg-primary/10"
         onClick={handleCopy}
         type="button"
       >

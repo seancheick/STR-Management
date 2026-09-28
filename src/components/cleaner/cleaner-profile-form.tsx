@@ -8,6 +8,7 @@ import {
   type CleanerProfileActionState,
 } from "@/app/(cleaner)/jobs/settings/actions";
 import { Button } from "@/components/ui/button";
+import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
 
 type CleanerProfileFormProps = {
   profile: {
@@ -38,7 +39,7 @@ function FieldError({ errors }: { errors?: string[] }) {
 }
 
 export function CleanerProfileForm({ profile }: CleanerProfileFormProps) {
-  const [state, formAction] = useActionState(updateCleanerProfileAction, initialState);
+  const [state, formAction] = useActionState(keepValuesOnError(updateCleanerProfileAction), initialState as WithSubmitted<typeof initialState>);
 
   return (
     <form action={formAction} className="space-y-5">
@@ -48,7 +49,7 @@ export function CleanerProfileForm({ profile }: CleanerProfileFormProps) {
         </label>
         <input
           className="h-12 w-full rounded-xl border border-input bg-muted/60 px-4 text-sm transition"
-          defaultValue={profile.full_name}
+          defaultValue={state.submitted?.["fullName"] ?? (profile.full_name)}
           id="fullName"
           name="fullName"
           type="text"
@@ -75,7 +76,7 @@ export function CleanerProfileForm({ profile }: CleanerProfileFormProps) {
         </label>
         <input
           className="h-12 w-full rounded-xl border border-input bg-muted/60 px-4 text-sm transition"
-          defaultValue={profile.phone ?? ""}
+          defaultValue={state.submitted?.["phone"] ?? (profile.phone ?? "")}
           id="phone"
           name="phone"
           type="tel"
@@ -89,7 +90,7 @@ export function CleanerProfileForm({ profile }: CleanerProfileFormProps) {
         </label>
         <textarea
           className="min-h-28 w-full rounded-xl border border-input bg-muted/60 px-4 py-3 text-sm transition"
-          defaultValue={profile.availability ?? ""}
+          defaultValue={state.submitted?.["availability"] ?? (profile.availability ?? "")}
           id="availability"
           name="availability"
           rows={4}

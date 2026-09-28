@@ -7,6 +7,7 @@ import {
 } from "@/lib/services/review-evidence";
 import { ReviewActionButtons } from "@/components/assignments/review-action-buttons";
 import { CheckCircle2, Clock, User } from "lucide-react";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 type PendingReviewJob = {
   id: string;
@@ -83,7 +84,7 @@ async function listPendingReviewJobs(): Promise<PendingReviewJob[]> {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
     hour: "numeric",

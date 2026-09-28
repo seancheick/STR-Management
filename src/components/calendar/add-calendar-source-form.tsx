@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 
 import type { AddCalendarSourceState } from "@/app/(admin)/dashboard/calendar/actions";
 import type { PropertyRecord } from "@/lib/queries/properties";
+import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
 
 type Props = {
   action: (
@@ -21,7 +22,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -36,7 +37,7 @@ function FieldError({ errors }: { errors?: string[] }) {
 }
 
 export function AddCalendarSourceForm({ action, properties, defaultPropertyId }: Props) {
-  const [state, formAction] = useActionState(action, initial);
+  const [state, formAction] = useActionState(keepValuesOnError(action), initial as WithSubmitted<typeof initial>);
   const defaultProperty = defaultPropertyId
     ? properties.find((p) => p.id === defaultPropertyId)
     : undefined;
@@ -51,7 +52,7 @@ export function AddCalendarSourceForm({ action, properties, defaultPropertyId }:
           </label>
           <select
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={defaultPropertyId ?? ""}
+            defaultValue={state.submitted?.["propertyId"] ?? (defaultPropertyId ?? "")}
             id="cal-property"
             name="propertyId"
             required
@@ -72,7 +73,7 @@ export function AddCalendarSourceForm({ action, properties, defaultPropertyId }:
           </label>
           <input
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={defaultName}
+            defaultValue={state.submitted?.["name"] ?? (defaultName)}
             id="cal-name"
             name="name"
             placeholder="e.g. Airbnb — Lakeview Loft"
@@ -88,7 +89,7 @@ export function AddCalendarSourceForm({ action, properties, defaultPropertyId }:
           </label>
           <select
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue="airbnb"
+            defaultValue={state.submitted?.["platform"] ?? "airbnb"}
             id="cal-platform"
             name="platform"
           >
@@ -106,6 +107,7 @@ export function AddCalendarSourceForm({ action, properties, defaultPropertyId }:
           <input
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm font-mono text-xs"
             id="cal-url"
+            defaultValue={state.submitted?.["icalUrl"]}
             name="icalUrl"
             placeholder="https://www.airbnb.com/calendar/ical/…"
             required

@@ -74,7 +74,7 @@ export default async function EditPropertyPage({ params }: EditPropertyPageProps
             Calendar sync
           </h2>
           <Link
-            className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
+            className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
             href={`/dashboard/calendar?propertyId=${propertyId}#add-source` as Route}
           >
             + Add iCal
@@ -88,7 +88,7 @@ export default async function EditPropertyPage({ params }: EditPropertyPageProps
         ) : (
           <div className="flex flex-col gap-3">
             {calendarSources.map((source) => (
-              <CalendarSourceRow key={source.id} source={source} />
+              <CalendarSourceRow canRemove key={source.id} source={source} />
             ))}
           </div>
         )}

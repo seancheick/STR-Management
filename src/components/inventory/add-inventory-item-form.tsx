@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import type { AddInventoryItemState } from "@/app/(admin)/dashboard/properties/[propertyId]/inventory/actions";
+import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
 
 type Props = {
   action: (
@@ -19,7 +20,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -34,7 +35,10 @@ function FieldError({ errors }: { errors?: string[] }) {
 }
 
 export function AddInventoryItemForm({ action, propertyId }: Props) {
-  const [state, formAction] = useActionState(action, initial);
+  const [state, formAction] = useActionState<WithSubmitted<AddInventoryItemState>, FormData>(
+    keepValuesOnError(action),
+    initial,
+  );
 
   return (
     <form action={formAction} className="space-y-4">
@@ -48,6 +52,7 @@ export function AddInventoryItemForm({ action, propertyId }: Props) {
           <input
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
             id="inv-name"
+            defaultValue={state.submitted?.["name"]}
             name="name"
             placeholder="e.g. Toilet paper"
             required
@@ -64,6 +69,7 @@ export function AddInventoryItemForm({ action, propertyId }: Props) {
           <input
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
             id="inv-category"
+            defaultValue={state.submitted?.["category"]}
             name="category"
             placeholder="e.g. Bathroom supplies"
             type="text"
@@ -76,7 +82,7 @@ export function AddInventoryItemForm({ action, propertyId }: Props) {
           </label>
           <input
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue="roll"
+            defaultValue={state.submitted?.["unit"] ?? "roll"}
             id="inv-unit"
             name="unit"
             placeholder="roll, bottle, set…"
@@ -90,7 +96,7 @@ export function AddInventoryItemForm({ action, propertyId }: Props) {
           </label>
           <input
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue="0"
+            defaultValue={state.submitted?.["currentQuantity"] ?? "0"}
             id="inv-qty"
             min="0"
             name="currentQuantity"
@@ -104,7 +110,7 @@ export function AddInventoryItemForm({ action, propertyId }: Props) {
           </label>
           <input
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue="2"
+            defaultValue={state.submitted?.["reorderThreshold"] ?? "2"}
             id="inv-threshold"
             min="0"
             name="reorderThreshold"

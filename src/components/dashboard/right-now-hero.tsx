@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, CheckSquare2, Clock, Sparkles } from "lucide
 
 import type { AssignmentListRecord, AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import { isTightTurnover } from "@/lib/domain/assignments";
+import { dateKeyInTimeZone, formatInTimeZone } from "@/lib/ical/timezone";
 
 type Props = {
   todaysJobs: AssignmentListRecord[];
@@ -13,17 +14,14 @@ type Props = {
   unassignedCount: number;
 };
 
-function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
+// Server-rendered (UTC on Vercel): show and compare days in the property's zone.
+function formatWhen(iso: string, timeZone?: string | null): string {
   const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-  return d.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  }) + (sameDay ? "" : ` · ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`);
+    dateKeyInTimeZone(new Date(iso), timeZone) === dateKeyInTimeZone(new Date(), timeZone);
+  return (
+    formatInTimeZone(iso, { hour: "numeric", minute: "2-digit" }, timeZone) +
+    (sameDay ? "" : ` · ${formatInTimeZone(iso, { month: "short", day: "numeric" }, timeZone)}`)
+  );
 }
 
 function formatRelative(iso: string): string {
@@ -87,7 +85,7 @@ export function RightNowHero({
         cta="Review"
         href={"/dashboard/schedule" as Route}
         icon={<Clock className="h-5 w-5" aria-hidden="true" />}
-        message={`Tight turn today: ${tightToday.properties?.name ?? "Property"} at ${formatWhen(tightToday.due_at)}`}
+        message={`Tight turn today: ${tightToday.properties?.name ?? "Property"} at ${formatWhen(tightToday.due_at, tightToday.properties?.timezone)}`}
         subtitle={
           tightToday.cleaners?.full_name
             ? `${tightToday.cleaners.full_name} needs to be on-site by checkout.`
@@ -109,7 +107,7 @@ export function RightNowHero({
         message={`In progress: ${inProgress.cleaners?.full_name?.split(" ")[0] ?? "Cleaner"} at ${inProgress.properties?.name ?? "Property"}`}
         subtitle={
           inProgress.due_at
-            ? `Due by ${formatWhen(inProgress.due_at)}.`
+            ? `Due by ${formatWhen(inProgress.due_at, inProgress.properties?.timezone)}.`
             : "Cleaning underway."
         }
         tone="orange"
@@ -132,6 +130,7 @@ export function RightNowHero({
   }
 
   // 5. Next upcoming
+  // eslint-disable-next-line react-hooks/purity -- server component renders once per request
   const nowMs = Date.now();
   const nextUp = [...weekAssignments]
     .filter(
@@ -150,10 +149,10 @@ export function RightNowHero({
         message={`Next up: ${nextUp.properties?.name ?? "Property"} ${formatRelative(nextUp.due_at)}`}
         subtitle={
           nextUp.cleaners?.full_name
-            ? `${nextUp.cleaners.full_name} is on deck for ${formatWhen(nextUp.due_at)}.`
+            ? `${nextUp.cleaners.full_name} is on deck for ${formatWhen(nextUp.due_at, nextUp.properties?.timezone)}.`
             : unassignedCount > 0
               ? `Unassigned — pick a cleaner before the turnover.`
-              : `Scheduled for ${formatWhen(nextUp.due_at)}.`
+              : `Scheduled for ${formatWhen(nextUp.due_at, nextUp.properties?.timezone)}.`
         }
         tone="neutral"
       />
@@ -193,7 +192,7 @@ function HeroCard({ icon, message, subtitle, tone, cta, href }: HeroCardProps) {
     red: "bg-red-600 text-white hover:bg-red-700",
     orange: "bg-orange-600 text-white hover:bg-orange-700",
     purple: "bg-purple-600 text-white hover:bg-purple-700",
-    neutral: "bg-primary text-[#f7f5ef] hover:opacity-90",
+    neutral: "bg-primary text-primary-foreground hover:opacity-90",
   };
 
   return (

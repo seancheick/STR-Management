@@ -1,5 +1,6 @@
 import "server-only";
 
+import { zonedDayTime } from "@/lib/ical/timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type AssignmentListRecord = {
@@ -22,7 +23,12 @@ export type AssignmentListRecord = {
   payment_method: string | null;
   payment_reference: string | null;
   created_at: string;
-  properties: { name: string; address_line_1: string | null; city: string | null } | null;
+  properties: {
+    name: string;
+    address_line_1: string | null;
+    city: string | null;
+    timezone?: string | null;
+  } | null;
   cleaners: { full_name: string } | null;
 };
 
@@ -81,7 +87,7 @@ const ASSIGNMENT_LIST_SELECT = `
   status, ack_status, priority, checkout_at, due_at, next_checkin_at,
   expected_duration_min, fixed_payout_amount, access_code, source_type,
   paid_at, payment_method, payment_reference, created_at,
-  properties:property_id ( name, address_line_1, city ),
+  properties:property_id ( name, address_line_1, city, timezone ),
   cleaners:cleaner_id ( full_name )
 `.trim();
 
@@ -109,10 +115,9 @@ export async function listUnpaidPayableJobs(): Promise<AssignmentListRecord[]> {
 
 export async function listTodaysAssignmentsForAdmin(): Promise<AssignmentListRecord[]> {
   const supabase = await createServerSupabaseClient();
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setUTCHours(23, 59, 59, 999);
+  // Today in the operator's zone (the server runs in UTC).
+  const todayStart = zonedDayTime(new Date(), 0, 0);
+  const todayEnd = new Date(zonedDayTime(new Date(), 1, 0).getTime() - 1);
 
   const { data } = await supabase
     .from("assignments")
@@ -277,7 +282,12 @@ export type AssignmentScheduleRecord = {
   paid_at: string | null;
   payment_method: string | null;
   payment_reference: string | null;
-  properties: { name: string; address_line_1: string | null; city: string | null } | null;
+  properties: {
+    name: string;
+    address_line_1: string | null;
+    city: string | null;
+    timezone?: string | null;
+  } | null;
   cleaners: { full_name: string } | null;
 };
 
@@ -286,7 +296,7 @@ const SCHEDULE_SELECT = `
   checkout_at, due_at, expected_duration_min, fixed_payout_amount,
   access_code, source_type, next_checkin_at,
   paid_at, payment_method, payment_reference,
-  properties:property_id ( name, address_line_1, city ),
+  properties:property_id ( name, address_line_1, city, timezone ),
   cleaners:cleaner_id ( full_name )
 `.trim();
 
@@ -321,10 +331,9 @@ export type PropertyTodayStatus = {
 
 export async function getPropertyTodayStatuses(): Promise<PropertyTodayStatus[]> {
   const supabase = await createServerSupabaseClient();
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setUTCHours(23, 59, 59, 999);
+  // Today in the operator's zone (the server runs in UTC).
+  const todayStart = zonedDayTime(new Date(), 0, 0);
+  const todayEnd = new Date(zonedDayTime(new Date(), 1, 0).getTime() - 1);
 
   const [propertiesRes, assignmentsRes] = await Promise.all([
     supabase.from("properties").select("id, name").eq("active", true).order("name"),
@@ -390,10 +399,9 @@ export async function getDashboardStats(): Promise<{
   atRisk: number;
 }> {
   const supabase = await createServerSupabaseClient();
-  const todayStart = new Date();
-  todayStart.setUTCHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setUTCHours(23, 59, 59, 999);
+  // Today in the operator's zone (the server runs in UTC).
+  const todayStart = zonedDayTime(new Date(), 0, 0);
+  const todayEnd = new Date(zonedDayTime(new Date(), 1, 0).getTime() - 1);
   const now = new Date().toISOString();
 
   const [checkoutsRes, dueRes, unassignedRes, inProgressRes, reviewRes, atRiskRes] =
@@ -427,12 +435,17 @@ export async function getDashboardStats(): Promise<{
         .from("assignments")
         .select("id", { count: "exact", head: true })
         .eq("status", "completed_pending_review"),
-      // At-risk: past due, not complete
+      // At-risk: past due, not complete. Excludes unassigned — those are
+      // already in `unassigned`, and the UI sums the two ("Needs action").
       supabase
         .from("assignments")
         .select("id", { count: "exact", head: true })
         .lt("due_at", now)
-        .not("status", "in", '("cancelled","approved","completed_pending_review")'),
+        .not(
+          "status",
+          "in",
+          '("cancelled","approved","completed_pending_review","unassigned")',
+        ),
     ]);
 
   return {

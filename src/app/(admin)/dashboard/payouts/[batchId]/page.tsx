@@ -10,9 +10,10 @@ import {
 } from "@/lib/queries/payouts";
 import { BatchActionButtons } from "@/components/payouts/batch-action-buttons";
 import { EntryPaidToggle } from "@/components/payouts/entry-paid-toggle";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString("en-US", {
+  return formatInTimeZone(d, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -20,7 +21,7 @@ function formatDate(d: string) {
 }
 
 function formatDateTime(d: string) {
-  return new Date(d).toLocaleDateString("en-US", {
+  return formatInTimeZone(d, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -48,7 +49,9 @@ export default async function PayoutBatchDetailPage({
   params: Promise<{ batchId: string }>;
 }) {
   const { batchId } = await params;
-  await requireRole(["owner", "admin", "supervisor"]);
+  const profile = await requireRole(["owner", "admin", "supervisor"]);
+  // Mutations here are owner/admin-only; supervisors get a read-only view.
+  const canManage = profile.role === "owner" || profile.role === "admin";
 
   const [batch, entries] = await Promise.all([
     getPayoutBatch(batchId),
@@ -124,7 +127,7 @@ export default async function PayoutBatchDetailPage({
       )}
 
       {/* Actions */}
-      {(canApprove || canPay || canCancel) && (
+      {canManage && (canApprove || canPay || canCancel) && (
         <BatchActionButtons
           batchId={batchId}
           canApprove={canApprove}
@@ -165,8 +168,8 @@ export default async function PayoutBatchDetailPage({
                 ${stmt.subtotal.toFixed(2)}
               </p>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-border/70">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto rounded-2xl border border-border/70">
+              <table className="w-full min-w-[40rem] text-sm">
                 <thead>
                   <tr className="border-b border-border/70 bg-muted/40">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">
@@ -218,7 +221,13 @@ export default async function PayoutBatchDetailPage({
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <EntryPaidToggle entryId={e.id} paidAt={e.paid_at} />
+                        {canManage ? (
+                          <EntryPaidToggle entryId={e.id} paidAt={e.paid_at} />
+                        ) : e.paid_at ? (
+                          <span className="text-xs font-medium text-green-700">Paid</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Unpaid</span>
+                        )}
                       </td>
                     </tr>
                   ))}

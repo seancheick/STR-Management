@@ -25,6 +25,8 @@ export type SignUpState = {
   status: "idle" | "success" | "error";
   message: string | null;
   fieldErrors?: Record<string, string[] | undefined>;
+  /** Echoed back so React 19's post-action form reset doesn't wipe them. */
+  values?: { fullName: string; email: string };
 };
 
 const SIGNUP_INITIAL: SignUpState = { status: "idle", message: null };
@@ -45,6 +47,10 @@ export async function signUpAsHostAction(
   _prev: SignUpState,
   formData: FormData,
 ): Promise<SignUpState> {
+  const values = {
+    fullName: String(formData.get("fullName") ?? ""),
+    email: String(formData.get("email") ?? ""),
+  };
   const parsed = signUpSchema.safeParse({
     fullName: formData.get("fullName"),
     email: formData.get("email"),
@@ -57,7 +63,7 @@ export async function signUpAsHostAction(
       const key = String(issue.path[0] ?? "form");
       fieldErrors[key] = [...(fieldErrors[key] ?? []), issue.message];
     }
-    return { status: "error", message: "Please fix the errors below.", fieldErrors };
+    return { status: "error", values, message: "Please fix the errors below.", fieldErrors };
   }
 
   const { email, password, fullName } = parsed.data;
@@ -81,10 +87,11 @@ export async function signUpAsHostAction(
       if (/already registered|already exists/i.test(msg)) {
         return {
           status: "error",
+          values,
           message: "An account with that email already exists. Try signing in instead.",
         };
       }
-      return { status: "error", message: msg };
+      return { status: "error", values, message: msg };
     }
 
     // Belt + suspenders: ensure the row actually landed as 'owner' with
@@ -97,13 +104,27 @@ export async function signUpAsHostAction(
 
     if (ensureError) {
       await service.auth.admin.deleteUser(userId).catch(() => undefined);
-      return { status: "error", message: ensureError.message };
+      return { status: "error", values, message: ensureError.message };
+    }
+
+    // admin.createUser() never sends the confirmation email, but the sign-in
+    // page tells new hosts one is on its way. Send Supabase's signup email.
+    const { error: emailError } = await service.auth.resend({ type: "signup", email });
+    if (emailError) {
+      console.error("[signUpAsHostAction] confirmation email", emailError);
+      return {
+        status: "error",
+        values,
+        message:
+          "Your account was created, but the confirmation email failed to send. Please contact support to activate it.",
+      };
     }
   } catch (error) {
     if (isRedirectError(error)) throw error;
     console.error("[signUpAsHostAction]", error);
     return {
       status: "error",
+      values,
       message: error instanceof Error ? error.message : "Something went wrong.",
     };
   }

@@ -7,6 +7,7 @@ import { listPayoutBatches } from "@/lib/queries/payouts";
 import { listActiveCleaners } from "@/lib/queries/team";
 import { BulkMarkPaid } from "@/components/payouts/bulk-mark-paid";
 import { CreatePayoutBatchForm } from "@/components/payouts/create-payout-batch-form";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 const statusColors: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700",
@@ -16,7 +17,7 @@ const statusColors: Record<string, string> = {
 };
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString("en-US", {
+  return formatInTimeZone(d, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -27,7 +28,7 @@ const FILTER_PRESETS: Array<{ key: string; label: string; days: number | "all" }
   { key: "all", label: "All", days: "all" },
   { key: "30", label: "Last 30 days", days: 30 },
   { key: "90", label: "Last 90 days", days: 90 },
-  { key: "365", label: "This year", days: 365 },
+  { key: "365", label: "Last 12 months", days: 365 },
 ];
 
 type PayoutsPageProps = {
@@ -35,7 +36,9 @@ type PayoutsPageProps = {
 };
 
 export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
-  await requireRole(["owner", "admin", "supervisor"]);
+  const profile = await requireRole(["owner", "admin", "supervisor"]);
+  // Mutations here are owner/admin-only; supervisors get a read-only view.
+  const canManage = profile.role === "owner" || profile.role === "admin";
   const params = (await searchParams) ?? {};
   const rangeKey = typeof params.range === "string" ? params.range : "all";
 
@@ -50,7 +53,8 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
   const cutoff =
     preset.days === "all"
       ? null
-      : new Date(Date.now() - preset.days * 24 * 60 * 60 * 1000);
+      : // eslint-disable-next-line react-hooks/purity -- server component renders once per request
+        new Date(Date.now() - preset.days * 24 * 60 * 60 * 1000);
   const batches = cutoff
     ? allBatches.filter((b) => new Date(b.period_end) >= cutoff)
     : allBatches;
@@ -76,9 +80,10 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
       </div>
 
       {/* Quick-pay: individual jobs (Zelle/Venmo/cash) outside the batch flow */}
-      <BulkMarkPaid jobs={unpaidJobs} />
+      {canManage && <BulkMarkPaid jobs={unpaidJobs} />}
 
       {/* Create new report */}
+      {canManage && (
       <section className="rounded-2xl border border-border/70 bg-card p-6">
         <h2 className="mb-1 text-lg font-semibold">Generate a payout report</h2>
         <p className="mb-4 text-sm text-muted-foreground">
@@ -87,6 +92,7 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
         </p>
         <CreatePayoutBatchForm cleaners={cleaners} />
       </section>
+      )}
 
       {/* Report list with date-range filter + totals */}
       <section className="flex flex-col gap-4">
@@ -99,7 +105,7 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
                 <Link
                   className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-medium transition ${
                     active
-                      ? "bg-primary text-[#f7f5ef]"
+                      ? "bg-primary text-primary-foreground"
                       : "border border-border/70 bg-card text-foreground hover:bg-muted"
                   }`}
                   href={

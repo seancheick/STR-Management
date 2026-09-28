@@ -12,6 +12,13 @@ type Props = {
 
 const initialState = { error: null as string | null };
 
+/** "YYYY-MM-DD" as a local date. new Date("YYYY-MM-DD") is UTC midnight,
+ *  which is the previous day in US zones. */
+function parseYmd(value: string): Date {
+  const [y, m, d] = value.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 function ymd(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -61,10 +68,10 @@ export function CreatePayoutBatchForm({ cleaners }: Props) {
   const autoLabel = useMemo(() => {
     const who = cleanerName ?? "All cleaners";
     const monthlyMatch =
-      periodStart === ymd(startOfMonth(new Date(periodStart))) &&
-      periodEnd === ymd(endOfMonth(new Date(periodStart)));
+      periodStart === ymd(startOfMonth(parseYmd(periodStart))) &&
+      periodEnd === ymd(endOfMonth(parseYmd(periodStart)));
     const period = monthlyMatch
-      ? monthLabel(new Date(periodStart))
+      ? monthLabel(parseYmd(periodStart))
       : `${periodStart} → ${periodEnd}`;
     return `${who} · ${period}`;
   }, [cleanerName, periodStart, periodEnd]);
@@ -195,7 +202,7 @@ export function CreatePayoutBatchForm({ cleaners }: Props) {
 
       <div>
         <button
-          className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-6 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-50"
+          className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
           disabled={isPending}
           type="submit"
         >

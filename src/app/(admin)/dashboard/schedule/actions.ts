@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth/session";
 import { sendNotification } from "@/lib/notifications/notification-service";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 /** Look up the data we need to personalise an assignment notification. */
 async function fetchAssignmentNotificationContext(
@@ -32,7 +33,7 @@ async function fetchAssignmentNotificationContext(
 }
 
 function formatAnchorDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
   });
@@ -409,6 +410,7 @@ export async function markUnpaidAction(
     .eq("id", assignmentId);
 
   revalidatePath("/dashboard/schedule");
+  revalidatePath("/dashboard");
   revalidatePath("/dashboard/assignments");
   revalidatePath("/dashboard/payouts");
   return { error: error?.message ?? null };

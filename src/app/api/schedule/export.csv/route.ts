@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/session";
 import { listAssignmentsForSchedule } from "@/lib/queries/assignments";
 import { listReservationsForRange } from "@/lib/queries/calendar";
 import { listProperties } from "@/lib/queries/properties";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 /**
  * GET /api/schedule/export.csv?start=YYYY-MM-DD&end=YYYY-MM-DD[&property=<id>]
@@ -78,11 +79,8 @@ export async function GET(req: NextRequest) {
       "Booking",
       p?.name ?? "",
       p?.address_line_1 ?? "",
-      new Date(res.start_at).toLocaleDateString("en-US"),
-      new Date(res.start_at).toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-      }),
+      formatInTimeZone(res.start_at, { year: "numeric", month: "numeric", day: "numeric" }, p?.timezone),
+      formatInTimeZone(res.start_at, { hour: "numeric", minute: "2-digit" }, p?.timezone),
       res.platform,
       res.guest_name ?? "",
       "reserved",
@@ -102,16 +100,13 @@ export async function GET(req: NextRequest) {
       "Cleaning",
       p?.name ?? "",
       p?.address_line_1 ?? "",
-      new Date(anchor).toLocaleDateString("en-US"),
-      new Date(anchor).toLocaleTimeString("en-US", {
-        hour: "numeric",
-        minute: "2-digit",
-      }),
+      formatInTimeZone(anchor, { year: "numeric", month: "numeric", day: "numeric" }, p?.timezone),
+      formatInTimeZone(anchor, { hour: "numeric", minute: "2-digit" }, p?.timezone),
       a.source_type ?? "manual",
       a.cleaners?.full_name ?? "Unassigned",
       a.status,
       a.fixed_payout_amount != null ? `$${Number(a.fixed_payout_amount).toFixed(2)}` : "",
-      a.paid_at ? new Date(a.paid_at).toLocaleDateString("en-US") : "",
+      a.paid_at ? formatInTimeZone(a.paid_at, { year: "numeric", month: "numeric", day: "numeric" }, p?.timezone) : "",
       a.payment_method ?? "",
       a.payment_reference ?? "",
       a.expected_duration_min ? `${a.expected_duration_min} min` : "",

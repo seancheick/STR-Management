@@ -5,7 +5,7 @@ import { Printer } from "lucide-react";
 export function PrintButton() {
   return (
     <button
-      className="inline-flex h-10 items-center gap-1.5 rounded-full bg-primary px-5 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90"
+      className="inline-flex h-10 items-center gap-1.5 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
       onClick={() => window.print()}
       type="button"
     >

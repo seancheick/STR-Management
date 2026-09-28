@@ -80,7 +80,8 @@ export function IssueActionButtons({ issueId, currentStatus }: Props) {
           disabled={isPending}
           onClick={() =>
             startTransition(async () => {
-              await acknowledgeIssueAction(issueId);
+              const res = await acknowledgeIssueAction(issueId);
+              showToast(res.error ?? "Acknowledged.", res.error ? "error" : "success");
             })
           }
           type="button"
@@ -94,7 +95,8 @@ export function IssueActionButtons({ issueId, currentStatus }: Props) {
           disabled={isPending}
           onClick={() =>
             startTransition(async () => {
-              await markInProgressAction(issueId);
+              const res = await markInProgressAction(issueId);
+              showToast(res.error ?? "Marked in progress.", res.error ? "error" : "success");
             })
           }
           type="button"

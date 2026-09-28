@@ -1,4 +1,4 @@
-import { Building2, CheckCircle } from "lucide-react";
+import { AlertCircle, Building2, CheckCircle } from "lucide-react";
 import Link from "next/link";
 
 import { requireRole } from "@/lib/auth/session";
@@ -10,8 +10,8 @@ type PropertiesPageProps = {
 };
 
 function statusMessage(status?: string, message?: string) {
-  if (message) {
-    return message;
+  if (status === "error") {
+    return message ?? "Something went wrong.";
   }
 
   switch (status) {
@@ -32,6 +32,7 @@ export default async function PropertiesPage({ searchParams }: PropertiesPagePro
   const status = typeof params.status === "string" ? params.status : undefined;
   const message = typeof params.message === "string" ? params.message : undefined;
   const banner = statusMessage(status, message);
+  const bannerIsError = status === "error";
   const result = await listProperties();
   const activeProperties = result.data.filter((p) => p.active === true);
   const archivedProperties = result.data.filter((p) => p.active === false);
@@ -47,7 +48,7 @@ export default async function PropertiesPage({ searchParams }: PropertiesPagePro
           </p>
         </div>
         <Link
-          className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition-opacity hover:opacity-90"
+          className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
           href="/dashboard/properties/new"
         >
           Add property
@@ -55,8 +56,19 @@ export default async function PropertiesPage({ searchParams }: PropertiesPagePro
       </header>
 
       {banner ? (
-        <section className="flex items-center gap-2 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          <CheckCircle className="h-4 w-4 shrink-0" />
+        <section
+          className={`flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm ${
+            bannerIsError
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-green-200 bg-green-50 text-green-800"
+          }`}
+          role={bannerIsError ? "alert" : "status"}
+        >
+          {bannerIsError ? (
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          ) : (
+            <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
           {banner}
         </section>
       ) : null}
@@ -80,7 +92,7 @@ export default async function PropertiesPage({ searchParams }: PropertiesPagePro
             </p>
           </div>
           <Link
-            className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition-opacity hover:opacity-90"
+            className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
             href="/dashboard/properties/new"
           >
             Add first property

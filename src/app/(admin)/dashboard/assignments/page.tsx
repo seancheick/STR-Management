@@ -12,7 +12,9 @@ type AssignmentsPageProps = {
 };
 
 export default async function AssignmentsPage({ searchParams }: AssignmentsPageProps) {
-  await requireRole(["owner", "admin", "supervisor"]);
+  const profile = await requireRole(["owner", "admin", "supervisor"]);
+  // Creating, bulk-assigning and deleting jobs are owner/admin-only actions.
+  const canManage = profile.role === "owner" || profile.role === "admin";
   const params = (await searchParams) ?? {};
   const banner =
     typeof params.status === "string" && params.status === "created"
@@ -37,7 +39,9 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
   });
 
   if (unpaidOnly) {
-    assignments = assignments.filter(
+    // Most unpaid jobs are approved, so this view ignores the approved toggle;
+    // otherwise the chip's count and the list disagree.
+    assignments = allAssignments.filter(
       (a) => PAYABLE_STATUSES.has(a.status) && a.paid_at === null,
     );
   }
@@ -74,12 +78,14 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
             All cleaning jobs across your portfolio.
           </p>
         </div>
-        <Link
-          className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef]"
-          href={"/dashboard/assignments/new" as Route}
-        >
-          New assignment
-        </Link>
+        {canManage && (
+          <Link
+            className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground"
+            href={"/dashboard/assignments/new" as Route}
+          >
+            New assignment
+          </Link>
+        )}
       </header>
 
       {banner ? (
@@ -123,7 +129,7 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
           <Link
             className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 font-medium transition ${
               chip.on
-                ? "bg-primary text-[#f7f5ef]"
+                ? "bg-primary text-primary-foreground"
                 : "border border-border/70 bg-card text-muted-foreground hover:bg-muted"
             }`}
             href={chip.href}
@@ -143,19 +149,32 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
         ))}
       </div>
 
-      {assignments.length === 0 ? (
+      {assignments.length === 0 && allAssignments.length > 0 ? (
+        <section className="flex flex-col items-center gap-3 rounded-[1.75rem] border border-dashed border-border bg-card/70 px-6 py-12 text-center">
+          <ClipboardList className="h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
+          <h2 className="text-xl font-semibold">No jobs match these filters</h2>
+          <Link
+            href="/dashboard/assignments"
+            className="inline-flex h-10 items-center justify-center rounded-full border border-border/70 px-5 text-sm font-medium hover:bg-muted"
+          >
+            Clear filters
+          </Link>
+        </section>
+      ) : assignments.length === 0 ? (
         <section className="flex flex-col items-center gap-4 rounded-[1.75rem] border border-dashed border-border bg-card/70 px-6 py-12 text-center">
           <ClipboardList className="h-10 w-10 text-muted-foreground/40" />
           <div>
             <h2 className="text-xl font-semibold">No assignments yet</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">Create your first assignment to start tracking cleaning jobs.</p>
           </div>
-          <Link href="/dashboard/assignments/new" className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef]">
-            New assignment
-          </Link>
+          {canManage && (
+            <Link href="/dashboard/assignments/new" className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground">
+              New assignment
+            </Link>
+          )}
         </section>
       ) : (
-        <AssignmentsList assignments={assignments} cleaners={cleaners} />
+        <AssignmentsList assignments={assignments} canManage={canManage} cleaners={cleaners} />
       )}
     </main>
   );

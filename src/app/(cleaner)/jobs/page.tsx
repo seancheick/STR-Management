@@ -31,7 +31,7 @@ export default async function CleanerJobsPage() {
             </p>
           </div>
           <Link
-            className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-[#f7f5ef]"
+            className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground"
             href={"/jobs/schedule" as Route}
           >
             View schedule

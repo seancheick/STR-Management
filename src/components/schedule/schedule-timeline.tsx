@@ -22,6 +22,8 @@ export type ScheduleTimelineProps = {
   cleaners: TeamMemberRecord[];
   days: string[]; // ISO of each visible day (local midnight)
   weekOffset: number;
+  /** "&cleaner=…&property=…" — active filters to keep when paging. */
+  filterQuery?: string;
   selectedPropertyId: string | null;
 };
 
@@ -84,6 +86,7 @@ export function ScheduleTimeline({
   cleaners,
   days,
   weekOffset,
+  filterQuery = "",
   selectedPropertyId,
 }: ScheduleTimelineProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -183,6 +186,11 @@ export function ScheduleTimeline({
   }, [days]);
 
   function scrollToToday() {
+    // Today isn't in this window when paged away: jump back to it first.
+    if (weekOffset !== 0) {
+      router.push(`?view=week&week=0${filterQuery}` as Route);
+      return;
+    }
     const el = scrollerRef.current;
     if (!el || !days.length) return;
     const todayCol = dayIndex(new Date(), new Date(days[0]), days.length);
@@ -289,7 +297,7 @@ export function ScheduleTimeline({
           <Link
             aria-label="Previous 2 weeks"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card text-sm font-medium transition hover:bg-muted"
-            href={`?view=week&week=${weekOffset - 2}` as Route}
+            href={`?view=week&week=${weekOffset - 2}${filterQuery}` as Route}
           >
             ←
           </Link>
@@ -299,7 +307,7 @@ export function ScheduleTimeline({
           <Link
             aria-label="Next 2 weeks"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card text-sm font-medium transition hover:bg-muted"
-            href={`?view=week&week=${weekOffset + 2}` as Route}
+            href={`?view=week&week=${weekOffset + 2}${filterQuery}` as Route}
           >
             →
           </Link>
@@ -370,7 +378,7 @@ export function ScheduleTimeline({
                   }`}
                 >
                   {isToday ? (
-                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[#f7f5ef]">
+                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
                       {d.getDate()}
                     </span>
                   ) : (
@@ -546,14 +554,18 @@ function PropertyRow({
               if (dayAssignments.length === 0) return <div key={col} />;
               return (
                 <div
-                  className="flex min-w-0 items-center justify-center px-1"
+                  className="flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-1"
                   key={col}
                   style={{ gridColumn: `${col + 1} / span 1` }}
                 >
-                  <CleaningChip
-                    assignment={dayAssignments[0]}
-                    onClick={() => onSelectAssignment(dayAssignments[0].id)}
-                  />
+                  {/* Every job that day (e.g. a re-clean plus a turnover), not just the first */}
+                  {dayAssignments.map((a) => (
+                    <CleaningChip
+                      assignment={a}
+                      key={a.id}
+                      onClick={() => onSelectAssignment(a.id)}
+                    />
+                  ))}
                 </div>
               );
             })}

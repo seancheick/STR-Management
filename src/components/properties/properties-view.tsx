@@ -102,7 +102,14 @@ function PropertyCard({ property }: { property: PropertyRecord }) {
           Edit
         </Link>
         {property.active ? (
-          <form action={archivePropertyAction.bind(null, property.id)}>
+          <form
+            action={archivePropertyAction.bind(null, property.id)}
+            onSubmit={(e) => {
+              if (!confirm(`Archive ${property.name}? It moves to your archived properties.`)) {
+                e.preventDefault();
+              }
+            }}
+          >
             <button
               className="inline-flex h-9 cursor-pointer items-center justify-center rounded-full border border-border/70 px-4 text-sm font-medium text-muted-foreground transition duration-200 hover:border-destructive/40 hover:text-destructive"
               type="submit"
@@ -137,7 +144,14 @@ function PropertyRow({ property }: { property: PropertyRecord }) {
             Edit
           </Link>
           {property.active ? (
-            <form action={archivePropertyAction.bind(null, property.id)}>
+            <form
+            action={archivePropertyAction.bind(null, property.id)}
+            onSubmit={(e) => {
+              if (!confirm(`Archive ${property.name}? It moves to your archived properties.`)) {
+                e.preventDefault();
+              }
+            }}
+          >
               <button
                 className="inline-flex h-9 cursor-pointer items-center justify-center rounded-full border border-border/70 px-4 text-sm font-medium text-muted-foreground transition duration-200 hover:border-destructive/40 hover:text-destructive"
                 type="submit"
@@ -180,7 +194,7 @@ export function PropertiesView({ activeProperties, archivedProperties }: Propert
             onClick={() => handleViewChange("grid")}
             className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${
               view === "grid"
-                ? "bg-primary text-[#f7f5ef]"
+                ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -192,7 +206,7 @@ export function PropertiesView({ activeProperties, archivedProperties }: Propert
             onClick={() => handleViewChange("list")}
             className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${
               view === "list"
-                ? "bg-primary text-[#f7f5ef]"
+                ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >

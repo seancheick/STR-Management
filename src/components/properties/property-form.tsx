@@ -8,6 +8,7 @@ import {
   type PropertyActionState,
 } from "@/app/(admin)/dashboard/properties/actions";
 import type { PropertyRecord } from "@/lib/queries/properties";
+import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
 
 function generateAccessCode(): string {
   // 4-digit code avoiding obvious patterns (0000, 1234, 1111)
@@ -46,7 +47,7 @@ function SubmitButton({ label }: { label: string }) {
 
   return (
     <button
-      className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-95 disabled:opacity-60"
+      className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -64,7 +65,10 @@ function FieldError({ errors }: { errors?: string[] }) {
 }
 
 export function PropertyForm({ action, property, submitLabel }: PropertyFormProps) {
-  const [state, formAction] = useActionState(action, initialPropertyActionState);
+  const [state, formAction] = useActionState<WithSubmitted<PropertyActionState>, FormData>(
+    keepValuesOnError(action),
+    initialPropertyActionState,
+  );
   const [accessCode, setAccessCode] = useState<string>(
     property?.cleaner_access_code ?? "",
   );
@@ -82,7 +86,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <input
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={property?.name ?? ""}
+            defaultValue={state.submitted?.["name"] ?? (property?.name ?? "")}
             id="name"
             name="name"
             placeholder="Lakeview Loft"
@@ -97,7 +101,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <input
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={property?.address_line_1 ?? ""}
+            defaultValue={state.submitted?.["addressLine1"] ?? (property?.address_line_1 ?? "")}
             id="addressLine1"
             name="addressLine1"
             placeholder="123 Demo Street"
@@ -111,7 +115,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <input
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={property?.city ?? ""}
+            defaultValue={state.submitted?.["city"] ?? (property?.city ?? "")}
             id="city"
             name="city"
             placeholder="Austin"
@@ -125,7 +129,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <input
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm uppercase"
-            defaultValue={property?.state ?? ""}
+            defaultValue={state.submitted?.["state"] ?? (property?.state ?? "")}
             id="state"
             name="state"
             placeholder="TX"
@@ -139,7 +143,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <input
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={property?.postal_code ?? ""}
+            defaultValue={state.submitted?.["postalCode"] ?? (property?.postal_code ?? "")}
             id="postalCode"
             name="postalCode"
             placeholder="78701"
@@ -153,7 +157,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <input
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={property?.bedrooms ?? ""}
+            defaultValue={state.submitted?.["bedrooms"] ?? (property?.bedrooms ?? "")}
             id="bedrooms"
             min="0"
             name="bedrooms"
@@ -169,7 +173,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <input
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={property?.bathrooms ?? ""}
+            defaultValue={state.submitted?.["bathrooms"] ?? (property?.bathrooms ?? "")}
             id="bathrooms"
             min="0"
             name="bathrooms"
@@ -185,7 +189,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <input
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={property?.default_clean_price ?? ""}
+            defaultValue={state.submitted?.["defaultCleanPrice"] ?? (property?.default_clean_price ?? "")}
             id="defaultCleanPrice"
             min="0"
             name="defaultCleanPrice"
@@ -201,7 +205,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <input
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={property?.difficulty_score ?? ""}
+            defaultValue={state.submitted?.["difficultyScore"] ?? (property?.difficulty_score ?? "")}
             id="difficultyScore"
             max="5"
             min="1"
@@ -221,7 +225,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <select
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue={property?.timezone ?? ""}
+            defaultValue={state.submitted?.["timezone"] ?? (property?.timezone ?? "")}
             id="timezone"
             name="timezone"
           >
@@ -290,7 +294,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <textarea
             className="min-h-28 w-full rounded-xl border border-input bg-background px-4 py-3 text-sm"
-            defaultValue={property?.cleaner_notes ?? ""}
+            defaultValue={state.submitted?.["cleanerNotes"] ?? (property?.cleaner_notes ?? "")}
             id="cleanerNotes"
             name="cleanerNotes"
             placeholder={`Example:\nWiFi: Lakeview-Guest / PW: 55Lake!\nLockbox: right of the door, code 4287\nLinens: top shelf of hallway closet\nTrash day: Tuesday morning, bins in garage`}
@@ -308,7 +312,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </label>
           <textarea
             className="min-h-28 w-full rounded-xl border border-input bg-background px-4 py-3 text-sm"
-            defaultValue={property?.guest_welcome_template ?? ""}
+            defaultValue={state.submitted?.["guestWelcomeTemplate"] ?? (property?.guest_welcome_template ?? "")}
             id="guestWelcomeTemplate"
             name="guestWelcomeTemplate"
             placeholder={`Hi [guest name]! Welcome to [property]. Your check-in is any time after 3pm.\n\nGate code: 1234\nWiFi: Lakeview-Guest / PW: 55Lake!\nQuiet hours: 10pm – 8am\n\nText me at [phone] if anything comes up.`}
@@ -335,6 +339,7 @@ export function PropertyForm({ action, property, submitLabel }: PropertyFormProp
           </p>
           <input
             className="h-11 w-full rounded-xl border border-input bg-background px-4 text-sm"
+            defaultValue={state.submitted?.["icalUrl"]}
             name="icalUrl"
             placeholder="https://www.airbnb.com/calendar/ical/…"
             type="url"

@@ -87,6 +87,7 @@ export default async function HealthPage() {
           {cronChecks.map((c) => {
             const ok =
               c.iso !== null &&
+              // eslint-disable-next-line react-hooks/purity -- server component renders once per request
               Date.now() - new Date(c.iso).getTime() < c.slackHours * 3_600_000;
             return (
               <li className="flex items-center justify-between gap-2 py-3" key={c.label}>

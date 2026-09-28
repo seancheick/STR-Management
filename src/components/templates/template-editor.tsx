@@ -2,6 +2,9 @@
 
 import { useTransition, useState, useActionState } from "react";
 
+import { showToast } from "@/components/ui/toast";
+import { keepValuesOnError } from "@/lib/form-values";
+
 import type { TemplateRecord, TemplateItemRecord } from "@/lib/queries/templates";
 import {
   updateTemplateAction,
@@ -24,14 +27,21 @@ export function TemplateEditor({ template, initialItems }: Props) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [addState, addAction, addPending] = useActionState(
-    addTemplateItemAction.bind(null, template.id),
+    keepValuesOnError(addTemplateItemAction.bind(null, template.id)),
     { error: null },
   );
+  // Typed values to restore if the update fails (React 19 resets the form).
+  const [updateDraft, setUpdateDraft] = useState<Record<string, string> | null>(null);
 
   function handleUpdate(formData: FormData) {
+    const raw: Record<string, string> = {};
+    formData.forEach((v, k) => {
+      if (typeof v === "string") raw[k] = v;
+    });
     startTransition(async () => {
       const result = await updateTemplateAction(template.id, formData);
       setUpdateError(result.error);
+      setUpdateDraft(result.error ? raw : null);
     });
   }
 
@@ -45,13 +55,16 @@ export function TemplateEditor({ template, initialItems }: Props) {
 
   function handleClone() {
     startTransition(async () => {
-      await cloneTemplateAction(template.id);
+      const result = await cloneTemplateAction(template.id);
+      if (result.error) showToast(result.error, "error");
     });
   }
 
   function handleRemoveItem(itemId: string) {
+    if (!confirm("Remove this checklist item?")) return;
     startTransition(async () => {
-      await removeTemplateItemAction(template.id, itemId);
+      const result = await removeTemplateItemAction(template.id, itemId);
+      if (result.error) showToast(result.error, "error");
     });
   }
 
@@ -68,7 +81,7 @@ export function TemplateEditor({ template, initialItems }: Props) {
             <label className="text-sm font-medium" htmlFor="t-name">Name</label>
             <input
               className="rounded-2xl border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              defaultValue={template.name}
+              defaultValue={updateDraft?.name ?? template.name}
               id="t-name"
               name="name"
               required
@@ -79,7 +92,7 @@ export function TemplateEditor({ template, initialItems }: Props) {
             <label className="text-sm font-medium" htmlFor="t-type">Type</label>
             <select
               className="rounded-2xl border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-              defaultValue={template.template_type ?? ""}
+              defaultValue={updateDraft?.template_type ?? template.template_type ?? ""}
               id="t-type"
               name="template_type"
             >
@@ -101,7 +114,7 @@ export function TemplateEditor({ template, initialItems }: Props) {
           </label>
           <div className="flex flex-wrap gap-3">
             <button
-              className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+              className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
               disabled={isPending}
               type="submit"
             >
@@ -214,6 +227,7 @@ export function TemplateEditor({ template, initialItems }: Props) {
               <input
                 className="rounded-2xl border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 id="label"
+                defaultValue={addState.submitted?.["label"]}
                 name="label"
                 placeholder="e.g. Wipe kitchen counters"
                 required
@@ -226,6 +240,7 @@ export function TemplateEditor({ template, initialItems }: Props) {
               <input
                 className="rounded-2xl border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 id="section_name"
+                defaultValue={addState.submitted?.["section_name"]}
                 name="section_name"
                 placeholder="e.g. Kitchen"
                 type="text"
@@ -240,6 +255,7 @@ export function TemplateEditor({ template, initialItems }: Props) {
             <textarea
               className="rounded-2xl border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
               id="instruction_text"
+              defaultValue={addState.submitted?.["instruction_text"]}
               name="instruction_text"
               placeholder="Optional step-by-step instructions…"
               rows={2}
@@ -254,6 +270,7 @@ export function TemplateEditor({ template, initialItems }: Props) {
               <input
                 className="rounded-2xl border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                 id="reference_media_url"
+                defaultValue={addState.submitted?.["reference_media_url"]}
                 name="reference_media_url"
                 placeholder="https://…"
                 type="url"
@@ -298,7 +315,7 @@ export function TemplateEditor({ template, initialItems }: Props) {
           </div>
 
           <button
-            className="self-start rounded-full bg-primary px-5 py-2 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+            className="self-start rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
             disabled={addPending}
             type="submit"
           >

@@ -38,12 +38,12 @@ export function ToastHost() {
     return () => window.removeEventListener(TOAST_EVENT, handler);
   }, []);
 
-  if (toasts.length === 0) return null;
-
+  // The live region stays mounted so screen readers announce new toasts, and
+  // sits above the cleaner's fixed bottom nav (~76px) instead of covering it.
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-2"
+      className="pointer-events-none fixed inset-x-4 bottom-24 z-[100] flex flex-col items-end gap-2 sm:inset-x-auto sm:right-6"
     >
       {toasts.map((t) => (
         <div

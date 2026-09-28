@@ -2,7 +2,7 @@ import Image from "next/image";
 
 import { HeaderBell } from "@/components/dashboard/header-bell";
 import { KeyboardShortcuts } from "@/components/dashboard/keyboard-shortcuts";
-import { SidebarNav } from "@/components/dashboard/sidebar-nav";
+import { MobileNav, SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { requireRole } from "@/lib/auth/session";
 import { getDashboardStats } from "@/lib/queries/assignments";
 import { getExceptionCounts } from "@/lib/queries/issues";
@@ -19,6 +19,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     getExceptionCounts(),
   ]);
   const branding = await getTenantBranding(profile.owner_id);
+  const canManage = profile.role === "owner" || profile.role === "admin";
 
   const bellCounts = {
     unassigned: stats.unassigned,
@@ -32,12 +33,13 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
     <div className="flex min-h-dvh">
       {/* Desktop sidebar — fixed, full viewport height */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 lg:flex lg:flex-col">
-        <SidebarNav branding={branding} />
+        <SidebarNav branding={branding} canManage={canManage} />
       </aside>
 
       {/* Mobile top bar — branded with tenant logo + name */}
       <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border/60 bg-card px-4 lg:hidden">
         <div className="flex min-w-0 items-center gap-2">
+          <MobileNav branding={branding} canManage={canManage} />
           {branding?.logoUrl ? (
             <Image
               alt=""
@@ -61,7 +63,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
       </div>
 
       {/* Global keyboard shortcuts — "g then x" chords + ? overlay */}
-      <KeyboardShortcuts />
+      <KeyboardShortcuts canManage={canManage} />
 
       {/* Content — offset for desktop sidebar, padded for mobile top bar */}
       <div className="flex w-full flex-col pt-14 lg:pl-60 lg:pt-0">

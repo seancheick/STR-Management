@@ -3,11 +3,12 @@
 import { useActionState } from "react";
 
 import { inviteTeamMemberAction } from "@/app/(admin)/dashboard/team/actions";
+import { keepValuesOnError } from "@/lib/form-values";
 
 const ROLES = ["cleaner", "supervisor", "admin"];
 
 export function InviteForm() {
-  const [state, action, isPending] = useActionState(inviteTeamMemberAction, { error: null });
+  const [state, action, isPending] = useActionState(keepValuesOnError(inviteTeamMemberAction), { error: null });
 
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -29,6 +30,7 @@ export function InviteForm() {
           <input
             className="rounded-2xl border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             id="full_name"
+            defaultValue={state.submitted?.["full_name"]}
             name="full_name"
             placeholder="Jane Smith"
             required
@@ -43,6 +45,7 @@ export function InviteForm() {
           <input
             className="rounded-2xl border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             id="email"
+            defaultValue={state.submitted?.["email"]}
             name="email"
             placeholder="jane@example.com"
             required
@@ -55,8 +58,8 @@ export function InviteForm() {
           <select
             className="rounded-2xl border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             id="role"
+            defaultValue={state.submitted?.["role"] ?? "cleaner"}
             name="role"
-            defaultValue="cleaner"
           >
             {ROLES.map((r) => (
               <option key={r} value={r}>{r}</option>
@@ -66,7 +69,7 @@ export function InviteForm() {
       </div>
 
       <button
-        className="self-start rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+        className="self-start rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
         disabled={isPending}
         type="submit"
       >

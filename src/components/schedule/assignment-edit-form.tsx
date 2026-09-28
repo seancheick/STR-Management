@@ -69,6 +69,11 @@ export function AssignmentEditForm({
     cancelInitial,
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // React 19 resets the form after the action even on a server error; keep
+  // the raw typed values (before the ISO conversion below) to restore them.
+  const [draft, setDraft] = useState<Record<string, string> | null>(null);
+  const kept = (name: string, fallback: string | number) =>
+    state.status === "error" && draft && name in draft ? draft[name] : fallback;
 
   useEffect(() => {
     if (state.status === "success") {
@@ -126,6 +131,11 @@ export function AssignmentEditForm({
 
       <form
         action={(fd) => {
+          const raw: Record<string, string> = {};
+          fd.forEach((v, k) => {
+            if (typeof v === "string") raw[k] = v;
+          });
+          setDraft(raw);
           // datetime-local values come back as local wall-clock. Convert to real
           // ISO so Postgres doesn't stamp them as UTC.
           for (const field of ["dueAt", "checkoutAt"]) {
@@ -146,7 +156,7 @@ export function AssignmentEditForm({
             <span className="text-xs font-medium text-muted-foreground">Guest checkout</span>
             <input
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-60"
-              defaultValue={toDatetimeLocal(assignment.checkout_at)}
+              defaultValue={kept("checkoutAt", toDatetimeLocal(assignment.checkout_at))}
               disabled={isLocked}
               name="checkoutAt"
               type="datetime-local"
@@ -156,7 +166,7 @@ export function AssignmentEditForm({
             <span className="text-xs font-medium text-muted-foreground">Next check-in</span>
             <input
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-60"
-              defaultValue={toDatetimeLocal(assignment.due_at)}
+              defaultValue={kept("dueAt", toDatetimeLocal(assignment.due_at))}
               disabled={isLocked}
               name="dueAt"
               required
@@ -173,7 +183,7 @@ export function AssignmentEditForm({
           <span className="text-xs font-medium text-muted-foreground">Cleaner</span>
           <select
             className="h-10 rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-60"
-            defaultValue={assignment.cleaner_id ?? ""}
+            defaultValue={kept("cleanerId", assignment.cleaner_id ?? "")}
             disabled={isLocked}
             name="cleanerId"
           >
@@ -191,7 +201,8 @@ export function AssignmentEditForm({
             <span className="text-xs font-medium text-muted-foreground">Priority</span>
             <select
               className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
-              defaultValue={assignment.priority}
+              defaultValue={kept("priority", assignment.priority)}
+              disabled={isLocked}
               name="priority"
             >
               <option value="normal">Normal</option>
@@ -203,7 +214,8 @@ export function AssignmentEditForm({
             <span className="text-xs font-medium text-muted-foreground">Duration (min)</span>
             <input
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
-              defaultValue={assignment.expected_duration_min ?? ""}
+              defaultValue={kept("expectedDurationMin", assignment.expected_duration_min ?? "")}
+              disabled={isLocked}
               min="15"
               name="expectedDurationMin"
               step="15"
@@ -214,11 +226,13 @@ export function AssignmentEditForm({
             <span className="text-xs font-medium text-muted-foreground">Payout ($)</span>
             <input
               className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
-              defaultValue={
+              defaultValue={kept(
+                "fixedPayoutAmount",
                 assignment.fixed_payout_amount !== null
                   ? Number(assignment.fixed_payout_amount)
-                  : ""
-              }
+                  : "",
+              )}
+              disabled={isLocked}
               min="0"
               name="fixedPayoutAmount"
               step="0.01"
@@ -233,7 +247,8 @@ export function AssignmentEditForm({
           </span>
           <input
             className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-mono"
-            defaultValue={assignment.access_code ?? ""}
+            defaultValue={kept("accessCode", assignment.access_code ?? "")}
+            disabled={isLocked}
             maxLength={64}
             name="accessCode"
             placeholder="e.g. 4287 or #1234"
@@ -243,7 +258,7 @@ export function AssignmentEditForm({
 
         <div className="mt-1 flex items-center gap-2">
           <button
-            className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+            className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
             disabled={isPending || isLocked}
             type="submit"
           >

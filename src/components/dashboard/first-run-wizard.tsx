@@ -109,7 +109,7 @@ export function FirstRunWizard({ firstName, steps }: FirstRunWizardProps) {
                   aria-disabled={i !== completed}
                   className={`inline-flex h-10 shrink-0 items-center gap-2 self-center rounded-full px-5 text-sm font-semibold transition ${
                     i === completed
-                      ? "bg-primary text-[#f7f5ef] hover:opacity-90"
+                      ? "bg-primary text-primary-foreground hover:opacity-90"
                       : "pointer-events-none border border-border/60 bg-muted text-muted-foreground"
                   }`}
                   href={step.href}

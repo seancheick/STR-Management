@@ -10,11 +10,13 @@ import {
 } from "@/app/actions/job-messages";
 import type { JobMessageRecord } from "@/lib/queries/job-messages";
 import { showToast } from "@/components/ui/toast";
+import { formatInTimeZone } from "@/lib/ical/timezone";
+import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
 
 const initial: PostJobMessageState = { status: "idle", message: null };
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -37,7 +39,7 @@ export function JobMessageThread({
   currentUserId,
   compact,
 }: Props) {
-  const [state, formAction] = useActionState(postJobMessageAction, initial);
+  const [state, formAction] = useActionState(keepValuesOnError(postJobMessageAction), initial as WithSubmitted<typeof initial>);
   const formRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -95,7 +97,7 @@ export function JobMessageThread({
                 <div
                   className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-5 ${
                     isOwn
-                      ? "bg-primary text-[#f7f5ef]"
+                      ? "bg-primary text-primary-foreground"
                       : "border border-border/70 bg-card"
                   }`}
                 >
@@ -115,6 +117,7 @@ export function JobMessageThread({
         <textarea
           className="min-h-12 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
           maxLength={2000}
+          defaultValue={state.submitted?.["body"]}
           name="body"
           placeholder="Write a message…"
           required
@@ -130,7 +133,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+      className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -169,7 +172,7 @@ function SystemMessageRow({ message }: { message: JobMessageRecord }) {
         {message.body}
       </span>
       <span className="text-[10px] opacity-60">
-        {new Date(message.created_at).toLocaleTimeString("en-US", {
+        {formatInTimeZone(message.created_at, {
           hour: "numeric",
           minute: "2-digit",
         })}

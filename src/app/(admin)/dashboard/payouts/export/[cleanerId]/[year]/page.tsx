@@ -1,16 +1,19 @@
+import type { Route } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { requireRole } from "@/lib/auth/session";
 import { listCleanerPayoutsForYear } from "@/lib/queries/payouts";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { PrintButton } from "@/components/payouts/print-button";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 type Props = {
   params: Promise<{ cleanerId: string; year: string }>;
 };
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -42,8 +45,8 @@ export default async function AnnualPayoutExportPage({ params }: Props) {
   >();
   let grandTotal = 0;
   for (const e of entries) {
-    const propertyName = e.properties?.name ?? "—";
-    const amt = Number(e.amount);
+    const propertyName = e.propertyName;
+    const amt = e.amount;
     grandTotal += amt;
     const row = byProperty.get(propertyName) ?? {
       name: propertyName,
@@ -140,7 +143,7 @@ export default async function AnnualPayoutExportPage({ params }: Props) {
         <table className="mt-3 w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-foreground/40">
-              <th className="py-2 text-left font-medium">Date</th>
+              <th className="py-2 text-left font-medium">Paid on</th>
               <th className="py-2 text-left font-medium">Property</th>
               <th className="py-2 text-left font-medium">Type</th>
               <th className="py-2 text-right font-medium">Amount</th>
@@ -150,14 +153,15 @@ export default async function AnnualPayoutExportPage({ params }: Props) {
             {entries.map((e) => (
               <tr className="border-b border-border/50" key={e.id}>
                 <td className="py-2 tabular-nums text-muted-foreground">
-                  {e.assignments?.due_at ? formatDate(e.assignments.due_at) : "—"}
+                  {formatDate(e.paidAt)}
                 </td>
-                <td className="py-2">{e.properties?.name ?? "—"}</td>
+                <td className="py-2">{e.propertyName}</td>
                 <td className="py-2 capitalize text-muted-foreground">
-                  {e.assignments?.assignment_type?.replace(/_/g, " ") ?? "cleaning"}
+                  {e.assignmentType?.replace(/_/g, " ") ?? "cleaning"}
+                  {e.dueAt ? ` · job ${formatDate(e.dueAt)}` : ""}
                 </td>
                 <td className="py-2 text-right tabular-nums">
-                  ${Number(e.amount).toFixed(2)}
+                  ${e.amount.toFixed(2)}
                 </td>
               </tr>
             ))}
@@ -177,7 +181,7 @@ export default async function AnnualPayoutExportPage({ params }: Props) {
 
       <footer className="mt-12 border-t border-border/40 pt-4 text-xs text-muted-foreground">
         <p>
-          Generated {new Date().toLocaleDateString("en-US", {
+          Generated {formatInTimeZone(new Date(), {
             month: "short",
             day: "numeric",
             year: "numeric",
@@ -189,8 +193,21 @@ export default async function AnnualPayoutExportPage({ params }: Props) {
         </p>
       </footer>
 
-      <div className="print-hide mt-10 flex gap-3">
+      <div className="print-hide mt-10 flex flex-wrap items-center gap-3">
         <PrintButton />
+        {/* Tax prep happens in January for last year, so make the year switchable. */}
+        <Link
+          className="inline-flex h-10 items-center rounded-full border border-border/70 px-4 text-sm font-medium hover:bg-muted"
+          href={`/dashboard/payouts/export/${cleanerId}/${year - 1}` as Route}
+        >
+          ← {year - 1}
+        </Link>
+        <Link
+          className="inline-flex h-10 items-center rounded-full border border-border/70 px-4 text-sm font-medium hover:bg-muted"
+          href={`/dashboard/payouts/export/${cleanerId}/${year + 1}` as Route}
+        >
+          {year + 1} →
+        </Link>
       </div>
     </main>
   );

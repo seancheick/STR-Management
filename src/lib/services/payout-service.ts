@@ -149,12 +149,23 @@ export async function cancelBatch(
   batchId: string,
 ): Promise<UpdateBatchStatusResult> {
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase
+  const { data: cancelled, error } = await supabase
     .from("payout_batches")
     .update({ status: "cancelled" })
     .eq("id", batchId)
-    .in("status", ["draft", "approved"]);
+    .in("status", ["draft", "approved"])
+    .select("id");
   if (error) return { success: false, error: error.message };
+  if (!cancelled || cancelled.length === 0) return { success: true };
+
+  // Release the jobs: new reports skip any job with an 'included' entry, so
+  // leaving them included would make these jobs unpayable via a report.
+  const { error: entryErr } = await supabase
+    .from("payout_entries")
+    .update({ status: "excluded" })
+    .eq("batch_id", batchId)
+    .eq("status", "included");
+  if (entryErr) return { success: false, error: entryErr.message };
   return { success: true };
 }
 

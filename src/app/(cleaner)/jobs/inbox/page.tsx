@@ -4,6 +4,7 @@ import { Bell, Inbox } from "lucide-react";
 
 import { InboxAcceptDecline } from "@/components/cleaner/inbox-accept-decline";
 import { requireRole } from "@/lib/auth/session";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 import { listNotificationsForCleaner } from "@/lib/queries/notifications";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
@@ -16,7 +17,7 @@ function formatWhen(iso: string): string {
   if (diffMin < 60) return `${diffMin}m ago`;
   const diffH = Math.round(diffMin / 60);
   if (diffH < 24) return `${diffH}h ago`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return formatInTimeZone(iso, { month: "short", day: "numeric" });
 }
 
 export default async function CleanerInboxPage() {

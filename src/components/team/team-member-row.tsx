@@ -3,7 +3,7 @@
 import { FileText } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import {
@@ -24,8 +24,16 @@ type Props = { member: TeamMemberRecord };
 
 export function TeamMemberRow({ member }: Props) {
   const [isPending, startTransition] = useTransition();
+  // Controlled so a failed or cancelled change snaps back to the saved role.
+  const [role, setRole] = useState(member.role);
+  // The workspace owner isn't an editable role; changing or deactivating
+  // that row from here would lock the owner out.
+  const isOwner = member.role === "owner";
 
   function handleToggleActive() {
+    if (member.active && !window.confirm(`Deactivate ${member.full_name}? They won't be able to sign in.`)) {
+      return;
+    }
     startTransition(async () => {
       const result = await toggleMemberActiveAction(member.id, !member.active);
       if (result.error) {
@@ -47,14 +55,17 @@ export function TeamMemberRow({ member }: Props) {
     });
   }
 
-  function handleRoleChange(role: string) {
-    const landing = ROLE_LANDING[role] ?? "/dashboard";
+  function handleRoleChange(next: string) {
+    if (!window.confirm(`Change ${member.full_name}'s role to ${next}?`)) return;
+    const landing = ROLE_LANDING[next] ?? "/dashboard";
+    setRole(next);
     startTransition(async () => {
-      const result = await updateMemberRoleAction(member.id, role);
+      const result = await updateMemberRoleAction(member.id, next);
       if (result.error) {
+        setRole(member.role);
         showToast(result.error, "error");
       } else {
-        showToast(`${member.full_name} is now ${role}. They'll land on ${landing}.`);
+        showToast(`${member.full_name} is now ${next}. They'll land on ${landing}.`);
       }
     });
   }
@@ -75,16 +86,23 @@ export function TeamMemberRow({ member }: Props) {
         )}
       </div>
 
-      <select
-        className="rounded-full border border-border bg-background px-3 py-1.5 text-sm focus:outline-none disabled:opacity-60"
-        defaultValue={member.role}
-        disabled={isPending}
-        onChange={(e) => handleRoleChange(e.target.value)}
-      >
-        {ROLES.map((r) => (
-          <option key={r} value={r}>{r}</option>
-        ))}
-      </select>
+      {isOwner ? (
+        <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary">
+          Owner
+        </span>
+      ) : (
+        <select
+          aria-label={`Role for ${member.full_name}`}
+          className="rounded-full border border-border bg-background px-3 py-1.5 text-sm focus:outline-none disabled:opacity-60"
+          disabled={isPending}
+          onChange={(e) => handleRoleChange(e.target.value)}
+          value={role}
+        >
+          {ROLES.map((r) => (
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+      )}
 
       {member.role === "cleaner" && (
         <>
@@ -114,6 +132,7 @@ export function TeamMemberRow({ member }: Props) {
         </>
       )}
 
+      {!isOwner && (
       <button
         className={`rounded-full border px-3 py-1.5 text-xs font-medium transition hover:opacity-80 disabled:opacity-60 ${
           member.active
@@ -126,6 +145,7 @@ export function TeamMemberRow({ member }: Props) {
       >
         {member.active ? "Deactivate" : "Reactivate"}
       </button>
+      )}
     </div>
   );
 }

@@ -12,6 +12,8 @@ import {
 import type { RecurringTaskRecord } from "@/lib/queries/recurring-tasks";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { showToast } from "@/components/ui/toast";
+import { formatInTimeZone } from "@/lib/ical/timezone";
+import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
 
 const CADENCES: Array<{ value: string; label: string }> = [
   { value: "weekly", label: "Every week" },
@@ -25,7 +27,7 @@ function formatCadence(c: string): string {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -41,7 +43,10 @@ type Props = {
 };
 
 export function RecurringTasksSection({ propertyId, tasks, cleaners }: Props) {
-  const [state, formAction] = useActionState(createRecurringTaskAction, initial);
+  const [state, formAction] = useActionState<WithSubmitted<RecurringTaskActionState>, FormData>(
+    keepValuesOnError(createRecurringTaskAction),
+    initial,
+  );
   const [isDeleting, startDelete] = useTransition();
 
   function handleDelete(taskId: string) {
@@ -103,6 +108,7 @@ export function RecurringTasksSection({ propertyId, tasks, cleaners }: Props) {
         <input
           className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
           maxLength={120}
+          defaultValue={state.submitted?.["title"]}
           name="title"
           placeholder="e.g. Quarterly deep clean"
           required
@@ -111,7 +117,7 @@ export function RecurringTasksSection({ propertyId, tasks, cleaners }: Props) {
         <div className="grid grid-cols-2 gap-2">
           <select
             className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
-            defaultValue="monthly"
+            defaultValue={state.submitted?.["cadence"] ?? "monthly"}
             name="cadence"
             required
           >
@@ -123,6 +129,7 @@ export function RecurringTasksSection({ propertyId, tasks, cleaners }: Props) {
           </select>
           <input
             className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            defaultValue={state.submitted?.["nextRunAt"]}
             name="nextRunAt"
             required
             type="date"
@@ -131,7 +138,7 @@ export function RecurringTasksSection({ propertyId, tasks, cleaners }: Props) {
         <div className="grid grid-cols-2 gap-2">
           <select
             className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
-            defaultValue=""
+            defaultValue={state.submitted?.["assigneeId"] ?? ""}
             name="assigneeId"
           >
             <option value="">Unassigned</option>
@@ -144,6 +151,7 @@ export function RecurringTasksSection({ propertyId, tasks, cleaners }: Props) {
           <input
             className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
             min="0"
+            defaultValue={state.submitted?.["fixedPayoutAmount"]}
             name="fixedPayoutAmount"
             placeholder="Payout ($)"
             step="0.01"
@@ -171,7 +179,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90 disabled:opacity-60"
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >

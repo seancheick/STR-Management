@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { CheckCircle2, DollarSign, Undo2 } from "lucide-react";
 
@@ -9,6 +9,8 @@ import {
   markUnpaidAction,
   type MarkPaidState,
 } from "@/app/(admin)/dashboard/schedule/actions";
+import { showToast } from "@/components/ui/toast";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 const METHODS: Array<{ value: "zelle" | "venmo" | "cash" | "check" | "bank_transfer" | "other"; label: string }> = [
   { value: "zelle", label: "Zelle" },
@@ -25,7 +27,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-95 disabled:opacity-60"
+      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -50,32 +52,62 @@ export function MarkPaidControl({
   paymentReference: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  const [state, formAction] = useActionState(markPaidAction, initialState);
+  // Some hosts (e.g. the dashboard drawer) hold a client copy of the job that
+  // never refreshes, so track the outcome here instead of relying on props.
+  const [local, setLocal] = useState<
+    { paidAt: string | null; method: string | null; reference: string | null } | null
+  >(null);
+  const [undoing, startUndo] = useTransition();
+  const [state, formAction] = useActionState(
+    async (prev: MarkPaidState, formData: FormData) => {
+      const res = await markPaidAction(prev, formData);
+      if (res.status === "success") {
+        setLocal({
+          paidAt: new Date().toISOString(),
+          method: String(formData.get("paymentMethod") ?? "") || null,
+          reference: String(formData.get("paymentReference") ?? "") || null,
+        });
+        setOpen(false);
+        showToast("Marked paid.");
+      }
+      return res;
+    },
+    initialState,
+  );
 
-  if (paidAt) {
-    const niceDate = new Date(paidAt).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
+  const shownPaidAt = local ? local.paidAt : paidAt;
+  const shownMethod = local ? local.method : paymentMethod;
+  const shownReference = local ? local.reference : paymentReference;
+
+  if (shownPaidAt) {
+    const niceDate = formatInTimeZone(shownPaidAt, { month: "short", day: "numeric" });
     return (
       <div className="flex items-center justify-between gap-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-3">
         <div className="flex items-start gap-3">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600" aria-hidden="true" />
           <div className="min-w-0 text-sm">
             <p className="font-semibold text-green-900">
-              Paid · {methodLabel(paymentMethod)} · {niceDate}
+              Paid · {methodLabel(shownMethod)} · {niceDate}
             </p>
-            {paymentReference && (
-              <p className="mt-0.5 text-xs text-green-800/80">Ref: {paymentReference}</p>
+            {shownReference && (
+              <p className="mt-0.5 text-xs text-green-800/80">Ref: {shownReference}</p>
             )}
           </div>
         </div>
         <button
-          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-green-200 bg-white px-3 text-xs font-medium text-green-700 transition hover:bg-green-100"
-          onClick={async () => {
-            if (confirm("Mark this job as unpaid?")) {
-              await markUnpaidAction(assignmentId);
-            }
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-green-200 bg-white px-3 text-xs font-medium text-green-700 transition hover:bg-green-100 disabled:opacity-60"
+          disabled={undoing}
+          onClick={() => {
+            if (!confirm("Mark this job as unpaid?")) return;
+            startUndo(async () => {
+              const res = await markUnpaidAction(assignmentId);
+              if (res.error) {
+                showToast(res.error, "error");
+              } else {
+                setLocal({ paidAt: null, method: null, reference: null });
+                showToast("Marked unpaid.");
+              }
+            });
           }}
           type="button"
         >

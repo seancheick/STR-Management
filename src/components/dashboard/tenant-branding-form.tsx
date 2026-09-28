@@ -11,12 +11,14 @@ import {
   updateTenantNameAction,
   uploadTenantLogoAction,
 } from "@/app/(admin)/dashboard/settings/actions";
+import { showToast } from "@/components/ui/toast";
+import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
 
 function NameSubmit() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-95 disabled:opacity-60"
+      className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -29,7 +31,7 @@ function LogoSubmit() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-95 disabled:opacity-60"
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -46,7 +48,10 @@ export function TenantBrandingForm({
   initialName: string;
   initialLogoUrl: string | null;
 }) {
-  const [nameState, nameAction] = useActionState(updateTenantNameAction, BRANDING_INITIAL);
+  const [nameState, nameAction] = useActionState(
+    keepValuesOnError(updateTenantNameAction),
+    BRANDING_INITIAL as WithSubmitted<typeof BRANDING_INITIAL>,
+  );
   const [logoState, logoAction] = useActionState(uploadTenantLogoAction, BRANDING_INITIAL);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -62,7 +67,11 @@ export function TenantBrandingForm({
 
   async function handleRemove() {
     if (!confirm("Remove the workspace logo?")) return;
-    await removeTenantLogoAction();
+    const res = await removeTenantLogoAction();
+    if (res.error) {
+      showToast(res.error, "error");
+      return;
+    }
     setPreviewUrl(null);
     if (fileRef.current) fileRef.current.value = "";
   }
@@ -82,7 +91,7 @@ export function TenantBrandingForm({
         <div className="flex items-center gap-2">
           <input
             className="h-10 flex-1 rounded-xl border border-input bg-background px-3 text-sm"
-            defaultValue={initialName}
+            defaultValue={nameState.submitted?.tenantName ?? initialName}
             id="tenantName"
             maxLength={80}
             name="tenantName"

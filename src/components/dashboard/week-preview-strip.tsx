@@ -108,7 +108,7 @@ export function WeekPreviewStrip({ assignments, days }: Props) {
               <span
                 className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold tabular-nums ${
                   isToday
-                    ? "bg-primary text-[#f7f5ef]"
+                    ? "bg-primary text-primary-foreground"
                     : "text-foreground group-hover:bg-muted-foreground/10"
                 }`}
               >

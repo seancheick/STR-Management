@@ -5,6 +5,7 @@ import { useTransition } from "react";
 
 import { toggleEntryPaidAction } from "@/app/(admin)/dashboard/payouts/actions";
 import { showToast } from "@/components/ui/toast";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 type Props = {
   entryId: string;
@@ -12,7 +13,7 @@ type Props = {
 };
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
   });

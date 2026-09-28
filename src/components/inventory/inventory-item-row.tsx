@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 
+import { showToast } from "@/components/ui/toast";
 import type { InventoryItemRecord } from "@/lib/queries/issues";
 import {
   updateInventoryQuantityAction,
@@ -21,7 +22,12 @@ export function InventoryItemRow({ item }: Props) {
     const newQty = parseInt(qty, 10);
     if (isNaN(newQty)) return;
     startTransition(async () => {
-      await updateInventoryQuantityAction(item.id, item.property_id, newQty);
+      const res = await updateInventoryQuantityAction(item.id, item.property_id, newQty);
+      // Keep the editor open on failure so the typed quantity isn't lost.
+      if (res.error) {
+        showToast(res.error, "error");
+        return;
+      }
       setEditing(false);
     });
   }
@@ -89,9 +95,13 @@ export function InventoryItemRow({ item }: Props) {
               <button
                 className="text-xs text-destructive underline-offset-2 hover:underline disabled:opacity-60"
                 disabled={isPending}
-                onClick={() =>
-                  startTransition(async () => { await archiveInventoryItemAction(item.id, item.property_id); })
-                }
+                onClick={() => {
+                  if (!confirm(`Archive "${item.name}"?`)) return;
+                  startTransition(async () => {
+                    const res = await archiveInventoryItemAction(item.id, item.property_id);
+                    if (res.error) showToast(res.error, "error");
+                  });
+                }}
                 type="button"
               >
                 Archive

@@ -6,6 +6,7 @@ import { CheckCircle2, DollarSign, Loader2 } from "lucide-react";
 import { bulkMarkPaidAction } from "@/app/(admin)/dashboard/schedule/actions";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
 import { showToast } from "@/components/ui/toast";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 const METHODS = [
   { value: "zelle", label: "Zelle" },
@@ -25,12 +26,12 @@ export function BulkMarkPaid({ jobs }: { jobs: AssignmentListRecord[] }) {
   const groups = useMemo(() => {
     const map = new Map<
       string,
-      { cleanerName: string; items: AssignmentListRecord[]; total: number }
+      { key: string; cleanerName: string; items: AssignmentListRecord[]; total: number }
     >();
     for (const j of jobs) {
       const key = j.cleaner_id ?? "__unassigned";
       const name = j.cleaners?.full_name ?? "Unassigned";
-      if (!map.has(key)) map.set(key, { cleanerName: name, items: [], total: 0 });
+      if (!map.has(key)) map.set(key, { key, cleanerName: name, items: [], total: 0 });
       const group = map.get(key)!;
       group.items.push(j);
       group.total += Number(j.fixed_payout_amount ?? 0);
@@ -115,7 +116,7 @@ export function BulkMarkPaid({ jobs }: { jobs: AssignmentListRecord[] }) {
           const allSelected = g.items.every((i) => selected.has(i.id));
           const someSelected = !allSelected && g.items.some((i) => selected.has(i.id));
           return (
-            <div className="rounded-xl border border-border/60 bg-background/60 p-3" key={g.cleanerName}>
+            <div className="rounded-xl border border-border/60 bg-background/60 p-3" key={g.key}>
               <label className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
                   <input
@@ -134,7 +135,7 @@ export function BulkMarkPaid({ jobs }: { jobs: AssignmentListRecord[] }) {
               </label>
               <ul className="mt-2 space-y-1">
                 {g.items.map((j) => {
-                  const date = new Date(j.due_at).toLocaleDateString("en-US", {
+                  const date = formatInTimeZone(j.due_at, {
                     month: "short",
                     day: "numeric",
                   });
@@ -198,7 +199,7 @@ export function BulkMarkPaid({ jobs }: { jobs: AssignmentListRecord[] }) {
         </div>
 
         <button
-          className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-95 disabled:opacity-60"
+          className="inline-flex h-11 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
           disabled={pending || selected.size === 0 || !method}
           onClick={handleSubmit}
           type="button"

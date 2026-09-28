@@ -2,6 +2,11 @@ import { AlertTriangle, MailCheck } from "lucide-react";
 
 import { SignInForm } from "@/components/auth/sign-in-form";
 
+const AUTH_ERRORS: Record<string, string> = {
+  link_expired: "That link has expired. Request a new one.",
+  link_invalid: "That link is invalid or already used. Request a new one.",
+};
+
 type SignInPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
@@ -10,8 +15,11 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = (await searchParams) ?? {};
   const redirectTo =
     typeof params.redirectTo === "string" ? params.redirectTo : undefined;
+  // Only known codes render; arbitrary URL text never reaches the page.
   const authError =
-    typeof params.authError === "string" ? params.authError : undefined;
+    typeof params.authError === "string"
+      ? (AUTH_ERRORS[params.authError] ?? AUTH_ERRORS.link_invalid)
+      : undefined;
   const justSignedUp = params.signedUp === "1";
 
   return (

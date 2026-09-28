@@ -49,11 +49,9 @@ export function HomeSignInCard() {
       </div>
 
       {/* Same SignInForm, just a different post-login landing. Cleaner tab uses
-          /jobs; owner tab uses /dashboard (default). */}
-      <SignInForm
-        key={tab}
-        redirectTo={tab === "cleaner" ? "/jobs" : "/dashboard"}
-      />
+          /jobs; owner tab uses /dashboard (default). No key: switching tabs
+          must not wipe what was typed. */}
+      <SignInForm redirectTo={tab === "cleaner" ? "/jobs" : "/dashboard"} />
     </div>
   );
 }

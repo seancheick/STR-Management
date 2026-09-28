@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth/session";
 import { listRecentNotifications, getNotificationStats } from "@/lib/queries/notifications";
 import { PushEnableButton } from "@/components/notifications/push-enable-button";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 const statusColors: Record<string, string> = {
   sent: "bg-green-100 text-green-700",
@@ -18,7 +19,7 @@ const typeLabels: Record<string, string> = {
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
     hour: "numeric",

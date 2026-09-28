@@ -11,6 +11,7 @@ import {
 } from "@/lib/queries/issues";
 import { IssueActionButtons } from "@/components/issues/issue-action-buttons";
 import { RestockActionButtons } from "@/components/issues/restock-action-buttons";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 const severityColors: Record<string, string> = {
   low: "bg-slate-50 text-slate-600 border border-slate-200",
@@ -34,7 +35,7 @@ const typeLabels: Record<string, string> = {
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -155,6 +156,11 @@ export default async function IssuesPage() {
                       {req.inventory_item?.name ?? "Unknown item"} ×{req.quantity_needed}{" "}
                       {req.inventory_item?.unit}
                     </p>
+                    {req.inventory_item?.properties?.name && (
+                      <p className="text-sm text-muted-foreground">
+                        {req.inventory_item.properties.name}
+                      </p>
+                    )}
                     {req.notes && (
                       <p className="text-sm text-muted-foreground">{req.notes}</p>
                     )}
@@ -162,7 +168,7 @@ export default async function IssuesPage() {
                       {formatDate(req.created_at)}
                     </p>
                   </div>
-                  <RestockActionButtons requestId={req.id} />
+                  <RestockActionButtons requestId={req.id} status={req.status} />
                 </div>
               </div>
             ))}

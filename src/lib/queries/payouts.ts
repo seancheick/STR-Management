@@ -1,5 +1,6 @@
 import "server-only";
 
+import { DEFAULT_TIMEZONE, zonedTimeToUtc } from "@/lib/ical/timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
 
@@ -36,11 +37,12 @@ export type PayoutEntryRecord = {
   paid_by_id: string | null;
   created_at: string;
   cleaners?: { full_name: string } | null;
-  properties?: { name: string } | null;
+  properties?: { name: string; timezone?: string | null } | null;
   assignments?: {
     due_at: string;
     assignment_type: string;
     expected_duration_min: number | null;
+    paid_at?: string | null;
   } | null;
 };
 
@@ -89,7 +91,7 @@ export async function listPayoutEntries(
   return (data ?? []) as unknown as PayoutEntryRecord[];
 }
 
-/** Entries visible to a cleaner (approved/paid batches only). */
+/** Entries visible to a cleaner (RLS limits cleaners to approved/paid batches). */
 export async function listMyPayoutEntries(
   cleanerId: string,
 ): Promise<PayoutEntryRecord[]> {
@@ -98,8 +100,8 @@ export async function listMyPayoutEntries(
     .from("payout_entries")
     .select(
       `*,
-       properties(name),
-       assignments(due_at, assignment_type, expected_duration_min)`,
+       properties(name, timezone),
+       assignments(due_at, assignment_type, expected_duration_min, paid_at)`,
     )
     .eq("cleaner_id", cleanerId)
     .eq("status", "included")
@@ -111,8 +113,8 @@ export async function listMyPayoutEntries(
 const CLEANER_PENDING_PAYOUT_ASSIGNMENT_SELECT = `
   id, owner_id, property_id, cleaner_id, assignment_type,
   status, ack_status, priority, checkout_at, due_at,
-  expected_duration_min, fixed_payout_amount, created_at,
-  properties:property_id ( name, address_line_1, city ),
+  expected_duration_min, fixed_payout_amount, paid_at, created_at,
+  properties:property_id ( name, address_line_1, city, timezone ),
   cleaners:cleaner_id ( full_name )
 `.trim();
 
@@ -253,28 +255,108 @@ export async function getPendingPayoutTotal(): Promise<{
  * All payout entries for a given cleaner in a given year, for tax/1099
  * preparation. Includes property name and due date from the assignment.
  */
+/** One payment to a cleaner, dated by when it was actually paid. */
+export type CleanerYearPayment = {
+  id: string;
+  paidAt: string;
+  amount: number;
+  propertyName: string;
+  assignmentType: string | null;
+  dueAt: string | null;
+};
+
+/**
+ * Payments made to a cleaner in a calendar year (cash basis, for 1099s):
+ * report entries that were paid (entry stamp, or the report marked paid) plus
+ * jobs paid directly from the schedule outside any report. Draft, approved-but-
+ * unpaid and cancelled reports don't count. Year bounds use the app zone.
+ */
 export async function listCleanerPayoutsForYear(
   cleanerId: string,
   year: number,
-): Promise<PayoutEntryRecord[]> {
+): Promise<CleanerYearPayment[]> {
   const supabase = await createServerSupabaseClient();
-  const start = new Date(Date.UTC(year, 0, 1)).toISOString();
-  const end = new Date(Date.UTC(year + 1, 0, 1)).toISOString();
+  const start = zonedTimeToUtc(year, 1, 1, 0, 0, DEFAULT_TIMEZONE).getTime();
+  const end = zonedTimeToUtc(year + 1, 1, 1, 0, 0, DEFAULT_TIMEZONE).getTime();
+  const inYear = (iso: string | null | undefined): iso is string => {
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return t >= start && t < end;
+  };
 
-  const { data } = await supabase
-    .from("payout_entries")
-    .select(
-      `*,
-       properties(name),
-       assignments(due_at, assignment_type, expected_duration_min)`,
-    )
-    .eq("cleaner_id", cleanerId)
-    .eq("status", "included")
-    .gte("created_at", start)
-    .lt("created_at", end)
-    .order("created_at", { ascending: true });
+  const [entriesRes, directRes] = await Promise.all([
+    supabase
+      .from("payout_entries")
+      .select(
+        `id, amount, paid_at, assignment_id,
+         payout_batches:batch_id ( status, paid_at ),
+         properties(name),
+         assignments(due_at, assignment_type, paid_at)`,
+      )
+      .eq("cleaner_id", cleanerId)
+      .eq("status", "included"),
+    supabase
+      .from("assignments")
+      .select("id, due_at, assignment_type, fixed_payout_amount, paid_at, properties:property_id ( name )")
+      .eq("cleaner_id", cleanerId)
+      .gte("paid_at", new Date(start).toISOString())
+      .lt("paid_at", new Date(end).toISOString()),
+  ]);
+  if (entriesRes.error) throw new Error(entriesRes.error.message);
+  if (directRes.error) throw new Error(directRes.error.message);
 
-  return (data as unknown as PayoutEntryRecord[] | null) ?? [];
+  type EntryRow = {
+    id: string;
+    amount: number;
+    paid_at: string | null;
+    assignment_id: string;
+    payout_batches: { status: string; paid_at: string | null } | null;
+    properties: { name: string } | null;
+    assignments: { due_at: string; assignment_type: string; paid_at: string | null } | null;
+  };
+  type DirectRow = {
+    id: string;
+    due_at: string;
+    assignment_type: string;
+    fixed_payout_amount: number | null;
+    paid_at: string | null;
+    properties: { name: string } | null;
+  };
+
+  const payments: CleanerYearPayment[] = [];
+  const paidViaReport = new Set<string>();
+  for (const e of (entriesRes.data ?? []) as unknown as EntryRow[]) {
+    if (e.payout_batches?.status === "cancelled") continue;
+    const paidAt =
+      e.paid_at ??
+      (e.payout_batches?.status === "paid" ? e.payout_batches.paid_at : null) ??
+      e.assignments?.paid_at ??
+      null;
+    if (!paidAt) continue;
+    paidViaReport.add(e.assignment_id);
+    if (!inYear(paidAt)) continue;
+    payments.push({
+      id: e.id,
+      paidAt,
+      amount: Number(e.amount),
+      propertyName: e.properties?.name ?? "—",
+      assignmentType: e.assignments?.assignment_type ?? null,
+      dueAt: e.assignments?.due_at ?? null,
+    });
+  }
+  for (const a of (directRes.data ?? []) as unknown as DirectRow[]) {
+    if (paidViaReport.has(a.id) || !inYear(a.paid_at)) continue;
+    payments.push({
+      id: a.id,
+      paidAt: a.paid_at,
+      amount: Number(a.fixed_payout_amount ?? 0),
+      propertyName: a.properties?.name ?? "—",
+      assignmentType: a.assignment_type,
+      dueAt: a.due_at,
+    });
+  }
+
+  return payments.sort((a, b) => a.paidAt.localeCompare(b.paidAt));
 }
 
 export function groupEntriesByClean(

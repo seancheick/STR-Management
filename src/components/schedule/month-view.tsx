@@ -21,6 +21,10 @@ export type MonthViewProps = {
   reservations: ReservationRecord[];
   monthDays: string[]; // ISO strings for every day in the month
   monthOffset: number;
+  /** Owner/admin: may create jobs. */
+  canManage?: boolean;
+  /** "&cleaner=…&property=…" — active filters to keep when paging. */
+  filterQuery?: string;
   view: "week" | "month";
 };
 
@@ -136,6 +140,8 @@ export function MonthView({
   reservations,
   monthDays,
   monthOffset,
+  canManage = false,
+  filterQuery = "",
   view,
 }: MonthViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -287,7 +293,7 @@ export function MonthView({
           <Link
             aria-label="Previous month"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card text-sm font-medium transition hover:bg-muted"
-            href={`?view=month&month=${monthOffset - 1}` as Route}
+            href={`?view=month&month=${monthOffset - 1}${filterQuery}` as Route}
           >
             ←
           </Link>
@@ -295,7 +301,7 @@ export function MonthView({
           <Link
             aria-label="Next month"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card text-sm font-medium transition hover:bg-muted"
-            href={`?view=month&month=${monthOffset + 1}` as Route}
+            href={`?view=month&month=${monthOffset + 1}${filterQuery}` as Route}
           >
             →
           </Link>
@@ -305,29 +311,31 @@ export function MonthView({
           <Link
             className={`inline-flex h-9 items-center rounded-full px-4 text-sm font-medium transition ${
               view === "week"
-                ? "bg-primary text-[#f7f5ef]"
+                ? "bg-primary text-primary-foreground"
                 : "border border-border/70 bg-card text-foreground hover:bg-muted"
             }`}
-            href="?week=0"
+            href={`?view=week&week=0${filterQuery}` as Route}
           >
             Week
           </Link>
           <Link
             className={`inline-flex h-9 items-center rounded-full px-4 text-sm font-medium transition ${
               view === "month"
-                ? "bg-primary text-[#f7f5ef]"
+                ? "bg-primary text-primary-foreground"
                 : "border border-border/70 bg-card text-foreground hover:bg-muted"
             }`}
-            href={`?view=month&month=${monthOffset}` as Route}
+            href={`?view=month&month=${monthOffset}${filterQuery}` as Route}
           >
             Month
           </Link>
-          <Link
-            className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90"
-            href="/dashboard/assignments/new"
-          >
-            + New job
-          </Link>
+          {canManage && (
+            <Link
+              className="inline-flex h-9 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+              href="/dashboard/assignments/new"
+            >
+              + New job
+            </Link>
+          )}
         </div>
       </div>
 
@@ -370,7 +378,7 @@ export function MonthView({
       </div>
 
       {/* Empty-state overlay when there's literally nothing in the month */}
-      {isEmpty && <EmptyMonthCta />}
+      {isEmpty && <EmptyMonthCta canManage={canManage} />}
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-muted-foreground">
@@ -496,7 +504,7 @@ function TodayFocusStrip({
 
 // ─── Empty-month CTA ──────────────────────────────────────────────────────────
 
-function EmptyMonthCta() {
+function EmptyMonthCta({ canManage }: { canManage: boolean }) {
   return (
     <div className="mx-auto flex max-w-xl flex-col items-center gap-3 rounded-2xl border border-dashed border-border/70 bg-card px-6 py-8 text-center">
       <Sparkles className="h-6 w-6 text-primary" aria-hidden="true" />
@@ -506,17 +514,19 @@ function EmptyMonthCta() {
       </p>
       <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
         <Link
-          className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-90"
+          className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
           href="/dashboard/calendar"
         >
           Connect a calendar
         </Link>
-        <Link
-          className="inline-flex h-9 items-center rounded-full border border-border/70 bg-card px-4 text-sm font-medium transition hover:bg-muted"
-          href="/dashboard/assignments/new"
-        >
-          + New cleaning
-        </Link>
+        {canManage && (
+          <Link
+            className="inline-flex h-9 items-center rounded-full border border-border/70 bg-card px-4 text-sm font-medium transition hover:bg-muted"
+            href="/dashboard/assignments/new"
+          >
+            + New cleaning
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -552,6 +562,8 @@ function WeekRow({
   today: Date;
   week: Date[];
 }) {
+  // Days whose "+N more" was tapped show every job instead of the first few.
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set());
   const STRIPE_HEIGHT = 18;
   const STRIPE_GAP = 3;
   const stripeRows = stripes.visible.length + (stripes.overflow > 0 ? 1 : 0);
@@ -613,6 +625,8 @@ function WeekRow({
         const inMonth = cell.getMonth() === monthStart.getMonth();
         const isToday = sameLocalDay(cell, today);
         const dayJobs = byDay.get(dayKey(cell)) ?? [];
+        const expanded = expandedDays.has(dayKey(cell));
+        const shownJobs = expanded ? dayJobs : dayJobs.slice(0, MAX_PILLS_PER_CELL);
 
         // Apply highlight dimming if a focus chip is active
         const shouldDimCell =
@@ -636,7 +650,7 @@ function WeekRow({
               <span
                 className={`inline-flex h-6 min-w-[1.5rem] items-center justify-center text-[11px] font-semibold tabular-nums ${
                   isToday
-                    ? "rounded-full bg-primary px-1.5 text-[#f7f5ef]"
+                    ? "rounded-full bg-primary px-1.5 text-primary-foreground"
                     : inMonth
                       ? "text-foreground"
                       : "text-muted-foreground/40"
@@ -655,7 +669,7 @@ function WeekRow({
               className="flex flex-col gap-1"
               style={pillTopPad ? { marginTop: `${pillTopPad}px` } : undefined}
             >
-              {dayJobs.slice(0, MAX_PILLS_PER_CELL).map((a) => (
+              {shownJobs.map((a) => (
                 <CalendarPill
                   assignment={a}
                   dimmed={
@@ -673,11 +687,19 @@ function WeekRow({
               ))}
               {dayJobs.length > MAX_PILLS_PER_CELL && (
                 <button
+                  aria-expanded={expanded}
                   className="text-left text-[10px] font-semibold text-primary hover:underline"
-                  onClick={() => onSelect(dayJobs[MAX_PILLS_PER_CELL].id)}
+                  onClick={() =>
+                    setExpandedDays((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(dayKey(cell))) next.delete(dayKey(cell));
+                      else next.add(dayKey(cell));
+                      return next;
+                    })
+                  }
                   type="button"
                 >
-                  + {dayJobs.length - MAX_PILLS_PER_CELL} more…
+                  {expanded ? "Show less" : `+ ${dayJobs.length - MAX_PILLS_PER_CELL} more…`}
                 </button>
               )}
             </div>

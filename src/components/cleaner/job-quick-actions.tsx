@@ -1,6 +1,7 @@
 "use client";
 
 import { Clock, Loader2, MapPin, UserX } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { declineJobAction, runningLateAction } from "@/app/(cleaner)/jobs/actions";
@@ -27,6 +28,7 @@ export function JobQuickActions({ assignmentId, status, address }: Props) {
   const [declineOpen, setDeclineOpen] = useState(false);
   const [lateOpen, setLateOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const mapsHref = address
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
@@ -40,6 +42,8 @@ export function JobQuickActions({ assignmentId, status, address }: Props) {
       } else {
         showToast("Job unassigned. We suggested the next cleaner to your host.");
         setDeclineOpen(false);
+        // The job is no longer ours, so this page would 404 on refresh.
+        router.push("/jobs");
       }
     });
   }
@@ -101,7 +105,7 @@ export function JobQuickActions({ assignmentId, status, address }: Props) {
           <div className="mt-2 flex flex-wrap gap-2">
             {ETA_PRESETS.map((eta) => (
               <button
-                className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-medium text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
+                className="min-h-10 rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
                 disabled={isPending}
                 key={eta}
                 onClick={() => handleRunLate(eta)}
@@ -115,7 +119,7 @@ export function JobQuickActions({ assignmentId, status, address }: Props) {
               </button>
             ))}
             <button
-              className="rounded-full px-3 py-1 text-xs text-amber-900/70 transition hover:bg-amber-100"
+              className="min-h-10 rounded-full px-4 py-2 text-sm text-amber-900/70 transition hover:bg-amber-100"
               onClick={() => setLateOpen(false)}
               type="button"
             >
@@ -133,7 +137,7 @@ export function JobQuickActions({ assignmentId, status, address }: Props) {
           <div className="mt-2 flex flex-wrap gap-2">
             {DECLINE_REASONS.map((r) => (
               <button
-                className="rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-medium text-red-900 transition hover:bg-red-100 disabled:opacity-60"
+                className="min-h-10 rounded-full border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-900 transition hover:bg-red-100 disabled:opacity-60"
                 disabled={isPending}
                 key={r.key}
                 onClick={() => handleDecline(r.key)}
@@ -147,7 +151,7 @@ export function JobQuickActions({ assignmentId, status, address }: Props) {
               </button>
             ))}
             <button
-              className="rounded-full px-3 py-1 text-xs text-red-900/70 transition hover:bg-red-100"
+              className="min-h-10 rounded-full px-4 py-2 text-sm text-red-900/70 transition hover:bg-red-100"
               onClick={() => setDeclineOpen(false)}
               type="button"
             >

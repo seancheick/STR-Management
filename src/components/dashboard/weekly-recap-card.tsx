@@ -1,6 +1,7 @@
 import { CheckCircle2, RefreshCw, TrendingUp, Banknote, UserMinus } from "lucide-react";
 
 import type { WeeklyRecap } from "@/lib/queries/recap";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 function formatRate(rate: number | null): string {
   if (rate === null) return "—";
@@ -10,7 +11,7 @@ function formatRate(rate: number | null): string {
 function rangeLabel(start: string, end: string): string {
   const s = new Date(start);
   const e = new Date(end);
-  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const fmt = (d: Date) => formatInTimeZone(d, { month: "short", day: "numeric" });
   return `${fmt(s)} – ${fmt(e)}`;
 }
 

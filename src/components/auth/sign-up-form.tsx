@@ -11,7 +11,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-12 w-full items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-[#f7f5ef] transition hover:opacity-95 disabled:opacity-60"
+      className="inline-flex h-12 w-full items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -45,6 +45,7 @@ export function SignUpForm() {
           autoComplete="name"
           className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
           id="fullName"
+          defaultValue={state.values?.fullName}
           name="fullName"
           placeholder="Alex Rivera"
           required
@@ -60,6 +61,7 @@ export function SignUpForm() {
         <input
           autoComplete="email"
           className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
+          defaultValue={state.values?.email}
           id="email"
           name="email"
           placeholder="alex@coastalstays.com"

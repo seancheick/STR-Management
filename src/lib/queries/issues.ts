@@ -54,7 +54,12 @@ export type RestockRequestRecord = {
   status: string;
   notes: string | null;
   created_at: string;
-  inventory_item: { name: string; unit: string; property_id: string } | null;
+  inventory_item: {
+    name: string;
+    unit: string;
+    property_id: string;
+    properties: { name: string } | null;
+  } | null;
 };
 
 export async function listOpenIssues(propertyId?: string): Promise<IssueRecord[]> {
@@ -160,9 +165,10 @@ export async function listPendingRestockRequests(propertyId?: string): Promise<R
     .select(`
       id, owner_id, assignment_id, inventory_item_id, requested_by_id,
       quantity_needed, status, notes, created_at,
-      inventory_item:inventory_item_id ( name, unit, property_id )
+      inventory_item:inventory_item_id ( name, unit, property_id, properties:property_id ( name ) )
     `)
-    .eq("status", "pending")
+    // Acknowledged requests still need fulfilling, so keep them listed.
+    .in("status", ["pending", "acknowledged"])
     .order("created_at", { ascending: false });
 
   if (propertyId) {

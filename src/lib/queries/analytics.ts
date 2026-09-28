@@ -219,19 +219,24 @@ export async function getPortfolioSummary(
 ): Promise<PortfolioSummary> {
   const supabase = await createServerSupabaseClient();
 
-  const thirtyDaysAgo = new Date();
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+  // Bounded above by now: calendar sync creates future jobs, which would
+  // inflate "last 30 days" and drag down the approval rate.
   const [totalRes, approvedRes] = await Promise.all([
     supabase
       .from("assignments")
       .select("id", { count: "exact", head: true })
       .gte("due_at", thirtyDaysAgo.toISOString())
+      .lte("due_at", now.toISOString())
       .not("status", "eq", "cancelled"),
     supabase
       .from("assignments")
       .select("id", { count: "exact", head: true })
       .gte("due_at", thirtyDaysAgo.toISOString())
+      .lte("due_at", now.toISOString())
       .eq("status", "approved"),
   ]);
 

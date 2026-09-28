@@ -14,6 +14,7 @@ import { useEffect } from "react";
 
 import type { AssignmentDetailAction } from "@/app/actions/assignments";
 import { MarkPaidControl } from "@/components/assignments/mark-paid-control";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 // ─── Status helpers ────────────────────────────────────────────────────────────
 
@@ -28,12 +29,14 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
 };
 
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return formatInTimeZone(iso, { hour: "numeric", minute: "2-digit" });
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 type Props = {
+  /** Marking paid is owner/admin-only (markPaidAction). */
+  canManage: boolean;
   detail: NonNullable<AssignmentDetailAction>;
   onClose: () => void;
   onAssignClick: () => void;
@@ -41,7 +44,7 @@ type Props = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AssignmentDrawer({ detail, onClose, onAssignClick }: Props) {
+export function AssignmentDrawer({ canManage, detail, onClose, onAssignClick }: Props) {
   const status = STATUS_CONFIG[detail.status] ?? { label: detail.status, cls: "bg-muted text-muted-foreground border-border" };
 
   // Close on Escape
@@ -165,7 +168,7 @@ export function AssignmentDrawer({ detail, onClose, onAssignClick }: Props) {
                   <button
                     type="button"
                     onClick={onAssignClick}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-[#f7f5ef] transition hover:opacity-90"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
                   >
                     Assign cleaner
                   </button>
@@ -272,7 +275,8 @@ export function AssignmentDrawer({ detail, onClose, onAssignClick }: Props) {
         </div>
 
         {/* Payment — only for jobs that can be paid (approved or pending review) */}
-        {(detail.status === "approved" ||
+        {canManage &&
+          (detail.status === "approved" ||
           detail.status === "completed_pending_review" ||
           detail.paidAt) && (
           <div className="border-t border-border/60 px-5 py-4">
@@ -288,10 +292,12 @@ export function AssignmentDrawer({ detail, onClose, onAssignClick }: Props) {
         {/* Footer */}
         <div className="border-t border-border/60 px-5 py-4">
           <Link
-            href={`/dashboard/assignments/${detail.id}` as Route}
+            // No admin detail route exists; the job page shows checklist,
+            // photos and notes, and admins can open any job there.
+            href={`/jobs/${detail.id}` as Route}
             className="flex w-full items-center justify-center gap-1.5 rounded-full border border-border/70 py-2.5 text-sm font-medium transition hover:border-primary/30 hover:bg-muted"
           >
-            View full details
+            Open job page
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>

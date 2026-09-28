@@ -41,8 +41,14 @@ export function SignInForm({ redirectTo }: SignInFormProps) {
   });
 
   const normalizedRedirectTo = useMemo(() => {
-    if (typeof redirectTo === "string" && redirectTo.startsWith("/jobs")) {
-      return "/jobs";
+    // Keep deep links (e.g. a push notification's /jobs/<id>) but only to
+    // in-app sections; the proxy still enforces the role on arrival.
+    if (
+      typeof redirectTo === "string" &&
+      /^\/(jobs|dashboard)(\/|\?|$)/.test(redirectTo) &&
+      !redirectTo.includes("\\")
+    ) {
+      return redirectTo;
     }
 
     return "/dashboard";

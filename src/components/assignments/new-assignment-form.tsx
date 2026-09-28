@@ -7,6 +7,7 @@ import type { AssignmentActionState } from "@/app/(admin)/dashboard/assignments/
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import type { TemplateRecord } from "@/lib/queries/templates";
+import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
 
 type NewAssignmentFormProps = {
   action: (
@@ -69,7 +70,7 @@ function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <button
-      className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-[#f7f5ef] transition hover:opacity-95 disabled:opacity-60"
+      className="inline-flex h-11 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
       disabled={pending}
       type="submit"
     >
@@ -89,7 +90,7 @@ export function NewAssignmentForm({
   cleaners,
   templates,
 }: NewAssignmentFormProps) {
-  const [state, formAction] = useActionState(action, initialState);
+  const [state, formAction] = useActionState(keepValuesOnError(action), initialState as WithSubmitted<typeof initialState>);
 
   // Default checkout: tomorrow at 11 AM (standard Airbnb checkout)
   const [checkoutVal, setCheckoutVal] = useState(() => {
@@ -216,7 +217,7 @@ export function NewAssignmentForm({
                   onClick={() => handleChipClick(chip)}
                   className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
                     isActive
-                      ? "border-primary bg-primary text-[#f7f5ef]"
+                      ? "border-primary bg-primary text-primary-foreground"
                       : disabled
                         ? "border-border/50 bg-muted/40 text-muted-foreground/50 cursor-not-allowed"
                         : "border-border/70 bg-card text-foreground hover:border-primary/40 hover:bg-primary/5"
@@ -278,6 +279,7 @@ export function NewAssignmentForm({
           <select
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
             id="templateId"
+            defaultValue={state.submitted?.["templateId"]}
             name="templateId"
           >
             <option value="">Use property default</option>
@@ -297,7 +299,7 @@ export function NewAssignmentForm({
           </label>
           <select
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
-            defaultValue="normal"
+            defaultValue={state.submitted?.["priority"] ?? "normal"}
             id="priority"
             name="priority"
           >
@@ -317,6 +319,7 @@ export function NewAssignmentForm({
             className="h-12 w-full rounded-xl border border-input bg-background px-4 text-sm"
             id="expectedDurationMin"
             min="15"
+            defaultValue={state.submitted?.["expectedDurationMin"]}
             name="expectedDurationMin"
             step="15"
             type="number"

@@ -4,6 +4,7 @@ import { listProperties } from "@/lib/queries/properties";
 import { AddCalendarSourceForm } from "@/components/calendar/add-calendar-source-form";
 import { CalendarSourceRow } from "@/components/calendar/calendar-source-row";
 import { addCalendarSourceAction } from "./actions";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 const platformLabels: Record<string, string> = {
   airbnb: "Airbnb",
@@ -25,7 +26,7 @@ const resultLabels: Record<string, string> = {
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("en-US", {
+  return formatInTimeZone(iso, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -38,7 +39,9 @@ type CalendarPageProps = {
 };
 
 export default async function CalendarPage({ searchParams }: CalendarPageProps) {
-  await requireRole(["owner", "admin", "supervisor"]);
+  const profile = await requireRole(["owner", "admin", "supervisor"]);
+  // Adding/removing sources is owner/admin-only; supervisors can still sync.
+  const canManage = profile.role === "owner" || profile.role === "admin";
 
   const params = (await searchParams) ?? {};
   const propertyIdParam =
@@ -83,13 +86,14 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
         ) : (
           <div className="flex flex-col gap-3">
             {sources.map((source) => (
-              <CalendarSourceRow key={source.id} source={source} />
+              <CalendarSourceRow canRemove={canManage} key={source.id} source={source} />
             ))}
           </div>
         )}
       </section>
 
       {/* Add source form */}
+      {canManage && (
       <section
         className="scroll-mt-8 rounded-[1.75rem] border border-border/70 bg-card p-6 shadow-sm"
         id="add-source"
@@ -107,6 +111,7 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
           properties={propertiesResult.data}
         />
       </section>
+      )}
 
       {/* Sync history */}
       {syncLogs.length > 0 && (
