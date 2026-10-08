@@ -1,7 +1,15 @@
 import "server-only";
 
 import { parseIcal, type TurnoverCandidate } from "./parser";
-import { DEFAULT_TIMEZONE } from "./timezone";
+import { DEFAULT_TIMEZONE, formatInTimeZone } from "./timezone";
+import { assertPublicHttpsUrl } from "./url-guard";
+import {
+  planReconciliation,
+  sourceReferenceFor,
+  SYNC_MUTABLE_STATUSES,
+  type ImportedAssignment,
+} from "./reconcile";
+import { sendNotification } from "@/lib/notifications/notification-service";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 export type SyncSourceInput = {
@@ -15,6 +23,10 @@ export type SyncResult = {
   eventsFound: number;
   assignmentsCreated: number;
   assignmentsSkipped: number;
+  /** Upcoming jobs whose booking dates changed in the feed. */
+  assignmentsRescheduled: number;
+  /** Upcoming jobs cancelled because their booking left the feed. */
+  assignmentsCancelled: number;
   reservationsUpserted: number;
   conflictCount: number;
   conflicts: ConflictWarning[];
@@ -46,17 +58,58 @@ export type ConflictWarning = {
   details: string;
 };
 
-/** Fetch raw iCal text from a URL. */
+const MAX_ICAL_BYTES = 5 * 1024 * 1024;
+const MAX_REDIRECTS = 3;
+
+/**
+ * Fetch raw iCal text from a user-supplied URL. Every hop (including
+ * redirects) must pass the public-https guard, and the body is capped.
+ */
 async function fetchIcal(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "AirbnbOpsPortal/1.0" },
-    // 10 second timeout
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) {
-    throw new Error(`iCal fetch failed: ${res.status} ${res.statusText}`);
+  const signal = AbortSignal.timeout(10_000);
+  let target = url;
+
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    await assertPublicHttpsUrl(target);
+    const res = await fetch(target, {
+      headers: { "User-Agent": "AirbnbOpsPortal/1.0" },
+      redirect: "manual",
+      signal,
+    });
+
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get("location");
+      if (!location) throw new Error(`iCal fetch failed: redirect without location`);
+      target = new URL(location, target).toString();
+      continue;
+    }
+    if (!res.ok) {
+      throw new Error(`iCal fetch failed: ${res.status} ${res.statusText}`);
+    }
+    return readCapped(res, MAX_ICAL_BYTES);
   }
-  return res.text();
+  throw new Error("iCal fetch failed: too many redirects");
+}
+
+async function readCapped(res: Response, maxBytes: number): Promise<string> {
+  const declared = Number(res.headers.get("content-length") ?? 0);
+  if (declared > maxBytes) throw new Error("iCal fetch failed: calendar file is too large");
+  if (!res.body) return "";
+
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new Error("iCal fetch failed: calendar file is too large");
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 /**
@@ -129,7 +182,7 @@ async function importCandidate(
   input: SyncSourceInput,
   candidate: TurnoverCandidate,
 ): Promise<{ created: boolean; conflict: ConflictWarning | null }> {
-  const sourceRef = `ical:${candidate.uid}`;
+  const sourceRef = sourceReferenceFor(candidate.uid);
 
   // Check if already imported
   const { data: existing } = await supabase
@@ -180,6 +233,7 @@ async function importCandidate(
     next_checkin_at: candidate.nextCheckinAt,
     source_type: "ical",
     source_reference: sourceRef,
+    calendar_source_id: input.calendarSourceId,
     created_by_user_id: input.ownerId,
   });
 
@@ -238,15 +292,7 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
     .maybeSingle();
 
   if (!source) {
-    return {
-      eventsFound: 0,
-      assignmentsCreated: 0,
-      assignmentsSkipped: 0,
-      reservationsUpserted: 0,
-      conflictCount: 0,
-      conflicts: [],
-      error: "Calendar source not found.",
-    };
+    return failedSync("Calendar source not found.");
   }
 
   const platform = detectPlatform(source.ical_url);
@@ -255,22 +301,20 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
   try {
     rawIcal = await fetchIcal(source.ical_url);
   } catch (err) {
-    return {
-      eventsFound: 0,
-      assignmentsCreated: 0,
-      assignmentsSkipped: 0,
-      reservationsUpserted: 0,
-      conflictCount: 0,
-      conflicts: [],
-      error: `Fetch error: ${err instanceof Error ? err.message : String(err)}`,
-    };
+    return failedSync(`Fetch error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // A truncated or HTML error page would parse as "no bookings" and cancel
+  // every upcoming job. Only reconcile against a real calendar document.
+  if (!/BEGIN:VCALENDAR/i.test(rawIcal)) {
+    return failedSync("Fetch error: response was not an iCal calendar.");
   }
 
   // Anchor DATE-only iCal events to the property's local timezone if set,
   // otherwise fall back to the app default (America/New_York).
   const { data: propertyTz } = await supabase
     .from("properties")
-    .select("timezone")
+    .select("timezone, name")
     .eq("id", input.propertyId)
     .maybeSingle();
   const timeZone =
@@ -289,7 +333,8 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
       owner_id: input.ownerId,
       property_id: input.propertyId,
       source_type: "ical",
-      source_reference: `ical:${c.uid}`,
+      source_reference: sourceReferenceFor(c.uid),
+      calendar_source_id: input.calendarSourceId,
       platform,
       guest_name: extractGuestName(c.summary),
       start_at: c.checkinAt,
@@ -325,6 +370,15 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
     }
   }
 
+  // Lifecycle problems must not block importing new bookings.
+  const lifecycle = await reconcileWithFeed(supabase, input, candidates, {
+    propertyName: (propertyTz?.name as string | null | undefined) ?? "A property",
+    timeZone,
+  }).catch((err) => {
+    console.error("[syncCalendarSource] reconcile", input.calendarSourceId, err);
+    return { rescheduled: 0, cancelled: 0 };
+  });
+
   // Update last_synced_at
   await supabase
     .from("property_calendar_sources")
@@ -348,8 +402,131 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
     eventsFound: candidates.length,
     assignmentsCreated: created,
     assignmentsSkipped: skipped,
+    assignmentsRescheduled: lifecycle.rescheduled,
+    assignmentsCancelled: lifecycle.cancelled,
     reservationsUpserted,
     conflictCount: conflicts.length,
     conflicts,
   };
+}
+
+function failedSync(error: string): SyncResult {
+  return {
+    eventsFound: 0,
+    assignmentsCreated: 0,
+    assignmentsSkipped: 0,
+    assignmentsRescheduled: 0,
+    assignmentsCancelled: 0,
+    reservationsUpserted: 0,
+    conflictCount: 0,
+    conflicts: [],
+    error,
+  };
+}
+
+/**
+ * Makes upcoming imported jobs follow the feed: moved bookings move their
+ * cleaning job, bookings that vanished from this source cancel theirs, and
+ * the assigned cleaner is told about either. See planReconciliation for the
+ * safety rules (unstarted jobs only, this source's jobs only).
+ */
+async function reconcileWithFeed(
+  supabase: ReturnType<typeof createServiceSupabaseClient>,
+  input: SyncSourceInput,
+  candidates: TurnoverCandidate[],
+  context: { propertyName: string; timeZone: string },
+): Promise<{ rescheduled: number; cancelled: number }> {
+  const now = new Date();
+
+  const { data: existing, error } = await supabase
+    .from("assignments")
+    .select("id, source_reference, status, cleaner_id, calendar_source_id, due_at, checkout_at, next_checkin_at")
+    .eq("owner_id", input.ownerId)
+    .eq("property_id", input.propertyId)
+    .eq("source_type", "ical")
+    .in("status", [...SYNC_MUTABLE_STATUSES])
+    .gt("due_at", now.toISOString());
+  if (error) throw new Error(error.message);
+
+  const plan = planReconciliation({
+    existing: (existing ?? []) as ImportedAssignment[],
+    candidates,
+    calendarSourceId: input.calendarSourceId,
+    now,
+  });
+
+  if (plan.stampSourceIds.length > 0) {
+    await supabase
+      .from("assignments")
+      .update({ calendar_source_id: input.calendarSourceId })
+      .in("id", plan.stampSourceIds)
+      .is("calendar_source_id", null);
+  }
+
+  const when = (iso: string) =>
+    formatInTimeZone(iso, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }, context.timeZone);
+
+  let rescheduled = 0;
+  for (const update of plan.updates) {
+    // Status guard: a cleaner may have started the job since we read it.
+    const { data: moved } = await supabase
+      .from("assignments")
+      .update(update.patch)
+      .eq("id", update.id)
+      .in("status", [...SYNC_MUTABLE_STATUSES])
+      .select("id");
+    if (!moved?.length || !update.dueChanged) continue;
+    rescheduled++;
+    if (update.cleanerId) {
+      await sendNotification({
+        ownerId: input.ownerId,
+        recipientId: update.cleanerId,
+        assignmentId: update.id,
+        type: "assignment_rescheduled",
+        title: "Job moved",
+        body: `${context.propertyName} moved from ${when(update.previousDueAt)} to ${when(update.patch.due_at)}. The guest changed their booking.`,
+        url: `/jobs/${update.id}`,
+      });
+    }
+  }
+
+  let cancelled = 0;
+  for (const job of plan.cancels) {
+    const { data: done } = await supabase
+      .from("assignments")
+      .update({ status: "cancelled" })
+      .eq("id", job.id)
+      .in("status", [...SYNC_MUTABLE_STATUSES])
+      .select("id");
+    if (!done?.length) continue;
+    cancelled++;
+    if (job.cleanerId) {
+      await sendNotification({
+        ownerId: input.ownerId,
+        recipientId: job.cleanerId,
+        assignmentId: job.id,
+        type: "assignment_cancelled",
+        title: "Job cancelled",
+        body: `${context.propertyName} on ${when(job.dueAt)} is cancelled. The booking was removed from the calendar.`,
+        url: "/jobs",
+      });
+    }
+  }
+
+  // Future reservations from this source that left the feed are gone too.
+  // Past stays are kept as history even when the feed stops listing them.
+  const feedRefs = new Set(candidates.map((c) => sourceReferenceFor(c.uid)));
+  const { data: futureReservations } = await supabase
+    .from("reservations")
+    .select("id, source_reference")
+    .eq("calendar_source_id", input.calendarSourceId)
+    .gt("start_at", now.toISOString());
+  const vanished = (futureReservations ?? [])
+    .filter((r) => !feedRefs.has(r.source_reference as string))
+    .map((r) => r.id as string);
+  if (vanished.length > 0) {
+    await supabase.from("reservations").delete().in("id", vanished);
+  }
+
+  return { rescheduled, cancelled };
 }

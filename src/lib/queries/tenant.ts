@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomBytes } from "node:crypto";
 import { cache } from "react";
 
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
@@ -49,3 +50,39 @@ export const getTenantBranding = cache(
     };
   },
 );
+
+/**
+ * Returns the tenant's secret calendar-feed token, creating one on first use.
+ * Tokens live in a service-role-only table; never expose them to non-owners.
+ */
+export async function getOrCreateCalendarFeedToken(ownerId: string): Promise<string> {
+  const supabase = createServiceSupabaseClient();
+  const { data: existing } = await supabase
+    .from("calendar_feed_tokens")
+    .select("token")
+    .eq("owner_id", ownerId)
+    .maybeSingle();
+  if (existing?.token) return existing.token as string;
+
+  // ignoreDuplicates keeps a concurrent first request from overwriting a
+  // token another request just created; re-read to return the winner.
+  const { error } = await supabase
+    .from("calendar_feed_tokens")
+    .upsert(
+      { owner_id: ownerId, token: newCalendarFeedToken() },
+      { onConflict: "owner_id", ignoreDuplicates: true },
+    );
+  if (error) throw new Error(error.message);
+
+  const { data: created, error: readError } = await supabase
+    .from("calendar_feed_tokens")
+    .select("token")
+    .eq("owner_id", ownerId)
+    .single();
+  if (readError || !created) throw new Error(readError?.message ?? "Feed token missing.");
+  return created.token as string;
+}
+
+export function newCalendarFeedToken(): string {
+  return randomBytes(32).toString("base64url");
+}

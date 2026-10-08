@@ -31,7 +31,7 @@ export function CalendarSourceRow({ source, canRemove }: Props) {
       } else if (res.result) {
         const r = res.result;
         setLastResult(
-          `Synced: ${r.assignmentsCreated} created, ${r.assignmentsSkipped} skipped${r.conflictCount > 0 ? `, ${r.conflictCount} conflicts` : ""}`,
+          `Synced: ${r.assignmentsCreated} created, ${r.assignmentsSkipped} skipped${r.assignmentsRescheduled > 0 ? `, ${r.assignmentsRescheduled} moved` : ""}${r.assignmentsCancelled > 0 ? `, ${r.assignmentsCancelled} cancelled` : ""}${r.conflictCount > 0 ? `, ${r.conflictCount} conflicts` : ""}`,
         );
       }
     });

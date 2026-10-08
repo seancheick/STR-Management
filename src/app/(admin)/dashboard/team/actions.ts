@@ -33,9 +33,11 @@ export async function inviteTeamMemberAction(
 
   const service = createServiceSupabaseClient();
 
-  // Invite via Supabase Auth — sends magic link email
+  // Invite via Supabase Auth — sends magic link email. Role and tenant are
+  // NOT read from metadata (the signup trigger ignores them); the upsert
+  // below sets them with the service role.
   const { data, error: inviteError } = await service.auth.admin.inviteUserByEmail(email, {
-    data: { full_name: fullName, role, owner_id: tenantId },
+    data: { full_name: fullName },
   });
 
   if (inviteError) return { error: inviteError.message };

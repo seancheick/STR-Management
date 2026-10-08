@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireRole } from "@/lib/auth/session";
+import { newCalendarFeedToken } from "@/lib/queries/tenant";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 const BUCKET = "tenant-assets";
@@ -19,11 +20,6 @@ export type BrandingActionState = {
   status: "idle" | "success" | "error";
   message: string | null;
   fieldErrors?: Record<string, string[] | undefined>;
-};
-
-export const BRANDING_INITIAL: BrandingActionState = {
-  status: "idle",
-  message: null,
 };
 
 const nameSchema = z.object({
@@ -143,4 +139,19 @@ export async function removeTenantLogoAction(): Promise<{ error: string | null }
 
   revalidatePath("/dashboard", "layout");
   return { error: error?.message ?? null };
+}
+
+// ─── Calendar feed ────────────────────────────────────────────────────────────
+/** Issues a new feed token; every existing subscription URL stops working. */
+export async function regenerateCalendarFeedTokenAction(): Promise<void> {
+  const profile = await requireRole(["owner"]);
+  const supabase = createServiceSupabaseClient();
+  const { error } = await supabase
+    .from("calendar_feed_tokens")
+    .upsert(
+      { owner_id: profile.owner_id, token: newCalendarFeedToken(), created_at: new Date().toISOString() },
+      { onConflict: "owner_id" },
+    );
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard/settings");
 }

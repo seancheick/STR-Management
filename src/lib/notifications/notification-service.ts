@@ -9,7 +9,9 @@ export type NotificationType =
   | "reminder_24h"
   | "reminder_2h"
   | "overdue"
-  | "sla_breach";
+  | "sla_breach"
+  | "assignment_rescheduled"
+  | "assignment_cancelled";
 
 type SendNotificationInput = {
   ownerId: string | null;

@@ -19,7 +19,8 @@
 
 ```bash
 npm run typecheck   # must pass before committing
-npm test            # all tests must stay green (165 as of 2026-09-28)
+npm test            # all tests must stay green (201 as of 2026-10-08)
+npm run test:db     # RLS / tenant security tests on a local Postgres (PGPORT=...), never a Supabase project
 npm run build       # use Node 20+
 ```
 

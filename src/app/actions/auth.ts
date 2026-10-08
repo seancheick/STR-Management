@@ -71,14 +71,14 @@ export async function signUpAsHostAction(
   try {
     const service = createServiceSupabaseClient();
 
-    // Create the auth user. The handle_auth_user_created trigger mints the
-    // public.users row from this metadata: role='owner' tells the trigger
-    // to self-tenant (owner_id = new.id). One round-trip total.
+    // Create the auth user. The handle_auth_user_created trigger mints a
+    // locked-down public.users row (it never trusts metadata for role or
+    // tenant); the service-role update below makes this user an owner.
     const { data: authData, error: authError } = await service.auth.admin.createUser({
       email,
       password,
       email_confirm: false, // require email verification
-      user_metadata: { full_name: fullName, role: "owner" },
+      user_metadata: { full_name: fullName },
     });
 
     if (authError || !authData.user) {
@@ -94,8 +94,7 @@ export async function signUpAsHostAction(
       return { status: "error", values, message: msg };
     }
 
-    // Belt + suspenders: ensure the row actually landed as 'owner' with
-    // self-tenant. If the trigger ever drifts, this update keeps the contract.
+    // Required: this is what makes the new user an owner of their own tenant.
     const userId = authData.user.id;
     const { error: ensureError } = await service
       .from("users")

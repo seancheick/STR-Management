@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth/session";
 import { resolveOwnerId } from "@/lib/queries/properties";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { syncCalendarSource } from "@/lib/ical/sync-service";
+import { assertPublicHttpsUrl } from "@/lib/ical/url-guard";
 import type { SyncResult } from "@/lib/ical/sync-service";
 
 const addSourceSchema = z.object({
@@ -45,6 +46,13 @@ export async function addCalendarSourceAction(
       };
     }
     return { status: "error", message: "Invalid form data." };
+  }
+
+  try {
+    await assertPublicHttpsUrl(values.icalUrl);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Enter a valid iCal URL.";
+    return { status: "error", message, fieldErrors: { icalUrl: [message] } };
   }
 
   const ownerId = await resolveOwnerId();

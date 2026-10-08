@@ -6,13 +6,16 @@ import { useFormStatus } from "react-dom";
 import { Check, ImageIcon, Loader2, Trash2, Upload } from "lucide-react";
 
 import {
-  BRANDING_INITIAL,
   removeTenantLogoAction,
   updateTenantNameAction,
   uploadTenantLogoAction,
+  type BrandingActionState,
 } from "@/app/(admin)/dashboard/settings/actions";
 import { showToast } from "@/components/ui/toast";
 import { keepValuesOnError, type WithSubmitted } from "@/lib/form-values";
+
+// Lives here, not in actions.ts: a "use server" file may only export async functions.
+const BRANDING_INITIAL: BrandingActionState = { status: "idle", message: null };
 
 function NameSubmit() {
   const { pending } = useFormStatus();

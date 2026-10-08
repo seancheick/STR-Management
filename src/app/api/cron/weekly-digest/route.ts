@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { isAuthorizedCronRequest } from "@/lib/auth/cron";
 import { sendNotification } from "@/lib/notifications/notification-service";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
@@ -12,12 +13,8 @@ import { createServiceSupabaseClient } from "@/lib/supabase/service";
  * device). No email provider needed.
  */
 export async function GET(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!isAuthorizedCronRequest(req.headers.get("authorization"))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const supabase = createServiceSupabaseClient();
