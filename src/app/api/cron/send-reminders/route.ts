@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { isAuthorizedCronRequest } from "@/lib/auth/cron";
 import {
   findUnacceptedDueSoon,
   findOverdueAssignments,
@@ -9,7 +10,10 @@ import {
 
 /**
  * Vercel Cron: GET /api/cron/send-reminders
- * Schedule: every hour  ("0 * * * *")
+ * Schedule: once daily at 09:00 UTC ("0 9 * * *" in vercel.json).
+ * Vercel Hobby only allows daily crons. At that cadence the T-2h and SLA
+ * checks only see jobs due between 09:00 and 11:00 UTC; switch the schedule
+ * to "0 * * * *" on a Pro plan for the time-sensitive alerts to work.
  *
  * Sends:
  *  - T-24h reminders to cleaners with unaccepted assigned jobs
@@ -18,10 +22,7 @@ import {
  *  - SLA breach alerts to owner (unassigned jobs due in <2h)
  */
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

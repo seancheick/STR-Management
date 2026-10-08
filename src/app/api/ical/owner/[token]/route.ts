@@ -3,10 +3,10 @@ import { NextResponse } from "next/server";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 /**
- * Public-by-token ICS feed of an owner's upcoming turnover assignments.
- * The token is the owner's auth.users.id — enough entropy for an unlisted
- * subscription URL. If a host wants to rotate it, they rotate their password
- * (and we can add a separate token column later for true rotation).
+ * Public-by-token ICS feed of a tenant's upcoming turnover assignments.
+ * The token is a random secret from calendar_feed_tokens (service-role only),
+ * shown to the owner on Settings, where they can regenerate it to revoke
+ * every existing subscription.
  *
  * Subscribe in Google Calendar: Settings → Add calendar → From URL.
  */
@@ -17,13 +17,21 @@ export async function GET(
   const { token } = await params;
   const supabase = createServiceSupabaseClient();
 
-  const { data: owner } = await supabase
-    .from("users")
-    .select("id, full_name, role, active")
-    .eq("id", token)
-    .in("role", ["owner", "admin"])
-    .eq("active", true)
+  const { data: feed } = await supabase
+    .from("calendar_feed_tokens")
+    .select("owner_id")
+    .eq("token", token)
     .maybeSingle();
+
+  const { data: owner } = feed
+    ? await supabase
+        .from("users")
+        .select("id, full_name")
+        .eq("id", feed.owner_id)
+        .eq("role", "owner")
+        .eq("active", true)
+        .maybeSingle()
+    : { data: null };
 
   if (!owner) {
     return new NextResponse("Feed not found", { status: 404 });

@@ -304,7 +304,7 @@ These MUST always filter by `owner_id` explicitly in their queries. Today they d
 
 ### 3.4 Public endpoints
 
-`/api/ical/owner/[token]/route.ts` uses the owner's user id as the token. This already works post-refactor — the token IS the tenant id. Verify the query only returns that owner's assignments (it does).
+`/api/ical/owner/[token]/route.ts` looks the token up in `calendar_feed_tokens` (random, service-role only, regenerable from Settings) and returns that tenant's assignments. Until 2026-10-08 the token was the owner's user id, which every admin and supervisor could read and which could not be rotated.
 
 `/api/schedule/export.csv` uses the cookie-authed client, which respects RLS. ✓
 

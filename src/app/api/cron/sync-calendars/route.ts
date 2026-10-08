@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { isAuthorizedCronRequest } from "@/lib/auth/cron";
 import { listCalendarSourcesForSync } from "@/lib/queries/calendar";
 import { syncCalendarSource } from "@/lib/ical/sync-service";
 
@@ -9,12 +10,7 @@ import { syncCalendarSource } from "@/lib/ical/sync-service";
  * Protected by CRON_SECRET header (set in Vercel env vars).
  */
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  // In production, Vercel sends the secret automatically.
-  // Skip check in dev (no secret set).
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -43,6 +39,8 @@ export async function GET(req: NextRequest) {
           ok: true,
           created: r.value.assignmentsCreated,
           skipped: r.value.assignmentsSkipped,
+          rescheduled: r.value.assignmentsRescheduled,
+          cancelled: r.value.assignmentsCancelled,
           conflicts: r.value.conflictCount,
         }
       : { ok: false, error: String(r.reason) }),

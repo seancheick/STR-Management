@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { isAuthorizedCronRequest } from "@/lib/auth/cron";
 import { runRecurringTaskSweep } from "@/lib/services/recurring-tasks";
 
 /**
@@ -8,10 +9,7 @@ import { runRecurringTaskSweep } from "@/lib/services/recurring-tasks";
  * materialises each into an assignment, then rolls next_run_at forward.
  */
 export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
-
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!isAuthorizedCronRequest(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
