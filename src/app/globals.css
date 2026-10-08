@@ -62,9 +62,17 @@
 
   html {
     scroll-behavior: smooth;
+    /* Anchor jumps clear the sticky h-14 navbar instead of hiding the heading. */
+    scroll-padding-top: 4.5rem;
     background:
       radial-gradient(circle at top left, rgba(217, 195, 161, 0.25), transparent 32%),
       linear-gradient(180deg, #faf7f1 0%, #f4f1ea 100%);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
   }
 
   body {

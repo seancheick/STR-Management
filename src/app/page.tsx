@@ -14,8 +14,10 @@ import {
   Lock,
   LogIn,
   MessageCircle,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
+  UserCheck,
   Users,
   Zap,
 } from "lucide-react";
@@ -51,17 +53,28 @@ export default async function HomePage() {
           <a className="transition hover:text-foreground" href="#how">
             How it works
           </a>
+          <a className="transition hover:text-foreground" href="#trust">
+            Under the hood
+          </a>
           <a className="transition hover:text-foreground" href="#founder">
             Founder
           </a>
         </div>
-        <a
-          className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-4 text-xs font-medium text-foreground transition hover:bg-muted"
-          href="#login"
-        >
-          <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
-          Login
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-4 text-xs font-medium text-foreground transition hover:bg-muted"
+            href="#login"
+          >
+            <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
+            Login
+          </a>
+          <a
+            className="hidden h-9 items-center rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:opacity-90 sm:inline-flex"
+            href="#access"
+          >
+            Get early access
+          </a>
+        </div>
       </nav>
 
       {/* ── Hero ───────────────────────────────────────────── */}
@@ -115,6 +128,9 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ── One booking, start to finish ─────────────────────── */}
+      <TurnoverPipeline />
 
       {/* ── Problem ─────────────────────────────────────────── */}
       <section className="border-y border-border/60 bg-card/40" id="problem">
@@ -182,7 +198,7 @@ export default async function HomePage() {
             bullets={[
               "Required checklists per property template",
               "Before/after photos enforced server-side",
-              "Issue flags require a photo on severity ≥ medium",
+              "Medium+ issues can't close without a photo or a written fix",
             ]}
           />
           <BucketCard
@@ -202,7 +218,7 @@ export default async function HomePage() {
             bullets={[
               "Per-cleaner reports by week, month, or custom range",
               "Line-by-line Mark paid + pending dashboard tile",
-              "1099 flag + annual tax-ready PDF",
+              "1099 flag + annual statement, print or save as PDF",
             ]}
           />
         </div>
@@ -212,7 +228,7 @@ export default async function HomePage() {
           a few weeks:{" "}
           <span className="text-foreground">reliability scores</span>,{" "}
           <span className="text-foreground">supervisor review queue</span>,{" "}
-          <span className="text-foreground">smart-lock-ready access codes</span>,{" "}
+          <span className="text-foreground">door codes on every job</span>,{" "}
           <span className="text-foreground">weekly recap</span>,{" "}
           <span className="text-foreground">keyboard shortcuts</span>,{" "}
           <span className="text-foreground">ICS subscribe-out to your own calendar</span>.
@@ -230,8 +246,8 @@ export default async function HomePage() {
               Your whole portfolio on one screen.
             </h2>
             <p className="mt-3 text-base leading-7 text-muted-foreground">
-              Property rows down, days across. Multi-night stays render as coloured chips
-              in their platform&apos;s colour. Your cleaning jobs slot in between.
+              Property rows down, days across. Airbnb, VRBO and Booking.com stays render
+              as chips in their platform&apos;s colour. Your cleaning jobs slot in between.
             </p>
           </div>
           <MockHotelCalendar />
@@ -288,9 +304,50 @@ export default async function HomePage() {
         </ol>
       </section>
 
+      {/* ── Under the hood ──────────────────────────────────── */}
+      <section className="border-y border-border/60 bg-card/40" id="trust">
+        <div className="mx-auto max-w-6xl px-6 py-16 md:py-20">
+          <div className="mb-10 max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+              Under the hood
+            </p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
+              Built so the rules hold, even when people don&apos;t.
+            </h2>
+            <p className="mt-3 text-base leading-7 text-muted-foreground">
+              A checklist app is only as good as what it refuses to let slide. These
+              guarantees live in the server and the database, not in a button someone
+              can skip.
+            </p>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <TrustCard
+              icon={<Camera className="h-5 w-5" />}
+              title="Proof the app can't fake"
+              body="A job can't be submitted until every required checklist item and photo is in. The server checks, so a tampered request fails too."
+            />
+            <TrustCard
+              icon={<Lock className="h-5 w-5" />}
+              title="Your data, walled off"
+              body="Every host's properties, team and payouts are isolated at the database layer, not just hidden in the interface."
+            />
+            <TrustCard
+              icon={<RefreshCw className="h-5 w-5" />}
+              title="Calendars that keep up"
+              body="Guest moves their dates? The cleaning moves with them. Booking cancelled? The job is cancelled. Your cleaner is told either way."
+            />
+            <TrustCard
+              icon={<ShieldCheck className="h-5 w-5" />}
+              title="Locked down by default"
+              body="Cleaners can't change their own role or pay details, and a deactivated teammate loses access everywhere, instantly."
+            />
+          </div>
+        </div>
+      </section>
+
       {/* ── Why TurnFlow ────────────────────────────────────── */}
-      <section className="border-y border-border/60 bg-card/40">
-        <div className="mx-auto max-w-5xl px-6 py-16 md:py-20">
+      <section>
+        <div className="mx-auto max-w-5xl px-6 pt-16 md:pt-24">
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
             Why TurnFlow
           </p>
@@ -386,7 +443,7 @@ export default async function HomePage() {
               Sign in
             </a>
             <Link className="transition hover:text-foreground" href="/sign-in">
-              Standalone sign-in
+              Sign-in page
             </Link>
           </div>
         </div>
@@ -461,6 +518,137 @@ function HowStep({
   );
 }
 
+function TrustCard({
+  icon,
+  title,
+  body,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+}) {
+  return (
+    <article className="flex flex-col gap-3 rounded-[1.5rem] border border-border/70 bg-card p-6 transition hover:border-primary/30 hover:shadow-sm">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        {icon}
+      </div>
+      <h3 className="text-base font-semibold tracking-tight">{title}</h3>
+      <p className="text-sm leading-6 text-muted-foreground">{body}</p>
+    </article>
+  );
+}
+
+// One booking traced through the whole product: the system at a glance.
+// Every step is a real feature; the sample data is illustrative.
+const PIPELINE_STEPS = [
+  {
+    icon: CalendarDays,
+    label: "Booking lands",
+    detail: "Synced from your listing calendar",
+    chipTitle: "Airbnb · #98",
+    chipBody: "Checkout Tue 11:00 AM",
+  },
+  {
+    icon: ClipboardCheck,
+    label: "Job is created",
+    detail: "With the property's checklist",
+    chipTitle: "Lakeview Loft",
+    chipBody: "Due Wed 3:00 PM",
+  },
+  {
+    icon: UserCheck,
+    label: "Cleaner accepts",
+    detail: "Or declines with a reason",
+    chipTitle: "Maria accepted",
+    chipBody: "Push sent · door code ready",
+  },
+  {
+    icon: Camera,
+    label: "Proof submitted",
+    detail: "Blocked until it's complete",
+    chipTitle: "12 / 12 checklist",
+    chipBody: "5 before & after photos",
+  },
+  {
+    icon: Banknote,
+    label: "Approved & paid",
+    detail: "Lands on her statement",
+    chipTitle: "Approved",
+    chipBody: "$85 marked paid",
+  },
+] as const;
+
+function TurnoverPipeline() {
+  return (
+    <section className="mx-auto w-full max-w-6xl px-6 pb-16 md:pb-24" aria-labelledby="pipeline-title">
+      <div className="rounded-[1.75rem] border border-border/70 bg-card p-6 shadow-sm md:p-10">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-muted-foreground">
+              One booking, start to finish
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl" id="pipeline-title">
+              From guest checkout to cleaner payout, without a single text.
+            </h2>
+          </div>
+          <span className="w-fit rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            Zero manual entry
+          </span>
+        </div>
+
+        <ol className="relative mt-8 grid gap-6 md:grid-cols-5 md:gap-4">
+          {/* Connector: vertical on mobile, horizontal on desktop */}
+          <span
+            aria-hidden="true"
+            className="absolute top-5 bottom-5 left-5 w-px bg-gradient-to-b from-primary/40 via-primary/25 to-primary/40 md:top-5 md:right-[10%] md:bottom-auto md:left-[10%] md:h-px md:w-auto md:bg-gradient-to-r"
+          />
+          {PIPELINE_STEPS.map((step, i) => {
+            const Icon = step.icon;
+            const last = i === PIPELINE_STEPS.length - 1;
+            return (
+              <li className="relative flex gap-4 md:flex-col md:items-center md:gap-3 md:text-center" key={step.label}>
+                <div
+                  className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-4 border-card ${
+                    last ? "bg-primary text-primary-foreground" : "bg-primary/15 text-primary"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                </div>
+                <div className="flex flex-1 flex-col gap-2 md:items-center">
+                  <div>
+                    <p className="text-sm font-semibold tracking-tight">{step.label}</p>
+                    <p className="text-xs text-muted-foreground">{step.detail}</p>
+                  </div>
+                  <div className="w-full max-w-[220px] rounded-xl border border-border/70 bg-background px-3 py-2 text-left">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold">
+                      {last ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                      ) : null}
+                      {step.chipTitle}
+                    </p>
+                    <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+                      {step.chipBody}
+                    </p>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+
+        <div className="mt-8 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+          <RefreshCw className="mt-1 h-4 w-4 shrink-0" aria-hidden="true" />
+          <p>
+            <span className="font-semibold">Plans change, and TurnFlow keeps up.</span> If the
+            guest moves their dates, the job moves and Maria gets a push. If the booking is
+            cancelled, so is her job. Nobody has to remember to tell anyone.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function PositionCard({ title, body }: { title: string; body: string }) {
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-card p-6">
@@ -479,7 +667,7 @@ function MockHotelCalendar() {
   type Block =
     | { kind: "airbnb"; label: string; start: number; end: number }
     | { kind: "booking"; label: string; start: number; end: number }
-    | { kind: "expedia"; label: string; start: number; end: number }
+    | { kind: "vrbo"; label: string; start: number; end: number }
     | { kind: "blocked"; start: number; end: number }
     | { kind: "clean"; label: string; start: number; end: number };
 
@@ -499,7 +687,7 @@ function MockHotelCalendar() {
       blocks: [
         { kind: "airbnb", label: "#73 Airbnb", start: 10, end: 13 },
         { kind: "clean", label: "Maria", start: 13, end: 13 },
-        { kind: "expedia", label: "#51 Expedia", start: 14, end: 19 },
+        { kind: "vrbo", label: "#51 VRBO", start: 14, end: 19 },
       ],
     },
     {
@@ -537,7 +725,7 @@ function MockHotelCalendar() {
         <div className="hidden items-center gap-3 text-[10px] text-muted-foreground sm:flex">
           <Legend color="bg-red-400" label="Airbnb" />
           <Legend color="bg-blue-600" label="Booking" />
-          <Legend color="bg-amber-400" label="Expedia" />
+          <Legend color="bg-amber-400" label="VRBO" />
           <Legend color="bg-green-400" label="Clean" />
         </div>
       </div>
@@ -633,7 +821,7 @@ function BookingChip({
   block:
     | { kind: "airbnb"; label: string }
     | { kind: "booking"; label: string }
-    | { kind: "expedia"; label: string }
+    | { kind: "vrbo"; label: string }
     | { kind: "blocked" }
     | { kind: "clean"; label: string };
 }) {
@@ -674,7 +862,7 @@ function BookingChip({
   const styles = {
     airbnb: "bg-gradient-to-r from-rose-500 to-rose-400 text-white",
     booking: "bg-gradient-to-r from-blue-700 to-blue-600 text-white",
-    expedia: "bg-gradient-to-r from-amber-500 to-amber-400 text-white",
+    vrbo: "bg-gradient-to-r from-amber-500 to-amber-400 text-white",
   } as const;
 
   return (
