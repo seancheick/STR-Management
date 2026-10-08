@@ -40,7 +40,7 @@ export function JobQuickActions({ assignmentId, status, address }: Props) {
       if (!res.success) {
         showToast(res.error ?? "Could not decline.", "error");
       } else {
-        showToast("Job unassigned. We suggested the next cleaner to your host.");
+        showToast("Job declined. Your host can see your reason in the job thread.");
         setDeclineOpen(false);
         // The job is no longer ours, so this page would 404 on refresh.
         router.push("/jobs");

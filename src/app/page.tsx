@@ -192,7 +192,7 @@ export default async function HomePage() {
             bullets={[
               "Accept, decline with a reason, or signal running late",
               "Per-job chat thread for every booking",
-              "Auto-reassign when someone declines",
+              "Declined jobs land back in your queue with the reason attached",
             ]}
           />
           <BucketCard
