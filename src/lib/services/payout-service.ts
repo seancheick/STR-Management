@@ -1,4 +1,5 @@
 import "server-only";
+import { listCleanerAccounts, isReconciledJob } from "@/lib/queries/cleaner-ledger";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -46,7 +47,7 @@ export async function generatePayoutBatch(
   let q = supabase
     .from("assignments")
     .select(
-      "id, property_id, cleaner_id, fixed_payout_amount, owner_id",
+      "id, property_id, cleaner_id, fixed_payout_amount, owner_id, due_at",
     )
     .in("status", ["approved", "completed_pending_review"])
     .gte("due_at", `${input.periodStart}T00:00:00Z`)
@@ -78,7 +79,8 @@ export async function generatePayoutBatch(
     .eq("status", "included");
 
   const alreadyBatched = new Set((existing ?? []).map((e) => e.assignment_id));
-  const eligible = assignments.filter((a) => !alreadyBatched.has(a.id));
+  const accounts = await listCleanerAccounts();
+  const eligible = assignments.filter((a) => !alreadyBatched.has(a.id) && !isReconciledJob(accounts,a.cleaner_id,a.due_at));
 
   if (eligible.length === 0) {
     return { success: true, batchId: batch.id, entryCount: 0 };

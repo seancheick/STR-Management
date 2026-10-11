@@ -364,10 +364,11 @@ export default async function DashboardPage() {
                     Pending payout
                   </p>
                   <p className="text-3xl font-semibold tabular-nums text-amber-900">
-                    ${pendingPayout.amount.toFixed(2)}
+                    {pendingPayout.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}
                   </p>
                   <p className="text-xs text-amber-800/80">
-                    {pendingPayout.unpaidEntries} unpaid
+                    {pendingPayout.reconciledLedgers > 0 ? `${pendingPayout.reconciledLedgers} reconciled ledger · ` : ""}
+                    {pendingPayout.unpaidEntries} unpaid report entries
                     {pendingPayout.orphanAssignments > 0 &&
                       ` · ${pendingPayout.orphanAssignments} un-batched`}
                   </p>

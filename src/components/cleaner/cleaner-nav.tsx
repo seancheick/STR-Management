@@ -25,7 +25,7 @@ export function CleanerNav({ unreadCount = 0 }: { unreadCount?: number }) {
   }
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-card/95 px-2 pb-3 pt-2 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:left-1/2 md:max-w-lg md:-translate-x-1/2 md:rounded-t-3xl md:border-x">
+    <nav aria-label="Cleaner navigation" className="fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-card/95 px-2 pb-3 pt-2 shadow-[0_-10px_30px_rgba(15,23,42,0.08)] backdrop-blur md:left-1/2 md:max-w-lg md:-translate-x-1/2 md:rounded-t-3xl md:border-x">
       <ul className="grid grid-cols-5 gap-1">
         {navItems.map((item) => {
           const { href, label, icon: Icon } = item;
@@ -41,6 +41,7 @@ export function CleanerNav({ unreadCount = 0 }: { unreadCount?: number }) {
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
+                aria-current={active ? "page" : undefined}
                 href={href as Route}
               >
                 <span className="relative">

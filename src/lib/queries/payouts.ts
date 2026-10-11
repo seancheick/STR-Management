@@ -1,4 +1,10 @@
 import "server-only";
+import {
+  getCleanerLedger,
+  listCleanerAccounts,
+  isReconciledJob,
+} from "@/lib/queries/cleaner-ledger";
+import { summarizeLedger } from "@/lib/services/cleaner-ledger";
 
 import { DEFAULT_TIMEZONE, zonedTimeToUtc } from "@/lib/ical/timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -123,11 +129,13 @@ export async function listPendingCleanerPayoutAssignments(
 ): Promise<AssignmentListRecord[]> {
   const supabase = await createServerSupabaseClient();
 
-  const { data: payoutEntries } = await supabase
+  const { data: payoutEntries, error: entriesError } = await supabase
     .from("payout_entries")
     .select("assignment_id")
     .eq("cleaner_id", cleanerId)
     .eq("status", "included");
+
+  if (entriesError) throw new Error(entriesError.message);
 
   const paidAssignmentIds = new Set(
     ((payoutEntries as Array<{ assignment_id: string }> | null) ?? []).map(
@@ -145,7 +153,7 @@ export async function listPendingCleanerPayoutAssignments(
 
   if (error) throw new Error(error.message);
 
-  return (((data as unknown) as AssignmentListRecord[] | null) ?? []).filter(
+  return ((data as unknown as AssignmentListRecord[] | null) ?? []).filter(
     (assignment) => !paidAssignmentIds.has(assignment.id),
   );
 }
@@ -211,43 +219,81 @@ export async function getPendingPayoutTotal(): Promise<{
   amount: number;
   unpaidEntries: number;
   orphanAssignments: number;
+  reconciledLedgers: number;
 }> {
   const supabase = await createServerSupabaseClient();
 
-  const [entriesRes, orphansRes] = await Promise.all([
+  const accounts = await listCleanerAccounts();
+  const [entriesRes, jobsRes] = await Promise.all([
     supabase
       .from("payout_entries")
-      .select("amount")
-      .eq("status", "included")
-      .is("paid_at", null),
+      .select(
+        "amount,status,assignment_id,cleaner_id,paid_at,assignments(due_at,paid_at),properties(timezone)",
+      )
+      .eq("status", "included"),
     supabase
       .from("assignments")
-      .select("fixed_payout_amount")
-      .eq("status", "approved")
-      .is("paid_at", null)
-      .not("fixed_payout_amount", "is", null)
-      .not(
-        "id",
-        "in",
-        `(select assignment_id from payout_entries where status = 'included')`,
-      ),
+      .select(
+        "id,cleaner_id,due_at,fixed_payout_amount,paid_at,properties(timezone)",
+      )
+      .in("status", ["approved", "completed_pending_review"])
+      .is("paid_at", null),
   ]);
-
-  const entries = (entriesRes.data as Array<{ amount: number }> | null) ?? [];
-  const orphans =
-    (orphansRes.data as Array<{ fixed_payout_amount: number | null }> | null) ??
-    [];
-
-  const entriesTotal = entries.reduce((sum, e) => sum + Number(e.amount), 0);
-  const orphansTotal = orphans.reduce(
-    (sum, a) => sum + Number(a.fixed_payout_amount ?? 0),
+  if (entriesRes.error) throw new Error(entriesRes.error.message);
+  if (jobsRes.error) throw new Error(jobsRes.error.message);
+  const entries = (entriesRes.data ?? []) as unknown as Array<{
+    amount: number;
+    assignment_id: string;
+    cleaner_id: string;
+    paid_at: string | null;
+    assignments: { due_at: string; paid_at: string | null } | null;
+    properties: { timezone: string } | null;
+  }>;
+  const represented = new Set(entries.map((e) => e.assignment_id));
+  const unpaid = entries.filter(
+    (e) =>
+      !e.paid_at &&
+      !e.assignments?.paid_at &&
+      e.assignments &&
+      !isReconciledJob(
+        accounts,
+        e.cleaner_id,
+        e.assignments.due_at,
+        e.properties?.timezone,
+      ),
+  );
+  const jobs = (jobsRes.data ?? []) as unknown as Array<{
+    id: string;
+    cleaner_id: string | null;
+    due_at: string;
+    fixed_payout_amount: number | null;
+    properties: { timezone: string } | null;
+  }>;
+  const orphans = jobs.filter(
+    (a) =>
+      !represented.has(a.id) &&
+      !isReconciledJob(
+        accounts,
+        a.cleaner_id,
+        a.due_at,
+        a.properties?.timezone,
+      ),
+  );
+  const ledgers = await Promise.all(
+    accounts.map((a) => getCleanerLedger(a.cleaner_id)),
+  );
+  const ledgerTotal = ledgers.reduce(
+    (sum, l) => sum + (l ? summarizeLedger(l.entries).balance : 0),
     0,
   );
-
   return {
-    amount: entriesTotal + orphansTotal,
-    unpaidEntries: entries.length,
+    amount:
+      ledgerTotal +
+      unpaid.reduce((sum, e) => sum + Number(e.amount), 0) +
+      orphans.reduce((sum, a) => sum + Number(a.fixed_payout_amount ?? 0), 0),
+    unpaidEntries: unpaid.length,
     orphanAssignments: orphans.length,
+    reconciledLedgers: accounts.length,
   };
 }
 
@@ -297,7 +343,9 @@ export async function listCleanerPayoutsForYear(
       .eq("status", "included"),
     supabase
       .from("assignments")
-      .select("id, due_at, assignment_type, fixed_payout_amount, paid_at, properties:property_id ( name )")
+      .select(
+        "id, due_at, assignment_type, fixed_payout_amount, paid_at, properties:property_id ( name )",
+      )
       .eq("cleaner_id", cleanerId)
       .gte("paid_at", new Date(start).toISOString())
       .lt("paid_at", new Date(end).toISOString()),
@@ -312,7 +360,11 @@ export async function listCleanerPayoutsForYear(
     assignment_id: string;
     payout_batches: { status: string; paid_at: string | null } | null;
     properties: { name: string } | null;
-    assignments: { due_at: string; assignment_type: string; paid_at: string | null } | null;
+    assignments: {
+      due_at: string;
+      assignment_type: string;
+      paid_at: string | null;
+    } | null;
   };
   type DirectRow = {
     id: string;
@@ -323,10 +375,30 @@ export async function listCleanerPayoutsForYear(
     properties: { name: string } | null;
   };
 
-  const payments: CleanerYearPayment[] = [];
+  const ledger = await getCleanerLedger(cleanerId);
+  const accounts = ledger ? [ledger.account] : [];
+  const payments: CleanerYearPayment[] = ledger
+    ? ledger.entries
+        .filter(
+          (e) => e.kind === "payment" && e.entry_date.startsWith(`${year}-`),
+        )
+        .map((e) => ({
+          id: e.id,
+          paidAt: `${e.entry_date}T12:00:00Z`,
+          amount: -Number(e.amount),
+          propertyName: e.description,
+          assignmentType: null,
+          dueAt: null,
+        }))
+    : [];
   const paidViaReport = new Set<string>();
   for (const e of (entriesRes.data ?? []) as unknown as EntryRow[]) {
-    if (e.payout_batches?.status === "cancelled") continue;
+    if (
+      e.payout_batches?.status === "cancelled" ||
+      (e.assignments &&
+        isReconciledJob(accounts, cleanerId, e.assignments.due_at))
+    )
+      continue;
     const paidAt =
       e.paid_at ??
       (e.payout_batches?.status === "paid" ? e.payout_batches.paid_at : null) ??
@@ -345,7 +417,12 @@ export async function listCleanerPayoutsForYear(
     });
   }
   for (const a of (directRes.data ?? []) as unknown as DirectRow[]) {
-    if (paidViaReport.has(a.id) || !inYear(a.paid_at)) continue;
+    if (
+      paidViaReport.has(a.id) ||
+      !inYear(a.paid_at) ||
+      isReconciledJob(accounts, cleanerId, a.due_at)
+    )
+      continue;
     payments.push({
       id: a.id,
       paidAt: a.paid_at,

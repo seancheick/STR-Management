@@ -1,6 +1,11 @@
 import type { Route } from "next";
 import Link from "next/link";
 
+import {
+  listCleanerAccounts,
+  getCleanerLedger,
+} from "@/lib/queries/cleaner-ledger";
+import { summarizeLedger } from "@/lib/services/cleaner-ledger";
 import { requireRole } from "@/lib/auth/session";
 import { listUnpaidPayableJobs } from "@/lib/queries/assignments";
 import { listPayoutBatches } from "@/lib/queries/payouts";
@@ -24,7 +29,11 @@ function formatDate(d: string) {
   });
 }
 
-const FILTER_PRESETS: Array<{ key: string; label: string; days: number | "all" }> = [
+const FILTER_PRESETS: Array<{
+  key: string;
+  label: string;
+  days: number | "all";
+}> = [
   { key: "all", label: "All", days: "all" },
   { key: "30", label: "Last 30 days", days: 30 },
   { key: "90", label: "Last 90 days", days: 90 },
@@ -48,8 +57,14 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
     listUnpaidPayableJobs(),
   ]);
 
+  const accounts = await listCleanerAccounts();
+  const ledgers = (
+    await Promise.all(accounts.map((a) => getCleanerLedger(a.cleaner_id)))
+  ).filter((l) => l !== null);
+
   // Filter in-memory — payout_batches is a small table per owner.
-  const preset = FILTER_PRESETS.find((p) => p.key === rangeKey) ?? FILTER_PRESETS[0];
+  const preset =
+    FILTER_PRESETS.find((p) => p.key === rangeKey) ?? FILTER_PRESETS[0];
   const cutoff =
     preset.days === "all"
       ? null
@@ -59,10 +74,17 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
     ? allBatches.filter((b) => new Date(b.period_end) >= cutoff)
     : allBatches;
 
-  const totalPaid = batches
+  const isHistorical = (batch: (typeof batches)[number]) =>
+    accounts.some(
+      (a) =>
+        a.cleaner_id === batch.cleaner_filter &&
+        batch.period_end <= a.reconciled_through,
+    );
+  const currentBatches = batches.filter((b) => !isHistorical(b));
+  const totalPaid = currentBatches
     .filter((b) => b.status === "paid")
     .reduce((sum, b) => sum + Number(b.total_amount), 0);
-  const totalPending = batches
+  const totalPending = currentBatches
     .filter((b) => b.status === "draft" || b.status === "approved")
     .reduce((sum, b) => sum + Number(b.total_amount), 0);
 
@@ -79,19 +101,51 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
         </div>
       </div>
 
+      {ledgers.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">Reconciled cleaning ledgers</h2>
+          <p className="text-sm text-muted-foreground">
+            Actual charges and payments. These balances replace historical job
+            and report payment assumptions through each ledger’s reconciliation
+            date.
+          </p>
+          {ledgers.map((l) => (
+            <Link
+              key={l.account.cleaner_id}
+              href={
+                `/dashboard/payouts/ledger/${l.account.cleaner_id}` as Route
+              }
+              className="flex min-h-14 flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4"
+            >
+              <span className="font-semibold underline">
+                {l.account.label} · View ledger
+              </span>
+              <span className="font-semibold tabular-nums">
+                {summarizeLedger(l.entries).balance.toLocaleString("en-US", {
+                  style: "currency",
+                  currency: "USD",
+                })}{" "}
+                due
+              </span>
+            </Link>
+          ))}
+        </section>
+      )}
       {/* Quick-pay: individual jobs (Zelle/Venmo/cash) outside the batch flow */}
       {canManage && <BulkMarkPaid jobs={unpaidJobs} />}
 
       {/* Create new report */}
       {canManage && (
-      <section className="rounded-2xl border border-border/70 bg-card p-6">
-        <h2 className="mb-1 text-lg font-semibold">Generate a payout report</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Pick a cleaner and date range. We&apos;ll pull approved jobs, total
-          the payouts, and let you review, mark paid, or export.
-        </p>
-        <CreatePayoutBatchForm cleaners={cleaners} />
-      </section>
+        <section className="rounded-2xl border border-border/70 bg-card p-6">
+          <h2 className="mb-1 text-lg font-semibold">
+            Generate a payout report
+          </h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Pick a cleaner and date range. We&apos;ll pull approved jobs, total
+            the payouts, and let you review, mark paid, or export.
+          </p>
+          <CreatePayoutBatchForm cleaners={cleaners} />
+        </section>
       )}
 
       {/* Report list with date-range filter + totals */}
@@ -122,21 +176,34 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
           </div>
         </div>
 
+        {batches.some(isHistorical) && (
+          <p className="text-sm text-muted-foreground">
+            Historical reports are kept for reference and excluded from these
+            totals. Use the reconciled ledger above for actual payments and the
+            amount due.
+          </p>
+        )}
         {/* Totals for the filtered range */}
         {batches.length > 0 && (
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-2xl border border-border/70 bg-card px-4 py-3">
               <p className="text-xs text-muted-foreground">Reports</p>
-              <p className="mt-1 text-xl font-semibold tabular-nums">{batches.length}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">
+                {batches.length}
+              </p>
             </div>
             <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3">
-              <p className="text-xs text-green-700/80">Paid out</p>
+              <p className="text-xs text-green-700/80">
+                Paid in current reports
+              </p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-green-800">
                 ${totalPaid.toFixed(2)}
               </p>
             </div>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-xs text-amber-700/80">Pending</p>
+              <p className="text-xs text-amber-700/80">
+                Unpaid current reports
+              </p>
               <p className="mt-1 text-xl font-semibold tabular-nums text-amber-800">
                 ${totalPending.toFixed(2)}
               </p>
@@ -178,7 +245,7 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-medium ${statusColors[b.status] ?? "bg-gray-100 text-gray-700"}`}
                 >
-                  {b.status}
+                  {isHistorical(b) ? "Historical · see ledger" : b.status}
                 </span>
               </div>
             </Link>

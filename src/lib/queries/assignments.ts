@@ -1,4 +1,5 @@
 import "server-only";
+import { listCleanerAccounts, isReconciledJob } from "@/lib/queries/cleaner-ledger";
 
 import { zonedDayTime } from "@/lib/ical/timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -104,13 +105,15 @@ export async function listAssignmentsForAdmin(): Promise<AssignmentListRecord[]>
 /** Payable but unpaid: approved/completed jobs that haven't been marked paid yet. */
 export async function listUnpaidPayableJobs(): Promise<AssignmentListRecord[]> {
   const supabase = await createServerSupabaseClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("assignments")
     .select(ASSIGNMENT_LIST_SELECT)
     .in("status", ["approved", "completed_pending_review"])
     .is("paid_at", null)
     .order("due_at", { ascending: true });
-  return (data as AssignmentListRecord[] | null) ?? [];
+  if (error) throw new Error(error.message);
+  const accounts = await listCleanerAccounts();
+  return ((data as unknown as AssignmentListRecord[] | null) ?? []).filter(a=>!isReconciledJob(accounts,a.cleaner_id,a.due_at,a.properties?.timezone));
 }
 
 export async function listTodaysAssignmentsForAdmin(): Promise<AssignmentListRecord[]> {

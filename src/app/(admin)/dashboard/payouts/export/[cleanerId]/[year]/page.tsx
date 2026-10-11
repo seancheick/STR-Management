@@ -95,32 +95,32 @@ export default async function AnnualPayoutExportPage({ params }: Props) {
 
       <section className="mt-8 grid grid-cols-3 gap-6">
         <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Jobs</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Payments</p>
           <p className="mt-1 text-3xl font-semibold tabular-nums">{entries.length}</p>
         </div>
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            Properties
+            Groups
           </p>
           <p className="mt-1 text-3xl font-semibold tabular-nums">{propertyRows.length}</p>
         </div>
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Total</p>
           <p className="mt-1 text-3xl font-semibold tabular-nums">
-            ${grandTotal.toFixed(2)}
+            {grandTotal.toLocaleString("en-US", { style: "currency", currency: "USD" })}
           </p>
         </div>
       </section>
 
       <section className="mt-10">
         <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          By property
+          By property or payment description
         </h2>
         <table className="mt-3 w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-foreground/40">
-              <th className="py-2 text-left font-medium">Property</th>
-              <th className="py-2 text-right font-medium">Jobs</th>
+              <th className="py-2 text-left font-medium">Property / description</th>
+              <th className="py-2 text-right font-medium">Payments</th>
               <th className="py-2 text-right font-medium">Total</th>
             </tr>
           </thead>
@@ -138,13 +138,13 @@ export default async function AnnualPayoutExportPage({ params }: Props) {
 
       <section className="mt-10">
         <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-          All jobs
+          All payments
         </h2>
         <table className="mt-3 w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-foreground/40">
               <th className="py-2 text-left font-medium">Paid on</th>
-              <th className="py-2 text-left font-medium">Property</th>
+              <th className="py-2 text-left font-medium">Property / description</th>
               <th className="py-2 text-left font-medium">Type</th>
               <th className="py-2 text-right font-medium">Amount</th>
             </tr>
@@ -157,7 +157,7 @@ export default async function AnnualPayoutExportPage({ params }: Props) {
                 </td>
                 <td className="py-2">{e.propertyName}</td>
                 <td className="py-2 capitalize text-muted-foreground">
-                  {e.assignmentType?.replace(/_/g, " ") ?? "cleaning"}
+                  {e.assignmentType?.replace(/_/g, " ") ?? "payment"}
                   {e.dueAt ? ` · job ${formatDate(e.dueAt)}` : ""}
                 </td>
                 <td className="py-2 text-right tabular-nums">
@@ -172,7 +172,7 @@ export default async function AnnualPayoutExportPage({ params }: Props) {
                 <span className="font-semibold">Grand total</span>
               </td>
               <td className="py-3 text-right text-lg font-semibold tabular-nums">
-                ${grandTotal.toFixed(2)}
+                {grandTotal.toLocaleString("en-US", { style: "currency", currency: "USD" })}
               </td>
             </tr>
           </tfoot>
