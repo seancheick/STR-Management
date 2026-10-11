@@ -1,3 +1,4 @@
+import { calendarListingId } from "@/lib/services/calendar-display";
 import type { Route } from "next";
 import {
   AlertCircle,
@@ -346,7 +347,7 @@ export default async function DashboardPage() {
 
             {/* Week calendar — first thing host sees */}
             <DashboardWeekCalendar
-              assignments={weekAssignments}
+              assignments={weekAssignments.map((a) => ({ ...a, property_id: calendarListingId(a) }))}
               cleaners={cleaners}
               days={weekDays}
               properties={propertiesResult.data}

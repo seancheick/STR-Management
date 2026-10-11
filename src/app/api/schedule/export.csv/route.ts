@@ -4,7 +4,8 @@ import { requireRole } from "@/lib/auth/session";
 import { listAssignmentsForSchedule } from "@/lib/queries/assignments";
 import { listReservationsForRange } from "@/lib/queries/calendar";
 import { listProperties } from "@/lib/queries/properties";
-import { formatInTimeZone } from "@/lib/ical/timezone";
+import { calendarDate, calendarDayKey, calendarInstantKey, calendarListingId, calendarWindow, calendarWindowContains } from "@/lib/services/calendar-display";
+import { dateKeyInTimeZone, formatInTimeZone } from "@/lib/ical/timezone";
 
 /**
  * GET /api/schedule/export.csv?start=YYYY-MM-DD&end=YYYY-MM-DD[&property=<id>]
@@ -20,31 +21,32 @@ export async function GET(req: NextRequest) {
   const endParam = url.searchParams.get("end");
   const propertyFilter = url.searchParams.get("property");
 
-  const now = new Date();
-  const defaultStart = new Date(now);
-  defaultStart.setDate(now.getDate() - 1);
-  defaultStart.setHours(0, 0, 0, 0);
+  const defaultStart = calendarDate(dateKeyInTimeZone(new Date()));
+  defaultStart.setDate(defaultStart.getDate() - 1);
   const defaultEnd = new Date(defaultStart);
-  defaultEnd.setDate(defaultStart.getDate() + 14);
-  defaultEnd.setHours(23, 59, 59, 999);
-
-  const start = startParam ? new Date(startParam) : defaultStart;
-  const end = endParam ? new Date(endParam) : defaultEnd;
+  defaultEnd.setDate(defaultStart.getDate() + 13);
+  const window = calendarWindow(startParam ?? calendarDayKey(defaultStart), endParam ?? calendarDayKey(defaultEnd));
+  if (!window) {
+    return NextResponse.json({ error: "Use valid YYYY-MM-DD dates with start on or before end." }, { status: 400 });
+  }
 
   const [propertiesResult, assignments, reservations] = await Promise.all([
     listProperties(),
-    listAssignmentsForSchedule(start.toISOString(), end.toISOString()),
-    listReservationsForRange(start.toISOString(), end.toISOString()),
+    listAssignmentsForSchedule(window.queryStart, window.queryEnd),
+    listReservationsForRange(window.queryStart, window.queryEnd),
   ]);
 
   const propById = new Map(propertiesResult.data.map((p) => [p.id, p]));
-
-  const filteredAssignments = propertyFilter
-    ? assignments.filter((a) => a.property_id === propertyFilter)
-    : assignments;
-  const filteredReservations = propertyFilter
-    ? reservations.filter((r) => r.property_id === propertyFilter)
-    : reservations;
+  const activeUnitIds = new Set(propertiesResult.data.filter((p) => p.active).map((p) => p.id));
+  const matchesProperty = (id: string) => activeUnitIds.has(id) && (!propertyFilter || id === propertyFilter);
+  const filteredAssignments = assignments.filter((a) => matchesProperty(calendarListingId(a)) &&
+    calendarWindowContains(a.checkout_at ?? a.due_at, window.start, window.end, propById.get(calendarListingId(a))?.timezone),
+  );
+  const filteredReservations = reservations.filter((r) => {
+    if (!matchesProperty(calendarListingId(r))) return false;
+    const timezone = propById.get(calendarListingId(r))?.timezone;
+    return calendarInstantKey(r.start_at, timezone) <= window.end && calendarInstantKey(r.end_at, timezone) >= window.start;
+  });
 
   // One row per booking + one row per cleaning so the CSV can be used for
   // quick book-keeping AND schedule review.
@@ -68,11 +70,11 @@ export async function GET(req: NextRequest) {
   ];
 
   for (const res of filteredReservations) {
-    const p = propById.get(res.property_id);
+    const p = propById.get(calendarListingId(res));
     const nights = Math.max(
       1,
       Math.round(
-        (new Date(res.end_at).getTime() - new Date(res.start_at).getTime()) / 86400000,
+        (Date.parse(calendarInstantKey(res.end_at, p?.timezone)) - Date.parse(calendarInstantKey(res.start_at, p?.timezone))) / 86400000,
       ),
     );
     rows.push([
@@ -94,7 +96,7 @@ export async function GET(req: NextRequest) {
   }
 
   for (const a of filteredAssignments) {
-    const p = propById.get(a.property_id);
+    const p = propById.get(calendarListingId(a));
     const anchor = a.checkout_at ?? a.due_at;
     rows.push([
       "Cleaning",
@@ -118,15 +120,16 @@ export async function GET(req: NextRequest) {
     .map((r) =>
       r
         .map((cell) => {
-          const needsQuote = /[",\n]/.test(cell);
-          const safe = cell.replace(/"/g, '""');
+          const value = /^[\s]*[=+@-]/.test(cell) ? `'${cell}` : cell;
+          const needsQuote = /[",\r\n]/.test(value);
+          const safe = value.replace(/"/g, '""');
           return needsQuote ? `"${safe}"` : safe;
         })
         .join(","),
     )
     .join("\n");
 
-  const filename = `schedule-${start.toISOString().slice(0, 10)}-to-${end.toISOString().slice(0, 10)}.csv`;
+  const filename = `schedule-${window.start}-to-${window.end}.csv`;
 
   return new NextResponse(csv, {
     headers: {

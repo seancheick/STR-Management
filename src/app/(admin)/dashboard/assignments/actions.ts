@@ -67,30 +67,32 @@ export async function createAssignmentAction(
 
     const supabase = await createServerSupabaseClient();
 
-    // Explicit template selection overrides the property default
-    const explicitTemplateId = (formData.get("templateId") as string | null) || null;
-    let resolvedTemplateId = explicitTemplateId;
-
-    if (!resolvedTemplateId) {
-      const { data: property } = await supabase
-        .from("properties")
-        .select("primary_checklist_template_id")
-        .eq("id", values.propertyId)
-        .maybeSingle();
-      resolvedTemplateId = property?.primary_checklist_template_id ?? null;
+    const ownerId = await resolveOwnerId();
+    const { data: selectedProperty, error: propertyError } = await supabase
+      .from("properties")
+      .select("id, physical_unit_id, primary_checklist_template_id, default_clean_price")
+      .eq("id", values.propertyId)
+      .eq("owner_id", ownerId)
+      .maybeSingle();
+    if (propertyError || !selectedProperty) {
+      return { status: "error", message: propertyError?.message ?? "Property not found." };
     }
 
-    const ownerId = await resolveOwnerId();
+    // Listing-specific checklist/rate stays with the selected configuration;
+    // operational turnover identity belongs to its shared physical unit.
+    const explicitTemplateId = (formData.get("templateId") as string | null) || null;
+    const resolvedTemplateId = explicitTemplateId ?? selectedProperty.primary_checklist_template_id;
 
     const result = await createAssignment({
       ownerId,
-      propertyId: values.propertyId,
+      propertyId: selectedProperty.physical_unit_id ?? selectedProperty.id,
+      listingPropertyId: selectedProperty.id,
       cleanerId: values.cleanerId,
       dueAt: values.dueAt,
       checkoutAt: values.checkoutAt,
       priority: values.priority,
       expectedDurationMin: values.expectedDurationMin,
-      fixedPayoutAmount: values.fixedPayoutAmount,
+      fixedPayoutAmount: values.fixedPayoutAmount ?? selectedProperty.default_clean_price,
       primaryChecklistTemplateId: resolvedTemplateId,
       createdByUserId: profile.id,
     });

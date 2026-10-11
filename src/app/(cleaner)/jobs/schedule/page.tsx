@@ -9,10 +9,11 @@ import {
 } from "@/lib/services/cleaner-portal";
 
 function formatGroupDate(dateKey: string) {
-  return new Date(`${dateKey}T12:00:00`).toLocaleDateString("en-US", {
+  return new Date(`${dateKey}T12:00:00Z`).toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
+    timeZone: "UTC",
   });
 }
 
@@ -25,8 +26,7 @@ export default async function CleanerSchedulePage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col gap-6 px-5 py-8">
       <header className="space-y-2">
-        <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Schedule</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Upcoming work</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Upcoming work</h1>
       </header>
 
       {groups.length === 0 ? (

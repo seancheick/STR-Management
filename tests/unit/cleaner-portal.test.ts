@@ -120,3 +120,13 @@ describe("zonedDayTime", () => {
     expect(zonedDayTime(now, 35, 0, "America/New_York").toISOString()).toBe("2026-11-02T05:00:00.000Z");
   });
 });
+
+it("keeps history newest first without reversing the upcoming schedule", () => {
+  const assignments = [
+    { ...baseAssignment, due_at:"2026-01-01T15:00:00Z" },
+    { ...baseAssignment, id:"latest", due_at:"2026-10-10T15:00:00Z" },
+    { ...baseAssignment, id:"middle", due_at:"2026-06-01T15:00:00Z" },
+  ];
+  expect(groupCleanerAssignmentsByDate(assignments,"desc").map(g=>g.dateKey)).toEqual(["2026-10-10","2026-06-01","2026-01-01"]);
+  expect(groupCleanerAssignmentsByDate(assignments).map(g=>g.dateKey)).toEqual(["2026-01-01","2026-06-01","2026-10-10"]);
+});

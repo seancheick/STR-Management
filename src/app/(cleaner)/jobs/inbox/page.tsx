@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth/session";
 import { formatInTimeZone } from "@/lib/ical/timezone";
 import { listNotificationsForCleaner } from "@/lib/queries/notifications";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
+import { currentCleanerNotifications } from "@/lib/services/cleaner-inbox";
 
 function formatWhen(iso: string): string {
   const d = new Date(iso);
@@ -21,8 +22,14 @@ function formatWhen(iso: string): string {
 }
 
 export default async function CleanerInboxPage() {
-  const profile = await requireRole(["cleaner", "owner", "admin", "supervisor"]);
-  const notifications = await listNotificationsForCleaner(profile.id, 50);
+  const profile = await requireRole([
+    "cleaner",
+    "owner",
+    "admin",
+    "supervisor",
+  ]);
+  const rawNotifications = await listNotificationsForCleaner(profile.id, 100);
+  const notifications = currentCleanerNotifications(rawNotifications);
 
   // Visiting the inbox implicitly marks everything as seen. We use the
   // service client because RLS would otherwise block the update (cleaners
@@ -42,18 +49,27 @@ export default async function CleanerInboxPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col gap-6 px-5 py-8">
       <header className="space-y-2">
-        <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Inbox</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Notifications</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
       </header>
 
       {notifications.length === 0 ? (
         <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border bg-card/70 px-6 py-12 text-center">
-          <Inbox className="h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
+          <Inbox
+            className="h-10 w-10 text-muted-foreground/40"
+            aria-hidden="true"
+          />
           <div>
             <p className="font-semibold">No notifications yet</p>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              You&apos;ll see new job assignments and updates here.
+              You&apos;ll see new job assignments and updates here. Your
+              upcoming jobs are ready in Schedule.
             </p>
+            <Link
+              href="/jobs/schedule"
+              className="mt-3 inline-flex min-h-11 items-center font-medium text-primary"
+            >
+              View upcoming jobs →
+            </Link>
           </div>
         </div>
       ) : (
@@ -89,7 +105,9 @@ export default async function CleanerInboxPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
-                      <p className="truncate text-sm font-semibold">{n.title}</p>
+                      <p className="truncate text-sm font-semibold">
+                        {n.title}
+                      </p>
                       <span className="shrink-0 text-[11px] text-muted-foreground">
                         {formatWhen(n.created_at)}
                       </span>
@@ -97,6 +115,15 @@ export default async function CleanerInboxPage() {
                     <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
                       {n.body}
                     </p>
+                    {n.assignment && (
+                      <p className="mt-1 text-xs font-medium text-primary">
+                        {n.assignment.status === "approved"
+                          ? "Completed · no action needed"
+                          : n.assignment.status === "confirmed"
+                            ? "Accepted · see schedule"
+                            : n.assignment.status.replace(/_/g, " ")}
+                      </p>
+                    )}
                   </div>
                 </Link>
                 {/* Accept/Decline sits OUTSIDE the anchor so the buttons

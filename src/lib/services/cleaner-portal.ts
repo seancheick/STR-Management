@@ -67,6 +67,7 @@ export function getCleanerAssignmentBuckets<T extends CleanerPortalAssignment>(
 
 export function groupCleanerAssignmentsByDate<T extends CleanerPortalAssignment>(
   assignments: T[],
+  order: "asc" | "desc" = "asc",
 ) {
   const grouped = new Map<string, T[]>();
 
@@ -76,7 +77,7 @@ export function groupCleanerAssignmentsByDate<T extends CleanerPortalAssignment>
   }
 
   return Array.from(grouped.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => order === "desc" ? b.localeCompare(a) : a.localeCompare(b))
     .map(([dateKey, group]) => ({
       dateKey,
       assignments: group.sort((a, b) => a.due_at.localeCompare(b.due_at)),

@@ -9,6 +9,8 @@ import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { ReservationRecord } from "@/lib/queries/calendar";
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
+import { calendarDate, calendarDayKey, calendarListingId, calendarInstantKey, reservationColumns } from "@/lib/services/calendar-display";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 import { isTightTurnover, tightTurnoverMinutes } from "@/lib/domain/assignments";
 import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
 
@@ -59,10 +61,11 @@ const PLATFORM_STYLE: Record<
   airbnb: { bar: "bg-rose-500 text-white shadow-sm", label: "Airbnb", dot: "bg-white/90" },
   vrbo: { bar: "bg-amber-500 text-white shadow-sm", label: "VRBO", dot: "bg-white/90" },
   booking: { bar: "bg-blue-600 text-white shadow-sm", label: "Booking", dot: "bg-white/90" },
+  hostex: { bar: "bg-primary text-primary-foreground", label: "Hostex", dot: "bg-primary-foreground" },
   other: { bar: "bg-slate-500 text-white shadow-sm", label: "Direct", dot: "bg-white/90" },
 };
 
-const MAX_STRIPES_PER_WEEK = 3;
+
 const MAX_PILLS_PER_CELL = 2;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -89,10 +92,9 @@ function propertyDotFor(propertyId: string): string {
   return PROPERTY_DOT_PALETTE[hashIndex(propertyId, PROPERTY_DOT_PALETTE.length)];
 }
 
-function shortTime(iso: string | null): string {
+function shortTime(iso: string | null, timezone?: string | null): string {
   if (!iso) return "";
-  return new Date(iso)
-    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+  return formatInTimeZone(iso, { hour: "numeric", minute: "2-digit" }, timezone)
     .replace(" ", "")
     .replace(":00", "");
 }
@@ -107,12 +109,6 @@ function sameLocalDay(a: Date, b: Date): boolean {
 
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function atStartOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
 }
 
 /** Priority within a day — lower number = top of list. */
@@ -156,8 +152,8 @@ export function MonthView({
     return () => window.removeEventListener("keydown", handler);
   }, [selectedId]);
 
-  const today = new Date();
-  const monthStart = new Date(monthDays[0]);
+  const today = useMemo(() => new Date(), []);
+  const monthStart = useMemo(() => calendarDate(monthDays[0]), [monthDays]);
   const monthLabel = monthStart.toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
@@ -173,7 +169,7 @@ export function MonthView({
       d.setDate(monthStart.getDate() - i);
       leading.push(d);
     }
-    const monthDates = monthDays.map((iso) => new Date(iso));
+    const monthDates = monthDays.map(calendarDate);
     const lastDate = monthDates[monthDates.length - 1];
     const trailing: Date[] = [];
     // Pad to exactly 42 cells
@@ -195,6 +191,8 @@ export function MonthView({
     return m;
   }, [properties]);
 
+  const timezoneByProperty = useMemo(() => new Map(properties.map((p) => [p.id, p.timezone])), [properties]);
+
   // Group assignments by day of due_at, sort by priority.
   const byDay = useMemo(() => {
     const map = new Map<string, AssignmentScheduleRecord[]>();
@@ -202,7 +200,7 @@ export function MonthView({
       // Cleaning pill anchors on the CHECKOUT day (guest leaves → cleaner arrives).
       // Fall back to due_at only for manual jobs without a checkout.
       const anchor = a.checkout_at ?? a.due_at;
-      const key = dayKey(new Date(anchor));
+      const key = calendarInstantKey(anchor, timezoneByProperty.get(calendarListingId(a)));
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(a);
     }
@@ -214,7 +212,7 @@ export function MonthView({
       });
     }
     return map;
-  }, [assignments]);
+  }, [assignments, timezoneByProperty]);
 
   // Compute booking stripes per week row with overflow tracking.
   const stripesByWeek = useMemo(() => {
@@ -231,30 +229,11 @@ export function MonthView({
     }));
 
     weeks.forEach((week, weekIdx) => {
-      const weekStart = atStartOfDay(week[0]);
-      const weekEndExclusive = new Date(week[6]);
-      weekEndExclusive.setHours(24, 0, 0, 0);
-
       const all: Stripe[] = [];
       for (const res of reservations) {
-        const start = atStartOfDay(new Date(res.start_at));
-        const endInclusive = atStartOfDay(new Date(new Date(res.end_at).getTime() - 1));
-        if (endInclusive < weekStart || start >= weekEndExclusive) continue;
-
-        const clampedStart = start < weekStart ? weekStart : start;
-        const clampedEnd = endInclusive >= weekEndExclusive ? new Date(week[6]) : endInclusive;
-
-        const startCol = clampedStart.getDay();
-        const endCol = clampedEnd.getDay();
-        const span = Math.max(1, endCol - startCol + 1);
-
-        all.push({
-          res,
-          startCol,
-          span,
-          startsInWeek: start >= weekStart,
-          endsInWeek: endInclusive < weekEndExclusive,
-        });
+        const clip = reservationColumns(res.start_at, res.end_at, week.map(calendarDayKey), timezoneByProperty.get(calendarListingId(res)));
+        if (!clip) continue;
+        all.push({ res, startCol: clip.startCol, span: clip.endCol - clip.startCol + 1, startsInWeek: clip.startsInWindow, endsInWeek: clip.endsInWindow });
       }
 
       // Stable order: earlier start first, then longer spans
@@ -263,12 +242,13 @@ export function MonthView({
           a.res.start_at.localeCompare(b.res.start_at) || b.span - a.span,
       );
 
-      rows[weekIdx].visible = all.slice(0, MAX_STRIPES_PER_WEEK);
-      rows[weekIdx].overflow = Math.max(0, all.length - MAX_STRIPES_PER_WEEK);
+      // Keep all bookings visible: an aggregate overflow label would hide
+      // checkout/check-in boundaries on busy weeks. Cells grow to fit.
+      rows[weekIdx].visible = all;
     });
 
     return rows;
-  }, [weeks, reservations]);
+  }, [weeks, reservations, timezoneByProperty]);
 
   // Today focus counts
   const todayCounts = useMemo(() => {
@@ -361,7 +341,7 @@ export function MonthView({
       {/* Month grid — 6 fixed week rows, each with stripe layer + day cells.
           max-h keeps the whole calendar inside the viewport so hosts don't
           scroll to see the last row. */}
-      <div className="flex flex-col gap-[1px] overflow-hidden rounded-b-2xl border border-t-0 border-border/60 bg-border/60 max-h-[calc(100vh-19rem)] min-h-[420px]">
+      <div className="flex flex-col gap-[1px] overflow-hidden rounded-b-2xl border border-t-0 border-border/60 bg-border/60 min-h-[420px]">
         {weeks.map((week, weekIdx) => (
           <WeekRow
             byDay={byDay}
@@ -581,8 +561,8 @@ function WeekRow({
           {stripes.visible.map((stripe, i) => {
             const style = PLATFORM_STYLE[stripe.res.platform];
             const propertyName =
-              propertyNameById.get(stripe.res.property_id) ?? "Property";
-            const propDot = propertyDotFor(stripe.res.property_id);
+              propertyNameById.get(calendarListingId(stripe.res)) ?? "Property";
+            const propDot = propertyDotFor(calendarListingId(stripe.res));
             return (
               <div className="grid grid-cols-7 gap-[1px]" key={`${stripe.res.id}-${i}`}>
                 <div
@@ -682,7 +662,7 @@ function WeekRow({
                   }
                   key={a.id}
                   onClick={() => onSelect(a.id)}
-                  propertyName={propertyNameById.get(a.property_id)}
+                  propertyName={propertyNameById.get(calendarListingId(a))}
                 />
               ))}
               {dayJobs.length > MAX_PILLS_PER_CELL && (
@@ -754,8 +734,8 @@ function CalendarPill({
   }
 
   // Cleaner arrives at checkout; show checkout time on the pill.
-  const time = shortTime(assignment.checkout_at ?? assignment.due_at);
-  const propDot = propertyDotFor(assignment.property_id);
+  const time = shortTime(assignment.checkout_at ?? assignment.due_at, assignment.properties?.timezone);
+  const propDot = propertyDotFor(calendarListingId(assignment));
   const shortProp = propertyName ? compactShort(propertyName, 14) : "";
   const gapHours = gap !== null ? Math.floor(gap / 60) : null;
   const urgencyLabel = tight && gap !== null

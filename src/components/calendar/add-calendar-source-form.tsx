@@ -96,6 +96,7 @@ export function AddCalendarSourceForm({ action, properties, defaultPropertyId }:
             <option value="airbnb">Airbnb</option>
             <option value="vrbo">VRBO</option>
             <option value="booking">Booking.com</option>
+            <option value="hostex">Hostex</option>
             <option value="other">Other</option>
           </select>
         </div>

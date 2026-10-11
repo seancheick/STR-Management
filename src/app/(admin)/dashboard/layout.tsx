@@ -66,7 +66,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
       <KeyboardShortcuts canManage={canManage} />
 
       {/* Content — offset for desktop sidebar, padded for mobile top bar */}
-      <div className="flex w-full flex-col pt-14 lg:pl-60 lg:pt-0">
+      <div className="flex min-w-0 w-full flex-col pt-14 lg:pl-60 lg:pt-0">
         {children}
       </div>
     </div>

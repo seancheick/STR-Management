@@ -46,7 +46,7 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
 
   const [inventoryItems, propertyResult, messages] = await Promise.all([
     listInventoryForProperty(assignment.property_id),
-    getProperty(assignment.property_id),
+    getProperty(assignment.listing_property_id ?? assignment.property_id),
     listJobMessages(assignmentId),
   ]);
   const cleanerNotes = propertyResult.data?.cleaner_notes ?? null;

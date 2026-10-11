@@ -1,3 +1,5 @@
+import { dateKeyInTimeZone } from "@/lib/ical/timezone";
+import { calendarDate, calendarDayKey, calendarInstantKey, calendarListingId } from "@/lib/services/calendar-display";
 import { requireRole } from "@/lib/auth/session";
 import { listAssignmentsForSchedule } from "@/lib/queries/assignments";
 import { listReservationsForRange } from "@/lib/queries/calendar";
@@ -13,7 +15,7 @@ type SchedulePageProps = {
 
 /** 14 days starting from yesterday, shifted by weekOffset weeks. */
 function getTimelineDays(weekOffset: number): Date[] {
-  const now = new Date();
+  const now = calendarDate(dateKeyInTimeZone(new Date()));
   const start = new Date(now);
   start.setDate(now.getDate() - 1 + weekOffset * 7);
   start.setHours(0, 0, 0, 0);
@@ -26,7 +28,7 @@ function getTimelineDays(weekOffset: number): Date[] {
 }
 
 function getMonthDays(monthOffset: number): Date[] {
-  const now = new Date();
+  const now = calendarDate(dateKeyInTimeZone(new Date()));
   const year = now.getFullYear();
   const month = now.getMonth() + monthOffset;
 
@@ -74,32 +76,40 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
     rangeEnd = new Date(rangeStart);
     rangeEnd.setDate(rangeStart.getDate() + 41);
     rangeEnd.setHours(23, 59, 59, 999);
-    monthDayISOs = monthDays.map((d) => d.toISOString());
+    monthDayISOs = monthDays.map(calendarDayKey);
   } else {
     const timelineDays = getTimelineDays(weekOffset);
     rangeStart = new Date(timelineDays[0]);
     rangeStart.setHours(0, 0, 0, 0);
     rangeEnd = new Date(timelineDays[timelineDays.length - 1]);
     rangeEnd.setHours(23, 59, 59, 999);
-    timelineDayISOs = timelineDays.map((d) => d.toISOString());
+    timelineDayISOs = timelineDays.map(calendarDayKey);
   }
 
   const [propertiesResult, allAssignments, cleaners, reservations] = await Promise.all([
     listProperties(),
-    listAssignmentsForSchedule(rangeStart.toISOString(), rangeEnd.toISOString()),
+    listAssignmentsForSchedule(new Date(rangeStart.getTime() - 86400000).toISOString(), new Date(rangeEnd.getTime() + 86400000).toISOString()),
     listActiveCleaners(),
-    listReservationsForRange(rangeStart.toISOString(), rangeEnd.toISOString()),
+    listReservationsForRange(new Date(rangeStart.getTime() - 86400000).toISOString(), new Date(rangeEnd.getTime() + 86400000).toISOString()),
   ]);
 
   const activeProperties = propertiesResult.data.filter((p) => p.active);
+  // Fetch padding covers timezone offsets; counts still describe the visible grid.
+  const timezoneByProperty = new Map(activeProperties.map((p) => [p.id, p.timezone]));
+  const firstDay = calendarDayKey(rangeStart);
+  const lastDay = calendarDayKey(rangeEnd);
+  const visibleAssignments = allAssignments.filter((a) => {
+    const day = calendarInstantKey(a.checkout_at ?? a.due_at, timezoneByProperty.get(calendarListingId(a)));
+    return day >= firstDay && day <= lastDay;
+  });
 
   // Property filter applies to every downstream array so the Month view,
   // Timeline, booking stripes, and cleaner count all react.
   const propFilteredAssignments = propertyFilter
-    ? allAssignments.filter((a) => a.property_id === propertyFilter)
-    : allAssignments;
+    ? visibleAssignments.filter((a) => calendarListingId(a) === propertyFilter)
+    : visibleAssignments;
   const propFilteredReservations = propertyFilter
-    ? reservations.filter((r) => r.property_id === propertyFilter)
+    ? reservations.filter((r) => calendarListingId(r) === propertyFilter)
     : reservations;
   const propFilteredProperties = propertyFilter
     ? activeProperties.filter((p) => p.id === propertyFilter)
@@ -141,7 +151,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
   const unassignedCount = propFilteredAssignments.filter((a) => a.cleaner_id === null).length;
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-[1400px] flex-col gap-6 px-6 py-10">
+    <main className="mx-auto flex min-h-screen min-w-0 w-full max-w-[1400px] flex-col gap-6 px-6 py-10">
       <div>
         <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Operations</p>
         <h1 className="mt-1.5 text-3xl font-semibold tracking-tight">Schedule</h1>

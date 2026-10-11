@@ -75,3 +75,30 @@ function search paths, and callable security-definer functions. These are
 outside the ledger change and need a focused permissions review; their notices
 alone do not establish exploitable access. No new ledger advisor findings.
 The repository also has five existing lint warnings in schedule/recap files.
+
+## Job and Hostex reconciliation — October 11
+
+132 completed offline cleanings are linked one-to-one to their ledger rows. Matched
+90 existing jobs and recorded 42 missing jobs. Owner review explicitly records
+that these are offline confirmations, without invented cleaner acceptance or
+photo evidence. Duplicate/unsupported old jobs are cancelled and their original
+rows retained in `ops_reconciliation_audit`. Ledger balance remains $2,124.
+
+Five Hostex feeds replaced the old feeds. Their authenticated URLs are stored
+only in the database, never in source control. Initial sync created 13 upcoming
+jobs assigned to Mary, with pending acceptance. Old source reservations remain
+stored but are excluded from the live calendar.
+
+The five visible configurations remain separate: basement 1 bedroom ($75), each
+floor 2 bedrooms ($90), and each floor 3 bedrooms ($120). Physical-unit identity
+prevents duplicate cleanings; `listing_property_id` preserves booked configuration
+in calendar rows, job labels, notes, checklists and payouts. Rate differences
+are retained for both historical and future jobs. Shared-unit next arrival is
+computed across both bedroom feeds. Current feeds have no same-day turnovers;
+checkout/check-in boundary rendering is covered by tests.
+
+History is newest first, compact and paginated (25 jobs). Terminal historical
+offers no longer require accept/decline; fresh cancellation updates still show.
+The one-time `longmont-jobs-reconciliation.sql` is an operational snapshot import;
+do not replay it after activating replacement feeds, as it archives old future
+imports. The original ledger data import remains idempotent.

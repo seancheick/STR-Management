@@ -38,8 +38,7 @@ export type TurnoverCandidate = {
   checkoutAt: string;
   /**
    * ISO string: cleaning deadline.
-   * If a next booking exists, this is the next guest's check-in (15:00 local).
-   * Otherwise, the checkout day at 15:00 local.
+   * Checkout day at 15:00 local; next arrivals are tracked separately.
    */
   dueAt: string;
   /** ISO string: next guest check-in (DTSTART of the following reservation). Null if no next booking. */
@@ -54,6 +53,7 @@ type RawEvent = {
   dtend?: string;
   summary?: string;
   description?: string;
+  status?: string;
 };
 
 type ParsedEvent = TurnoverCandidate & {
@@ -61,7 +61,7 @@ type ParsedEvent = TurnoverCandidate & {
   checkinAt: string;
 };
 
-const BLOCKED_PATTERNS = /not available|blocked|unavailable|maintenance|hold/i;
+const BLOCKED_PATTERNS = /\b(?:not available|blocked|unavailable|maintenance|hold)\b/i;
 
 /** Unfold RFC 5545 line continuations (CRLF + whitespace = continuation). */
 function unfold(raw: string): string {
@@ -76,7 +76,7 @@ type ParsedIcalDate = {
 };
 
 /** Parse a DATE or DATETIME value string into a JS Date plus a flag indicating granularity. */
-function parseIcalDate(value: string): ParsedIcalDate | null {
+function parseIcalDate(value: string, timeZone: string): ParsedIcalDate | null {
   // Strip VALUE=DATE: or TZID= param prefix (e.g. DTSTART;TZID=America/New_York:20260415T110000)
   const bare = value.replace(/^[^:]+:/, "").trim();
 
@@ -97,8 +97,12 @@ function parseIcalDate(value: string): ParsedIcalDate | null {
     const h = bare.slice(9, 11);
     const min = bare.slice(11, 13);
     const s = bare.slice(13, 15);
+    const eventZone = value.match(/TZID=([^;:]+)/i)?.[1] ?? timeZone;
+    const date = bare.endsWith("Z")
+      ? new Date(`${y}-${mo}-${d}T${h}:${min}:${s}Z`)
+      : new Date(zonedTimeToUtc(Number(y), Number(mo), Number(d), Number(h), Number(min), eventZone).getTime() + Number(s) * 1000);
     return {
-      date: new Date(`${y}-${mo}-${d}T${h}:${min}:${s}Z`),
+      date,
       dateOnly: false,
       ymd: null,
     };
@@ -147,7 +151,7 @@ export function parseIcal(raw: string, options?: ParseIcalOptions): TurnoverCand
       inEvent = false;
 
       // Skip blocked / unavailable slots
-      if (current.summary && BLOCKED_PATTERNS.test(current.summary)) {
+      if (current.status === "CANCELLED" || (current.summary && BLOCKED_PATTERNS.test(current.summary))) {
         continue;
       }
 
@@ -156,18 +160,21 @@ export function parseIcal(raw: string, options?: ParseIcalOptions): TurnoverCand
 
       // DTSTART = guest check-in; DTEND = guest checkout
       if (!current.dtstart) continue;
-      const checkinParsed = parseIcalDate(current.dtstart);
+      const checkinParsed = parseIcalDate(current.dtstart, timeZone);
       if (!checkinParsed) continue;
 
-      // Use DTEND as the checkout date (guest leaves), fall back to DTSTART
-      const checkoutRaw = current.dtend ?? current.dtstart;
-      const checkoutParsed = parseIcalDate(checkoutRaw);
+      // Without a checkout, a reservation cannot establish a cleaning task.
+      if (!current.dtend) continue;
+      const checkoutRaw = current.dtend;
+      const checkoutParsed = parseIcalDate(checkoutRaw, timeZone);
       if (!checkoutParsed) continue;
 
       // Snap DATE-only values to property-local hours (11:00 checkout / 15:00 check-in).
       // For DATETIME values, respect the explicit time from the feed.
       const checkinDate = anchorLocalHour(checkinParsed, checkinHour, timeZone);
       const checkoutDate = anchorLocalHour(checkoutParsed, checkoutHour, timeZone);
+
+      if (!Number.isFinite(checkinDate.getTime()) || !Number.isFinite(checkoutDate.getTime()) || checkoutDate <= checkinDate) continue;
 
       // Fallback dueAt: same day as checkout at check-in hour (used when no next booking pairs).
       const fallbackDue = snapToLocalHour(checkoutDate, checkinHour, 0, timeZone);
@@ -197,6 +204,7 @@ export function parseIcal(raw: string, options?: ParseIcalOptions): TurnoverCand
     if (key === "UID") current.uid = value;
     else if (key.startsWith("DTSTART")) current.dtstart = line; // full line for param extraction
     else if (key.startsWith("DTEND")) current.dtend = line; // full line for param extraction
+    else if (key === "STATUS") current.status = value.toUpperCase();
     else if (key === "SUMMARY") current.summary = value;
     else if (key === "DESCRIPTION") current.description = value.replace(/\\n/g, "\n");
   }

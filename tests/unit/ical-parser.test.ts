@@ -163,13 +163,12 @@ describe("parseIcal", () => {
     expect(parseIcal(raw)).toHaveLength(0);
   });
 
-  it("falls back to DTSTART when DTEND is missing", () => {
+  it("skips a stay whose checkout is unknown", () => {
     const raw = makeIcal([
       makeEvent({ UID: "nodtend", DTSTART: "20261101", SUMMARY: "No DTEND" }),
     ]);
     const result = parseIcal(raw);
-    expect(result).toHaveLength(1);
-    expect(result[0].checkoutAt).toContain("2026-11-01");
+    expect(result).toHaveLength(0);
   });
 
   it("parses multiple events", () => {
@@ -258,5 +257,38 @@ describe("overlap window calculation", () => {
     const windowStart = new Date(dueAt.getTime() - 4 * 60 * 60 * 1000);
     const windowEnd = new Date(dueAt.getTime() + 4 * 60 * 60 * 1000);
     expect(candidate >= windowStart && candidate <= windowEnd).toBe(false);
+  });
+});
+
+
+describe("feed hygiene", () => {
+  it("skips cancelled bookings without mistaking a guest name for a hold", () => {
+    const raw = makeIcal([
+      makeEvent({ UID: "cancelled", DTSTART: "20261001", DTEND: "20261003", STATUS: "CANCELLED", SUMMARY: "Reserved" }),
+      makeEvent({ UID: "guest", DTSTART: "20261001", DTEND: "20261003", SUMMARY: "Holden family" }),
+    ]);
+    expect(parseIcal(raw).map((r) => r.uid)).toEqual(["guest"]);
+  });
+  it("records same-day checkout and next arrival as one turnover", () => {
+    const raw = makeIcal([
+      makeEvent({ UID: "first", DTSTART: "20261001", DTEND: "20261003", SUMMARY: "Reserved" }),
+      makeEvent({ UID: "next", DTSTART: "20261003", DTEND: "20261006", SUMMARY: "Reserved" }),
+    ]);
+    const first = parseIcal(raw)[0];
+    expect(first.checkoutAt).toBe(nyIso(2026, 10, 3, 11));
+    expect(first.nextCheckinAt).toBe(nyIso(2026, 10, 3, 15));
+    expect(first.dueAt).toBe(first.nextCheckinAt);
+  });
+});
+
+
+describe("explicit local reservation times", () => {
+  it("honors TZID instead of treating local PMS timestamps as UTC", () => {
+    const result = parseIcal(makeIcal([makeEvent({ UID: "pms", "DTSTART;TZID=America/New_York": "20261001T150000", "DTEND;TZID=America/New_York": "20261003T110000", SUMMARY: "Reserved" })]));
+    expect(result[0].checkoutAt).toBe(nyIso(2026, 10, 3, 11));
+  });
+  it("anchors floating PMS timestamps in the property timezone", () => {
+    const result = parseIcal(makeIcal([makeEvent({ UID: "pms", DTSTART: "20261001T150000", DTEND: "20261003T110000", SUMMARY: "Reserved" })]));
+    expect(result[0].checkoutAt).toBe(nyIso(2026, 10, 3, 11));
   });
 });

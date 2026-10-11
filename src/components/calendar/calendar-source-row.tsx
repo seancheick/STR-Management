@@ -10,6 +10,7 @@ const platformLabels: Record<string, string> = {
   airbnb: "Airbnb",
   vrbo: "VRBO",
   booking: "Booking.com",
+  hostex: "Hostex",
   other: "Other",
 };
 

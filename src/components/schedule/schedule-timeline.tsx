@@ -10,6 +10,8 @@ import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { ReservationRecord } from "@/lib/queries/calendar";
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
+import { calendarDate, calendarDayKey, calendarEdgeDirection, calendarListingId, calendarInstantKey, calendarRangeLabel, reservationColumns } from "@/lib/services/calendar-display";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 import { isTightTurnover } from "@/lib/domain/assignments";
 import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
 
@@ -36,6 +38,7 @@ const PLATFORM_STYLE: Record<
   airbnb: { barBg: "bg-rose-500", dot: "bg-white/90", label: "Airbnb" },
   booking: { barBg: "bg-blue-600", dot: "bg-white/90", label: "Booking.com" },
   vrbo: { barBg: "bg-amber-500", dot: "bg-white/90", label: "VRBO" },
+  hostex: { barBg: "bg-primary", dot: "bg-primary-foreground", label: "Hostex" },
   other: { barBg: "bg-slate-500", dot: "bg-white/90", label: "Direct" },
 };
 
@@ -55,14 +58,6 @@ function atStartOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
-}
-
-function dayKeyUTC(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function localDateKey(iso: string): string {
-  return dayKeyUTC(new Date(iso));
 }
 
 /** Column index (0..days.length-1) a date falls on, or null if outside the window.
@@ -92,6 +87,7 @@ export function ScheduleTimeline({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const pendingEdgePage = useRef<{ direction: "previous" | "next"; fromDay: string } | null>(null);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -107,7 +103,7 @@ export function ScheduleTimeline({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
-      if (target && target.matches("input, textarea, select, [contenteditable]")) return;
+      if (target && target.closest("input, textarea, select, button, a, [contenteditable], [role=dialog]")) return;
       // Ignore modifier combos (user may be copying etc.)
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
@@ -141,6 +137,7 @@ export function ScheduleTimeline({
     let startScroll = 0;
 
     function onDown(e: PointerEvent) {
+      if (e.pointerType === "touch") return;
       // Don't hijack drags starting on interactive elements (buttons, links)
       const target = e.target as HTMLElement;
       if (target.closest("button,a,input,select")) return;
@@ -156,7 +153,7 @@ export function ScheduleTimeline({
     }
     function onUp(e: PointerEvent) {
       isDown = false;
-      el!.releasePointerCapture(e.pointerId);
+      if (el!.hasPointerCapture(e.pointerId)) el!.releasePointerCapture(e.pointerId);
       el!.style.cursor = "";
     }
 
@@ -177,13 +174,67 @@ export function ScheduleTimeline({
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el || !days.length) return;
-    const todayCol = dayIndex(new Date(), new Date(days[0]), days.length);
+    const todayCol = dayIndex(new Date(), calendarDate(days[0]), days.length);
     if (todayCol === null || todayCol < 3) return;
     // Each day ≈ (el.scrollWidth - propertyCol) / days.length
     const propertyColPx = 220;
     const perDay = (el.scrollWidth - propertyColPx) / days.length;
     el.scrollLeft = Math.max(0, perDay * (todayCol - 2));
   }, [days]);
+
+  // Route paging only follows user gestures, never initial/programmatic scrolling.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const pending = pendingEdgePage.current;
+    if (pending && pending.fromDay !== days[0]) {
+      el.scrollLeft = pending.direction === "next" ? 1 : Math.max(0, el.scrollWidth - el.clientWidth - 1);
+      pendingEdgePage.current = null;
+    }
+    let frame = 0;
+    let pointerX: number | null = null;
+    let gestureDelta = 0;
+    function checkEdge() {
+      if (pendingEdgePage.current) return;
+      const direction = calendarEdgeDirection(el!.scrollLeft, el!.scrollWidth, el!.clientWidth, gestureDelta);
+      if (!direction) return;
+      pendingEdgePage.current = { direction, fromDay: days[0] };
+      router.push(`?view=week&week=${weekOffset + (direction === "next" ? 2 : -2)}${filterQuery}` as Route, { scroll: false });
+    }
+    function scheduleCheck(delta: number) {
+      if (!delta) return;
+      gestureDelta = delta;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(checkEdge);
+    }
+    function onWheel(e: WheelEvent) {
+      scheduleCheck(Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0);
+    }
+    function onPointerDown(e: PointerEvent) {
+      if ((e.target as HTMLElement).closest("button,a,input,select")) return;
+      pointerX = e.clientX;
+    }
+    function onPointerMove(e: PointerEvent) {
+      if (pointerX === null) return;
+      const delta = pointerX - e.clientX;
+      pointerX = e.clientX;
+      scheduleCheck(delta);
+    }
+    function onPointerUp() { pointerX = null; }
+    el.addEventListener("wheel", onWheel, { passive: true });
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", onPointerUp);
+    el.addEventListener("pointercancel", onPointerUp);
+    return () => {
+      cancelAnimationFrame(frame);
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", onPointerUp);
+      el.removeEventListener("pointercancel", onPointerUp);
+    };
+  }, [days, router, weekOffset, filterQuery]);
 
   function scrollToToday() {
     // Today isn't in this window when paged away: jump back to it first.
@@ -193,7 +244,7 @@ export function ScheduleTimeline({
     }
     const el = scrollerRef.current;
     if (!el || !days.length) return;
-    const todayCol = dayIndex(new Date(), new Date(days[0]), days.length);
+    const todayCol = dayIndex(new Date(), calendarDate(days[0]), days.length);
     if (todayCol === null) return;
     const propertyColPx = 220;
     const perDay = (el.scrollWidth - propertyColPx) / days.length;
@@ -201,8 +252,7 @@ export function ScheduleTimeline({
   }
 
   const today = new Date();
-  const dayDates = useMemo(() => days.map((iso) => new Date(iso)), [days]);
-  const windowStart = useMemo(() => atStartOfDay(dayDates[0]), [dayDates]);
+  const dayDates = useMemo(() => days.map(calendarDate), [days]);
 
   const visibleProperties = useMemo(() => {
     const filtered = selectedPropertyId
@@ -211,21 +261,9 @@ export function ScheduleTimeline({
     return filtered.filter((p) => p.active);
   }, [properties, selectedPropertyId]);
 
-  const rangeLabel = useMemo(() => {
-    const first = dayDates[0];
-    const last = dayDates[dayDates.length - 1];
-    const sameMonth = first.getMonth() === last.getMonth();
-    const firstLabel = first.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    const lastLabel = last.toLocaleDateString("en-US", {
-      month: sameMonth ? undefined : "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    return `${firstLabel} – ${lastLabel}`;
-  }, [dayDates]);
+  const rangeLabel = calendarRangeLabel(dayDates[0], dayDates[dayDates.length - 1]);
+  const timezoneByProperty = useMemo(() => new Map(properties.map((p) => [p.id, p.timezone])), [properties]);
+  const dayKeys = useMemo(() => dayDates.map(calendarDayKey), [dayDates]);
 
   const selectedAssignment = selectedId
     ? assignments.find((a) => a.id === selectedId) ?? null
@@ -245,26 +283,12 @@ export function ScheduleTimeline({
   const reservationsByProperty = useMemo(() => {
     const map = new Map<string, ClippedReservation[]>();
     for (const res of reservations) {
-      const start = atStartOfDay(new Date(res.start_at));
-      const endInclusive = atStartOfDay(new Date(new Date(res.end_at).getTime() - 1));
-      if (endInclusive < windowStart) continue;
-      const windowEnd = new Date(windowStart);
-      windowEnd.setDate(windowEnd.getDate() + days.length - 1);
-      if (start > windowEnd) continue;
-
-      const clampedStart = start < windowStart ? windowStart : start;
-      const clampedEnd = endInclusive > windowEnd ? windowEnd : endInclusive;
-      const startCol = dayIndex(clampedStart, windowStart, days.length) ?? 0;
-      const endCol =
-        dayIndex(clampedEnd, windowStart, days.length) ?? days.length - 1;
-
-      if (!map.has(res.property_id)) map.set(res.property_id, []);
-      map.get(res.property_id)!.push({
+      const clip = reservationColumns(res.start_at, res.end_at, dayKeys, timezoneByProperty.get(calendarListingId(res)));
+      if (!clip) continue;
+      if (!map.has(calendarListingId(res))) map.set(calendarListingId(res), []);
+      map.get(calendarListingId(res))!.push({
         res,
-        startCol,
-        endCol,
-        startsInWindow: start >= windowStart,
-        endsInWindow: endInclusive <= windowEnd,
+        ...clip,
       });
     }
     // Sort each property's reservations chronologically
@@ -272,22 +296,22 @@ export function ScheduleTimeline({
       list.sort((a, b) => a.res.start_at.localeCompare(b.res.start_at));
     }
     return map;
-  }, [reservations, windowStart, days.length]);
+  }, [reservations, dayKeys, timezoneByProperty]);
 
   // Assignments grouped by property, each keyed to a day column.
   const assignmentsByPropertyDay = useMemo(() => {
     const map = new Map<string, Map<number, AssignmentScheduleRecord[]>>();
     for (const a of assignments) {
       const anchor = a.checkout_at ?? a.due_at;
-      const col = dayIndex(new Date(anchor), windowStart, days.length);
-      if (col === null) continue;
-      if (!map.has(a.property_id)) map.set(a.property_id, new Map());
-      const perDay = map.get(a.property_id)!;
+      const col = dayKeys.indexOf(calendarInstantKey(anchor, timezoneByProperty.get(calendarListingId(a))));
+      if (col < 0) continue;
+      if (!map.has(calendarListingId(a))) map.set(calendarListingId(a), new Map());
+      const perDay = map.get(calendarListingId(a))!;
       if (!perDay.has(col)) perDay.set(col, []);
       perDay.get(col)!.push(a);
     }
     return map;
-  }, [assignments, windowStart, days.length]);
+  }, [assignments, dayKeys, timezoneByProperty]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -328,6 +352,8 @@ export function ScheduleTimeline({
           <Legend color="border border-green-300 bg-green-50" label="Clean" />
         </div>
       </div>
+
+      <p className="text-xs text-muted-foreground">Scroll sideways to browse dates. At either edge, keep scrolling to load earlier or later weeks.</p>
 
       {/* Timeline — grid with property column + N day columns.
           Horizontal scroll enabled: trackpad / touch pan, mouse wheel shift,
@@ -496,6 +522,7 @@ function PropertyRow({
           const isToday = sameLocalDay(d, today);
           return (
             <div
+              style={{ gridColumn: i + 1, gridRow: 1 }}
               className={`border-r border-border/30 last:border-r-0 ${
                 isToday ? "bg-primary/5" : ""
               }`}
@@ -506,10 +533,10 @@ function PropertyRow({
         })}
 
         {/* Reservation bars + cleaning chips layered inside */}
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-center gap-1 px-1.5 py-2">
+        <div className="pointer-events-none relative col-span-full row-start-1 flex flex-col justify-center gap-1 px-1.5 py-2">
           {/* Top lane: reservation bars */}
           <div
-            className="pointer-events-auto grid gap-0"
+            className="pointer-events-auto grid gap-y-1"
             style={{
               gridTemplateColumns: `repeat(${dayDates.length}, minmax(0, 1fr))`,
             }}
@@ -537,6 +564,7 @@ function PropertyRow({
                   clip={clip}
                   key={`res-${clip.res.id}-${i}`}
                   style={style}
+                  timezone={property.timezone}
                 />
               );
             })}
@@ -544,7 +572,7 @@ function PropertyRow({
 
           {/* Bottom lane: cleaning chips + tight badges on specific days */}
           <div
-            className="pointer-events-auto grid gap-0"
+            className="pointer-events-auto grid gap-y-1"
             style={{
               gridTemplateColumns: `repeat(${dayDates.length}, minmax(0, 1fr))`,
             }}
@@ -638,6 +666,7 @@ function Legend({ color, label }: { color: string; label: string }) {
 // ─── Booking bar with click popover ───────────────────────────────────────────
 
 function BookingBar({
+  timezone,
   clip,
   style,
 }: {
@@ -649,6 +678,7 @@ function BookingBar({
     endsInWindow: boolean;
   };
   style: { barBg: string; dot: string; label: string };
+  timezone?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -673,12 +703,12 @@ function BookingBar({
   const end = new Date(clip.res.end_at);
   const nights = Math.max(
     1,
-    Math.round((atStartOfDay(end).getTime() - atStartOfDay(start).getTime()) / 86400000),
+    Math.round((Date.parse(calendarInstantKey(clip.res.end_at, timezone)) - Date.parse(calendarInstantKey(clip.res.start_at, timezone))) / 86400000),
   );
   const dateFmt = (d: Date) =>
-    d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    formatInTimeZone(d, { weekday: "short", month: "short", day: "numeric" }, timezone);
   const timeFmt = (d: Date) =>
-    d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    formatInTimeZone(d, { hour: "numeric", minute: "2-digit" }, timezone);
 
   return (
     <div

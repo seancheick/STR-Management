@@ -1,5 +1,7 @@
 "use client";
 
+import { calendarListingId } from "@/lib/services/calendar-display";
+
 import { useActionState, useEffect, useState } from "react";
 import {
   AlertCircle,
@@ -79,7 +81,7 @@ function propertyStatus(
   today: Date,
 ): { label: string; color: string } {
   const todayAssignments = assignments.filter(
-    (a) => a.property_id === propertyId && isSameDay(new Date(a.due_at), today),
+    (a) => calendarListingId(a) === propertyId && isSameDay(new Date(a.due_at), today),
   );
   if (todayAssignments.length === 0) return { label: "No jobs today", color: "text-muted-foreground" };
   const statuses = todayAssignments.map((a) => a.status);
@@ -390,7 +392,7 @@ export function ScheduleGrid({
       isSameDay(new Date(d), new Date(a.due_at)),
     );
     if (dayIndex >= 0) {
-      const key = `${a.property_id}|${dayIndex}`;
+      const key = `${calendarListingId(a)}|${dayIndex}`;
       if (!cellMap.has(key)) cellMap.set(key, []);
       cellMap.get(key)!.push(a);
     }

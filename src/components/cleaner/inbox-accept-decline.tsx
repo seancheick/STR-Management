@@ -37,7 +37,7 @@ export function InboxAcceptDecline({ assignmentId }: { assignmentId: string }) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-1.5">
       <button
-        className="inline-flex h-8 items-center gap-1.5 rounded-full bg-emerald-600 px-3 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
         disabled={pending}
         onClick={handleAccept}
         type="button"
@@ -48,7 +48,7 @@ export function InboxAcceptDecline({ assignmentId }: { assignmentId: string }) {
 
       {!declineOpen ? (
         <button
-          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 text-xs font-medium text-foreground transition hover:bg-muted disabled:opacity-50"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 text-xs font-medium text-foreground transition hover:bg-muted disabled:opacity-50"
           disabled={pending}
           onClick={(e) => {
             e.preventDefault();
@@ -65,7 +65,7 @@ export function InboxAcceptDecline({ assignmentId }: { assignmentId: string }) {
           <span className="text-[11px] text-muted-foreground">Reason:</span>
           {DECLINE_REASONS.map((r) => (
             <button
-              className="inline-flex h-7 items-center rounded-full border border-border/70 bg-card px-2.5 text-[11px] font-medium transition hover:bg-muted disabled:opacity-50"
+              className="inline-flex min-h-11 items-center rounded-full border border-border/70 bg-card px-2.5 text-[11px] font-medium transition hover:bg-muted disabled:opacity-50"
               disabled={pending}
               key={r.value}
               onClick={(e) => {
@@ -79,7 +79,7 @@ export function InboxAcceptDecline({ assignmentId }: { assignmentId: string }) {
             </button>
           ))}
           <button
-            className="inline-flex h-7 items-center rounded-full px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+            className="inline-flex min-h-11 items-center rounded-full px-2 text-[11px] font-medium text-muted-foreground hover:text-foreground"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();

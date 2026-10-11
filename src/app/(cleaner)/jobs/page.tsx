@@ -15,8 +15,7 @@ export default async function CleanerJobsPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col gap-6 px-5 py-8">
       <header className="space-y-2">
-        <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Cleaner portal</p>
-        <h1 className="text-3xl font-semibold tracking-tight">
+        <h1 className="text-2xl font-semibold tracking-tight">
           Jobs, {profile.full_name.split(" ")[0]}
         </h1>
       </header>

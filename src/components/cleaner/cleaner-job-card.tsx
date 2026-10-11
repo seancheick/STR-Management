@@ -37,7 +37,13 @@ const STATUS_BARS: Record<string, string> = {
 function formatDateTime(iso: string, timeZone?: string | null) {
   return formatInTimeZone(
     iso,
-    { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
+    {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    },
     timeZone,
   );
 }
@@ -52,18 +58,50 @@ type CleanerJobCardProps = {
   assignment: AssignmentListRecord;
   showActions?: boolean;
   showPayout?: boolean;
+  compact?: boolean;
 };
 
 export function CleanerJobCard({
   assignment,
   showActions = false,
   showPayout = true,
+  compact = false,
 }: CleanerJobCardProps) {
   const address = addressForAssignment(assignment);
   const statusClass =
-    STATUS_CLASSES[assignment.status] ?? "border-border bg-muted text-muted-foreground";
+    STATUS_CLASSES[assignment.status] ??
+    "border-border bg-muted text-muted-foreground";
   const statusBar = STATUS_BARS[assignment.status] ?? "bg-border";
   const timeZone = assignment.properties?.timezone;
+
+  if (compact)
+    return (
+      <Link
+        href={`/jobs/${assignment.id}` as Route}
+        className="flex min-h-16 items-center justify-between gap-3 border-b border-border py-3 last:border-b-0"
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">
+            {assignment.properties?.name ?? "Property"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {assignment.ledger_entry_id
+              ? "Recorded from ledger"
+              : (STATUS_LABELS[assignment.status] ??
+                assignment.status.replace(/_/g, " "))}{" "}
+            · View details
+          </p>
+        </div>
+        {showPayout && assignment.fixed_payout_amount !== null && (
+          <span className="shrink-0 text-sm font-semibold tabular-nums">
+            {Number(assignment.fixed_payout_amount).toLocaleString("en-US", {
+              style: "currency",
+              currency: "USD",
+            })}
+          </span>
+        )}
+      </Link>
+    );
 
   return (
     <article className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
@@ -81,8 +119,11 @@ export function CleanerJobCard({
               </div>
             )}
           </div>
-          <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClass}`}>
-            {STATUS_LABELS[assignment.status] ?? assignment.status.replace(/_/g, " ")}
+          <span
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClass}`}
+          >
+            {STATUS_LABELS[assignment.status] ??
+              assignment.status.replace(/_/g, " ")}
           </span>
         </div>
 
@@ -90,23 +131,33 @@ export function CleanerJobCard({
           {assignment.checkout_at ? (
             <div className="flex flex-col gap-0.5 rounded-xl bg-muted/60 px-3 py-2">
               <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <Clock
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Window
                 </span>
               </div>
               <p className="text-xs leading-5 text-foreground">
                 <span className="text-muted-foreground">Start after</span>{" "}
-                <span className="font-semibold">{formatDateTime(assignment.checkout_at, timeZone)}</span>
+                <span className="font-semibold">
+                  {formatDateTime(assignment.checkout_at, timeZone)}
+                </span>
               </p>
               <p className="text-xs leading-5 text-foreground">
                 <span className="text-muted-foreground">Done by</span>{" "}
-                <span className="font-semibold">{formatDateTime(assignment.due_at, timeZone)}</span>
+                <span className="font-semibold">
+                  {formatDateTime(assignment.due_at, timeZone)}
+                </span>
               </p>
             </div>
           ) : (
             <div className="flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2">
-              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <Clock
+                className="h-4 w-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
               <span className="text-sm font-medium">
                 Done by {formatDateTime(assignment.due_at, timeZone)}
               </span>
@@ -114,7 +165,10 @@ export function CleanerJobCard({
           )}
           {showPayout && assignment.fixed_payout_amount !== null && (
             <div className="flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2">
-              <DollarSign className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <DollarSign
+                className="h-4 w-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
               <span className="text-sm font-medium">
                 ${Number(assignment.fixed_payout_amount).toFixed(2)}
               </span>
@@ -141,7 +195,9 @@ export function CleanerJobCard({
               </Link>
             )}
 
-            {["completed_pending_review", "approved", "needs_reclean"].includes(assignment.status) && (
+            {["completed_pending_review", "approved", "needs_reclean"].includes(
+              assignment.status,
+            ) && (
               <Link
                 className="flex h-12 w-full items-center justify-center rounded-xl border border-border/70 bg-transparent text-sm font-medium"
                 href={`/jobs/${assignment.id}` as Route}

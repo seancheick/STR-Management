@@ -1,4 +1,5 @@
 import "server-only";
+import { withListingConfiguration } from "@/lib/services/booking-configuration";
 import {
   getCleanerLedger,
   listCleanerAccounts,
@@ -88,7 +89,7 @@ export async function listPayoutEntries(
     .select(
       `*,
        cleaners:users!payout_entries_cleaner_id_fkey(full_name),
-       properties(name),
+       properties:property_id(name),
        assignments(due_at, assignment_type, expected_duration_min)`,
     )
     .eq("batch_id", batchId)
@@ -106,7 +107,7 @@ export async function listMyPayoutEntries(
     .from("payout_entries")
     .select(
       `*,
-       properties(name, timezone),
+       properties:property_id(name, timezone),
        assignments(due_at, assignment_type, expected_duration_min, paid_at)`,
     )
     .eq("cleaner_id", cleanerId)
@@ -117,10 +118,11 @@ export async function listMyPayoutEntries(
 }
 
 const CLEANER_PENDING_PAYOUT_ASSIGNMENT_SELECT = `
-  id, owner_id, property_id, cleaner_id, assignment_type,
+  id, owner_id, property_id, listing_property_id, cleaner_id, assignment_type,
   status, ack_status, priority, checkout_at, due_at,
   expected_duration_min, fixed_payout_amount, paid_at, created_at,
   properties:property_id ( name, address_line_1, city, timezone ),
+  listing_properties:assignments_listing_property_fk ( name, address_line_1, city, timezone ),
   cleaners:cleaner_id ( full_name )
 `.trim();
 
@@ -153,7 +155,7 @@ export async function listPendingCleanerPayoutAssignments(
 
   if (error) throw new Error(error.message);
 
-  return ((data as unknown as AssignmentListRecord[] | null) ?? []).filter(
+  return ((data as unknown as AssignmentListRecord[] | null) ?? []).map(withListingConfiguration).filter(
     (assignment) => !paidAssignmentIds.has(assignment.id),
   );
 }
@@ -180,7 +182,7 @@ export async function listEligibleAssignments(
     .from("assignments")
     .select(
       `id, property_id, cleaner_id, due_at, fixed_payout_amount, expected_duration_min,
-       properties(name),
+       properties:property_id(name),
        cleaners:users!assignments_cleaner_id_fkey(full_name)`,
     )
     .in("status", ["approved", "completed_pending_review"])
@@ -228,13 +230,13 @@ export async function getPendingPayoutTotal(): Promise<{
     supabase
       .from("payout_entries")
       .select(
-        "amount,status,assignment_id,cleaner_id,paid_at,assignments(due_at,paid_at),properties(timezone)",
+        "amount,status,assignment_id,cleaner_id,paid_at,assignments(due_at,paid_at),properties:property_id(timezone)",
       )
       .eq("status", "included"),
     supabase
       .from("assignments")
       .select(
-        "id,cleaner_id,due_at,fixed_payout_amount,paid_at,properties(timezone)",
+        "id,cleaner_id,due_at,fixed_payout_amount,paid_at,properties:property_id(timezone)",
       )
       .in("status", ["approved", "completed_pending_review"])
       .is("paid_at", null),
@@ -336,7 +338,7 @@ export async function listCleanerPayoutsForYear(
       .select(
         `id, amount, paid_at, assignment_id,
          payout_batches:batch_id ( status, paid_at ),
-         properties(name),
+         properties:property_id(name),
          assignments(due_at, assignment_type, paid_at)`,
       )
       .eq("cleaner_id", cleanerId)

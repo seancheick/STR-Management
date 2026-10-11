@@ -39,7 +39,7 @@ const unchanged = candidate("booking-1", "2026-10-19T15:00:00.000Z", "2026-10-19
 describe("planReconciliation", () => {
   it("does nothing when the feed still has the booking with the same dates", () => {
     const plan = planReconciliation({ existing: [row()], candidates: [unchanged], calendarSourceId: SOURCE, now: NOW });
-    expect(plan).toEqual({ updates: [], stampSourceIds: [], cancels: [] });
+    expect(plan).toEqual({ updates: [], stampSourceIds: [], ownershipTransfers: [], cancels: [] });
   });
 
   it("moves the job when the checkout date changes, and flags it for the cleaner", () => {
@@ -119,8 +119,54 @@ describe("planReconciliation", () => {
       const moved = candidate("booking-1", "2026-10-21T15:00:00.000Z", "2026-10-21T19:00:00.000Z");
       for (const candidates of [[moved], []]) {
         const plan = planReconciliation({ existing: [row({ status })], candidates, calendarSourceId: SOURCE, now: NOW });
-        expect(plan).toEqual({ updates: [], stampSourceIds: [], cancels: [] });
+        expect(plan).toEqual({ updates: [], stampSourceIds: [], ownershipTransfers: [], cancels: [] });
       }
     },
   );
+});
+
+
+describe("source ownership", () => {
+  it("does not move a matching UID owned by another source", () => {
+    const moved = candidate("booking-1", "2026-10-21T15:00:00.000Z", "2026-10-21T19:00:00.000Z");
+    expect(planReconciliation({ existing: [row({ calendar_source_id: OTHER_SOURCE })], candidates: [moved], calendarSourceId: SOURCE, now: NOW }).updates).toEqual([]);
+  });
+  it("does not move an upcoming job into history", () => {
+    const past = candidate("booking-1", "2026-10-01T15:00:00.000Z", "2026-10-01T19:00:00.000Z");
+    expect(planReconciliation({ existing: [row()], candidates: [past], calendarSourceId: SOURCE, now: NOW }).updates).toEqual([]);
+  });
+});
+
+
+describe("shared physical unit source ownership", () => {
+  it("retains and transfers a missing-source cleaning when the alternate feed still reserves its local checkout day", () => {
+    const plan = planReconciliation({ existing: [row()], candidates: [], calendarSourceId: SOURCE, now: NOW, timeZone: "America/New_York", otherFeedReservations: [{ checkoutAt: "2026-10-19T17:00:00Z", calendarSourceId: OTHER_SOURCE, sourceReference: "ical:alternate-uid" }] });
+    expect(plan.cancels).toEqual([]);
+    expect(plan.ownershipTransfers).toEqual([{ id: "a1", calendarSourceId: OTHER_SOURCE, sourceReference: "ical:alternate-uid" }]);
+  });
+  it("does not preserve a missing booking merely because another feed has a different checkout day", () => {
+    const plan = planReconciliation({ existing: [row()], candidates: [], calendarSourceId: SOURCE, now: NOW, otherFeedReservations: [{ checkoutAt: "2026-10-20T15:00:00Z", calendarSourceId: OTHER_SOURCE, sourceReference: "ical:alternate-uid" }] });
+    expect(plan.cancels).toHaveLength(1);
+    expect(plan.ownershipTransfers).toEqual([]);
+  });
+  it("never transfers completed history", () => {
+    const plan = planReconciliation({ existing: [row({ status: "approved" })], candidates: [], calendarSourceId: SOURCE, now: NOW, otherFeedReservations: [{ checkoutAt: "2026-10-19T15:00:00Z", calendarSourceId: OTHER_SOURCE, sourceReference: "ical:alternate-uid" }] });
+    expect(plan.ownershipTransfers).toEqual([]);
+    expect(plan.cancels).toEqual([]);
+  });
+});
+
+
+describe("superseded reschedule", () => {
+  it.each(["unassigned", "approved"])("cancels the obsolete old-day job when destination already has a %s cleaning", (status) => {
+    const moved = candidate("booking-1", "2026-10-21T15:00:00Z", "2026-10-21T19:00:00Z");
+    const occupied = row({ id: "canonical", source_reference: null, status, calendar_source_id: null, checkout_at: "2026-10-21T15:00:00Z", due_at: "2026-10-21T19:00:00Z" });
+    const plan = planReconciliation({ existing: [row(), occupied], candidates: [moved], calendarSourceId: SOURCE, now: NOW });
+    expect(plan.updates).toEqual([]);
+    expect(plan.cancels).toEqual([{ id: "a1", cleanerId: "cleaner-1", dueAt: "2026-10-19T19:00:00+00:00" }]);
+  });
+  it("transfers the listing rate with source ownership", () => {
+    const plan = planReconciliation({ existing: [row()], candidates: [], calendarSourceId: SOURCE, now: NOW, otherFeedReservations: [{ checkoutAt: "2026-10-19T15:00:00Z", calendarSourceId: OTHER_SOURCE, sourceReference: "ical:3bed", listingPropertyId: "3bed", fixedPayoutAmount: 120 }] });
+    expect(plan.ownershipTransfers[0]).toMatchObject({ listingPropertyId: "3bed", fixedPayoutAmount: 120 });
+  });
 });

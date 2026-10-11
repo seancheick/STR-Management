@@ -51,6 +51,7 @@ export async function runRecurringTaskSweep(): Promise<{
     const result = await createAssignment({
       ownerId: task.owner_id,
       propertyId: task.property_id,
+      listingPropertyId: task.property_id,
       cleanerId: task.assignee_id,
       dueAt: task.next_run_at,
       checkoutAt: null,

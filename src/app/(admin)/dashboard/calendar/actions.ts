@@ -14,7 +14,7 @@ const addSourceSchema = z.object({
   propertyId: z.string().uuid("Select a property."),
   name: z.string().min(1).max(120),
   icalUrl: z.string().url("Enter a valid iCal URL."),
-  platform: z.enum(["airbnb", "vrbo", "booking", "other"]).default("other"),
+  platform: z.enum(["airbnb", "vrbo", "booking", "hostex", "other"]).default("other"),
 });
 
 export type AddCalendarSourceState = {

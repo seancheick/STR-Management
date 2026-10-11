@@ -1,5 +1,9 @@
 import "server-only";
-import { listCleanerAccounts, isReconciledJob } from "@/lib/queries/cleaner-ledger";
+import { withListingConfiguration } from "@/lib/services/booking-configuration";
+import {
+  listCleanerAccounts,
+  isReconciledJob,
+} from "@/lib/queries/cleaner-ledger";
 
 import { zonedDayTime } from "@/lib/ical/timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -8,6 +12,7 @@ export type AssignmentListRecord = {
   id: string;
   owner_id: string;
   property_id: string;
+  listing_property_id?: string | null;
   cleaner_id: string | null;
   assignment_type: string;
   status: string;
@@ -20,6 +25,7 @@ export type AssignmentListRecord = {
   fixed_payout_amount: number | null;
   access_code: string | null;
   source_type: string | null;
+  ledger_entry_id?: string | null;
   paid_at: string | null;
   payment_method: string | null;
   payment_reference: string | null;
@@ -84,22 +90,27 @@ export type AssignmentDetailIssueRecord = {
 };
 
 const ASSIGNMENT_LIST_SELECT = `
-  id, owner_id, property_id, cleaner_id, assignment_type,
+  id, owner_id, property_id, listing_property_id, cleaner_id, assignment_type,
   status, ack_status, priority, checkout_at, due_at, next_checkin_at,
   expected_duration_min, fixed_payout_amount, access_code, source_type,
-  paid_at, payment_method, payment_reference, created_at,
+  paid_at, payment_method, payment_reference, ledger_entry_id, created_at,
   properties:property_id ( name, address_line_1, city, timezone ),
+  listing_properties:assignments_listing_property_fk ( name, address_line_1, city, timezone ),
   cleaners:cleaner_id ( full_name )
 `.trim();
 
-export async function listAssignmentsForAdmin(): Promise<AssignmentListRecord[]> {
+export async function listAssignmentsForAdmin(): Promise<
+  AssignmentListRecord[]
+> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("assignments")
     .select(ASSIGNMENT_LIST_SELECT)
     .order("due_at", { ascending: true });
 
-  return (data as AssignmentListRecord[] | null) ?? [];
+  return ((data as unknown as AssignmentListRecord[] | null) ?? []).map(
+    withListingConfiguration,
+  );
 }
 
 /** Payable but unpaid: approved/completed jobs that haven't been marked paid yet. */
@@ -113,10 +124,22 @@ export async function listUnpaidPayableJobs(): Promise<AssignmentListRecord[]> {
     .order("due_at", { ascending: true });
   if (error) throw new Error(error.message);
   const accounts = await listCleanerAccounts();
-  return ((data as unknown as AssignmentListRecord[] | null) ?? []).filter(a=>!isReconciledJob(accounts,a.cleaner_id,a.due_at,a.properties?.timezone));
+  return ((data as unknown as AssignmentListRecord[] | null) ?? [])
+    .map(withListingConfiguration)
+    .filter(
+      (a) =>
+        !isReconciledJob(
+          accounts,
+          a.cleaner_id,
+          a.due_at,
+          a.properties?.timezone,
+        ),
+    );
 }
 
-export async function listTodaysAssignmentsForAdmin(): Promise<AssignmentListRecord[]> {
+export async function listTodaysAssignmentsForAdmin(): Promise<
+  AssignmentListRecord[]
+> {
   const supabase = await createServerSupabaseClient();
   // Today in the operator's zone (the server runs in UTC).
   const todayStart = zonedDayTime(new Date(), 0, 0);
@@ -130,7 +153,9 @@ export async function listTodaysAssignmentsForAdmin(): Promise<AssignmentListRec
     .not("status", "eq", "cancelled")
     .order("due_at", { ascending: true });
 
-  return (data as AssignmentListRecord[] | null) ?? [];
+  return ((data as unknown as AssignmentListRecord[] | null) ?? []).map(
+    withListingConfiguration,
+  );
 }
 
 export async function listAtRiskAssignments(): Promise<AssignmentListRecord[]> {
@@ -145,10 +170,14 @@ export async function listAtRiskAssignments(): Promise<AssignmentListRecord[]> {
     .order("due_at", { ascending: true })
     .limit(20);
 
-  return (data as AssignmentListRecord[] | null) ?? [];
+  return ((data as unknown as AssignmentListRecord[] | null) ?? []).map(
+    withListingConfiguration,
+  );
 }
 
-export async function listUnassignedAssignments(): Promise<AssignmentListRecord[]> {
+export async function listUnassignedAssignments(): Promise<
+  AssignmentListRecord[]
+> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("assignments")
@@ -156,7 +185,9 @@ export async function listUnassignedAssignments(): Promise<AssignmentListRecord[
     .eq("status", "unassigned")
     .order("due_at", { ascending: true });
 
-  return (data as AssignmentListRecord[] | null) ?? [];
+  return ((data as unknown as AssignmentListRecord[] | null) ?? []).map(
+    withListingConfiguration,
+  );
 }
 
 export async function listAssignmentsForCleaner(
@@ -170,7 +201,9 @@ export async function listAssignmentsForCleaner(
     .not("status", "in", '("cancelled","approved")')
     .order("due_at", { ascending: true });
 
-  return (data as AssignmentListRecord[] | null) ?? [];
+  return ((data as unknown as AssignmentListRecord[] | null) ?? []).map(
+    withListingConfiguration,
+  );
 }
 
 export async function listCleanerPortalAssignments(
@@ -184,22 +217,29 @@ export async function listCleanerPortalAssignments(
     .not("status", "eq", "cancelled")
     .order("due_at", { ascending: true });
 
-  return (data as AssignmentListRecord[] | null) ?? [];
+  return ((data as unknown as AssignmentListRecord[] | null) ?? []).map(
+    withListingConfiguration,
+  );
 }
 
 export async function listCleanerHistoryAssignments(
   cleanerId: string,
+  page = 1,
 ): Promise<AssignmentListRecord[]> {
   const supabase = await createServerSupabaseClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("assignments")
     .select(ASSIGNMENT_LIST_SELECT)
     .eq("cleaner_id", cleanerId)
     .in("status", ["completed_pending_review", "approved", "needs_reclean"])
     .order("due_at", { ascending: false })
-    .limit(100);
+    .order("id", { ascending: false })
+    .range((page - 1) * 25, page * 25);
+  if (error) throw new Error(error.message);
 
-  return (data as AssignmentListRecord[] | null) ?? [];
+  return ((data as unknown as AssignmentListRecord[] | null) ?? []).map(
+    withListingConfiguration,
+  );
 }
 
 export async function getAssignmentDetail(
@@ -207,42 +247,50 @@ export async function getAssignmentDetail(
 ): Promise<AssignmentDetailRecord | null> {
   const supabase = await createServerSupabaseClient();
 
-  const [assignmentRes, checklistRes, photosRes, notesRes, issuesRes] = await Promise.all([
-    supabase
-      .from("assignments")
-      .select(ASSIGNMENT_LIST_SELECT)
-      .eq("id", assignmentId)
-      .maybeSingle(),
-    supabase
-      .from("assignment_checklist_items")
-      .select(
-        "id, assignment_id, template_item_id, section_name, label, instruction_text, reference_media_url, required, sort_order, photo_category, completed, completed_at",
-      )
-      .eq("assignment_id", assignmentId)
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("assignment_photos")
-      .select("id, assignment_id, photo_category, storage_path, captured_at")
-      .eq("assignment_id", assignmentId),
-    supabase
-      .from("assignment_notes")
-      .select("id, assignment_id, user_id, note_type, body, created_at, users:user_id ( full_name )")
-      .eq("assignment_id", assignmentId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("issues")
-      .select("id, assignment_id, title, severity, status, description, created_at")
-      .eq("assignment_id", assignmentId)
-      .order("created_at", { ascending: false }),
-  ]);
+  const [assignmentRes, checklistRes, photosRes, notesRes, issuesRes] =
+    await Promise.all([
+      supabase
+        .from("assignments")
+        .select(ASSIGNMENT_LIST_SELECT)
+        .eq("id", assignmentId)
+        .maybeSingle(),
+      supabase
+        .from("assignment_checklist_items")
+        .select(
+          "id, assignment_id, template_item_id, section_name, label, instruction_text, reference_media_url, required, sort_order, photo_category, completed, completed_at",
+        )
+        .eq("assignment_id", assignmentId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("assignment_photos")
+        .select("id, assignment_id, photo_category, storage_path, captured_at")
+        .eq("assignment_id", assignmentId),
+      supabase
+        .from("assignment_notes")
+        .select(
+          "id, assignment_id, user_id, note_type, body, created_at, users:user_id ( full_name )",
+        )
+        .eq("assignment_id", assignmentId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("issues")
+        .select(
+          "id, assignment_id, title, severity, status, description, created_at",
+        )
+        .eq("assignment_id", assignmentId)
+        .order("created_at", { ascending: false }),
+    ]);
 
   if (!assignmentRes.data) {
     return null;
   }
 
   return {
-    ...(assignmentRes.data as unknown as AssignmentListRecord),
-    checklist_items: (checklistRes.data as AssignmentChecklistItemRecord[] | null) ?? [],
+    ...withListingConfiguration(
+      assignmentRes.data as unknown as AssignmentListRecord,
+    ),
+    checklist_items:
+      (checklistRes.data as AssignmentChecklistItemRecord[] | null) ?? [],
     photos: (photosRes.data as AssignmentPhotoRecord[] | null) ?? [],
     notes: (notesRes.data as unknown as AssignmentNoteRecord[] | null) ?? [],
     issues: (issuesRes.data as AssignmentDetailIssueRecord[] | null) ?? [],
@@ -272,6 +320,7 @@ export async function getDashboardCounts(): Promise<{
 export type AssignmentScheduleRecord = {
   id: string;
   property_id: string;
+  listing_property_id?: string | null;
   cleaner_id: string | null;
   status: string;
   priority: string;
@@ -295,11 +344,12 @@ export type AssignmentScheduleRecord = {
 };
 
 const SCHEDULE_SELECT = `
-  id, property_id, cleaner_id, status, priority,
+  id, property_id, listing_property_id, cleaner_id, status, priority,
   checkout_at, due_at, expected_duration_min, fixed_payout_amount,
   access_code, source_type, next_checkin_at,
   paid_at, payment_method, payment_reference,
   properties:property_id ( name, address_line_1, city, timezone ),
+  listing_properties:assignments_listing_property_fk ( name, address_line_1, city, timezone ),
   cleaners:cleaner_id ( full_name )
 `.trim();
 
@@ -321,53 +371,82 @@ export async function listAssignmentsForSchedule(
     .not("status", "eq", "cancelled")
     .order("due_at", { ascending: true });
 
-  return (data as AssignmentScheduleRecord[] | null) ?? [];
+  return ((data as unknown as AssignmentScheduleRecord[] | null) ?? []).map(
+    withListingConfiguration,
+  );
 }
 
 export type PropertyTodayStatus = {
   propertyId: string;
   name: string;
-  status: "unassigned" | "assigned" | "in_progress" | "pending_review" | "ready" | "quiet";
+  status:
+    | "unassigned"
+    | "assigned"
+    | "in_progress"
+    | "pending_review"
+    | "ready"
+    | "quiet";
   cleanerName: string | null;
   dueAt: string | null;
 };
 
-export async function getPropertyTodayStatuses(): Promise<PropertyTodayStatus[]> {
+export async function getPropertyTodayStatuses(): Promise<
+  PropertyTodayStatus[]
+> {
   const supabase = await createServerSupabaseClient();
   // Today in the operator's zone (the server runs in UTC).
   const todayStart = zonedDayTime(new Date(), 0, 0);
   const todayEnd = new Date(zonedDayTime(new Date(), 1, 0).getTime() - 1);
 
   const [propertiesRes, assignmentsRes] = await Promise.all([
-    supabase.from("properties").select("id, name").eq("active", true).order("name"),
+    supabase
+      .from("properties")
+      .select("id, name")
+      .eq("active", true)
+      .order("name"),
     supabase
       .from("assignments")
-      .select("property_id, status, due_at, cleaners:cleaner_id ( full_name )")
+      .select(
+        "property_id, listing_property_id, status, due_at, cleaners:cleaner_id ( full_name )",
+      )
       .gte("due_at", todayStart.toISOString())
       .lte("due_at", todayEnd.toISOString())
       .not("status", "eq", "cancelled"),
   ]);
 
-  const assignmentMap = new Map<string, { status: string; cleanerName: string | null; dueAt: string }>();
+  const assignmentMap = new Map<
+    string,
+    { status: string; cleanerName: string | null; dueAt: string }
+  >();
   for (const a of (assignmentsRes.data ?? []) as Array<{
     property_id: string;
+    listing_property_id?: string | null;
     status: string;
     due_at: string;
     cleaners: { full_name: string } | { full_name: string }[] | null;
   }>) {
-    const existing = assignmentMap.get(a.property_id);
+    const existing = assignmentMap.get(a.listing_property_id ?? a.property_id);
     // Priority order: in_progress > unassigned > assigned > pending_review > approved
     const priority: Record<string, number> = {
-      in_progress: 5, unassigned: 4, assigned: 3, confirmed: 3,
-      completed_pending_review: 2, approved: 1, needs_reclean: 4,
+      in_progress: 5,
+      unassigned: 4,
+      assigned: 3,
+      confirmed: 3,
+      completed_pending_review: 2,
+      approved: 1,
+      needs_reclean: 4,
     };
     const newPriority = priority[a.status] ?? 0;
     const existingPriority = existing ? (priority[existing.status] ?? 0) : -1;
     if (newPriority > existingPriority) {
       const cleanerName = Array.isArray(a.cleaners)
         ? (a.cleaners[0]?.full_name ?? null)
-        : (a.cleaners as { full_name: string } | null)?.full_name ?? null;
-      assignmentMap.set(a.property_id, { status: a.status, cleanerName, dueAt: a.due_at });
+        : ((a.cleaners as { full_name: string } | null)?.full_name ?? null);
+      assignmentMap.set(a.listing_property_id ?? a.property_id, {
+        status: a.status,
+        cleanerName,
+        dueAt: a.due_at,
+      });
     }
   }
 
@@ -381,7 +460,9 @@ export async function getPropertyTodayStatuses(): Promise<PropertyTodayStatus[]>
     needs_reclean: "unassigned",
   };
 
-  return ((propertiesRes.data ?? []) as Array<{ id: string; name: string }>).map((p) => {
+  return (
+    (propertiesRes.data ?? []) as Array<{ id: string; name: string }>
+  ).map((p) => {
     const a = assignmentMap.get(p.id);
     return {
       propertyId: p.id,
@@ -407,49 +488,55 @@ export async function getDashboardStats(): Promise<{
   const todayEnd = new Date(zonedDayTime(new Date(), 1, 0).getTime() - 1);
   const now = new Date().toISOString();
 
-  const [checkoutsRes, dueRes, unassignedRes, inProgressRes, reviewRes, atRiskRes] =
-    await Promise.all([
-      // Assignments whose checkout_at is today
-      supabase
-        .from("assignments")
-        .select("id", { count: "exact", head: true })
-        .gte("checkout_at", todayStart.toISOString())
-        .lte("checkout_at", todayEnd.toISOString())
-        .not("status", "in", '("cancelled")'),
-      // Cleanings due today
-      supabase
-        .from("assignments")
-        .select("id", { count: "exact", head: true })
-        .gte("due_at", todayStart.toISOString())
-        .lte("due_at", todayEnd.toISOString())
-        .not("status", "in", '("cancelled","approved")'),
-      // Unassigned (all time)
-      supabase
-        .from("assignments")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "unassigned"),
-      // In progress right now
-      supabase
-        .from("assignments")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "in_progress"),
-      // Pending review
-      supabase
-        .from("assignments")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "completed_pending_review"),
-      // At-risk: past due, not complete. Excludes unassigned — those are
-      // already in `unassigned`, and the UI sums the two ("Needs action").
-      supabase
-        .from("assignments")
-        .select("id", { count: "exact", head: true })
-        .lt("due_at", now)
-        .not(
-          "status",
-          "in",
-          '("cancelled","approved","completed_pending_review","unassigned")',
-        ),
-    ]);
+  const [
+    checkoutsRes,
+    dueRes,
+    unassignedRes,
+    inProgressRes,
+    reviewRes,
+    atRiskRes,
+  ] = await Promise.all([
+    // Assignments whose checkout_at is today
+    supabase
+      .from("assignments")
+      .select("id", { count: "exact", head: true })
+      .gte("checkout_at", todayStart.toISOString())
+      .lte("checkout_at", todayEnd.toISOString())
+      .not("status", "in", '("cancelled")'),
+    // Cleanings due today
+    supabase
+      .from("assignments")
+      .select("id", { count: "exact", head: true })
+      .gte("due_at", todayStart.toISOString())
+      .lte("due_at", todayEnd.toISOString())
+      .not("status", "in", '("cancelled","approved")'),
+    // Unassigned (all time)
+    supabase
+      .from("assignments")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "unassigned"),
+    // In progress right now
+    supabase
+      .from("assignments")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "in_progress"),
+    // Pending review
+    supabase
+      .from("assignments")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "completed_pending_review"),
+    // At-risk: past due, not complete. Excludes unassigned — those are
+    // already in `unassigned`, and the UI sums the two ("Needs action").
+    supabase
+      .from("assignments")
+      .select("id", { count: "exact", head: true })
+      .lt("due_at", now)
+      .not(
+        "status",
+        "in",
+        '("cancelled","approved","completed_pending_review","unassigned")',
+      ),
+  ]);
 
   return {
     checkoutsToday: checkoutsRes.count ?? 0,

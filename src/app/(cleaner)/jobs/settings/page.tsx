@@ -11,8 +11,7 @@ export default async function CleanerSettingsPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col gap-6 px-5 py-8">
       <header className="space-y-2">
-        <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Settings</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Profile</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
       </header>
 
       <section className="rounded-2xl border border-border/70 bg-card p-5">

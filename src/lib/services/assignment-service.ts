@@ -6,6 +6,7 @@ import { createServiceSupabaseClient } from "@/lib/supabase/service";
 export type CreateAssignmentInput = {
   ownerId: string;
   propertyId: string;
+  listingPropertyId?: string;
   cleanerId: string | null;
   dueAt: string;
   checkoutAt: string | null;
@@ -31,13 +32,28 @@ export async function createAssignment(
 ): Promise<CreateAssignmentResult> {
   const supabase = createServiceSupabaseClient();
 
+  // Centralize identity for every caller, including recurring jobs. Never trust
+  // a submitted operational ID to override the selected listing configuration.
+  const { data: listing, error: listingError } = await supabase
+    .from("properties")
+    .select("id, physical_unit_id, primary_checklist_template_id, default_clean_price")
+    .eq("owner_id", input.ownerId)
+    .eq("id", input.listingPropertyId ?? input.propertyId)
+    .maybeSingle();
+  if (listingError || !listing) {
+    return { success: false, error: listingError?.message ?? "Property not found." };
+  }
+  const operationalPropertyId = listing.physical_unit_id ?? listing.id;
+  const templateId = input.primaryChecklistTemplateId ?? listing.primary_checklist_template_id;
+
   const hasClean = input.cleanerId !== null;
 
   const { data: assignment, error: assignError } = await supabase
     .from("assignments")
     .insert({
       owner_id: input.ownerId,
-      property_id: input.propertyId,
+      property_id: operationalPropertyId,
+      listing_property_id: listing.id,
       cleaner_id: input.cleanerId,
       status: hasClean ? "assigned" : "unassigned",
       ack_status: "pending",
@@ -45,7 +61,7 @@ export async function createAssignment(
       due_at: input.dueAt,
       checkout_at: input.checkoutAt,
 expected_duration_min: input.expectedDurationMin,
-      fixed_payout_amount: input.fixedPayoutAmount,
+      fixed_payout_amount: input.fixedPayoutAmount ?? listing.default_clean_price,
       source_type: "manual",
       created_by_user_id: input.createdByUserId,
     })
@@ -57,9 +73,9 @@ expected_duration_min: input.expectedDurationMin,
   }
 
   // Snapshot checklist items from the template if one is linked
-  if (input.primaryChecklistTemplateId) {
+  if (templateId) {
     const templateItems = await getChecklistTemplateItems(
-      input.primaryChecklistTemplateId,
+      templateId,
     );
 
     if (templateItems.length > 0) {

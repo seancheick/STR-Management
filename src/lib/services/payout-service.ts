@@ -47,7 +47,7 @@ export async function generatePayoutBatch(
   let q = supabase
     .from("assignments")
     .select(
-      "id, property_id, cleaner_id, fixed_payout_amount, owner_id, due_at",
+      "id, property_id, listing_property_id, cleaner_id, fixed_payout_amount, owner_id, due_at",
     )
     .in("status", ["approved", "completed_pending_review"])
     .gte("due_at", `${input.periodStart}T00:00:00Z`)
@@ -92,7 +92,7 @@ export async function generatePayoutBatch(
     owner_id: input.ownerId,
     cleaner_id: a.cleaner_id as string,
     assignment_id: a.id,
-    property_id: a.property_id,
+    property_id: a.listing_property_id ?? a.property_id,
     amount: Number(a.fixed_payout_amount ?? 0),
     status: "included" as const,
   }));
@@ -240,11 +240,11 @@ export async function getOpsReport(
   const { data: assignments, error } = await supabase
     .from("assignments")
     .select(
-      `property_id,
+      `property_id, listing_property_id,
        status,
        assignment_type,
        fixed_payout_amount,
-       properties(name)`,
+       properties:property_id(name), listing_properties:assignments_listing_property_fk(name)`,
     )
     .gte("due_at", `${periodStart}T00:00:00Z`)
     .lte("due_at", `${periodEnd}T23:59:59Z`);
@@ -253,11 +253,12 @@ export async function getOpsReport(
 
   const map = new Map<string, OpsReportRow>();
   for (const a of assignments ?? []) {
-    if (!map.has(a.property_id)) {
-      map.set(a.property_id, {
-        property_id: a.property_id,
+    const displayId = a.listing_property_id ?? a.property_id;
+    if (!map.has(displayId)) {
+      map.set(displayId, {
+        property_id: displayId,
         property_name:
-          (a.properties as unknown as { name: string } | null)?.name ??
+          ((a.listing_properties ?? a.properties) as unknown as { name: string } | null)?.name ??
           "Unknown",
         total_jobs: 0,
         completed_jobs: 0,
@@ -265,7 +266,7 @@ export async function getOpsReport(
         total_payout: 0,
       });
     }
-    const row = map.get(a.property_id)!;
+    const row = map.get(displayId)!;
     row.total_jobs++;
     if (["approved", "completed_pending_review"].includes(a.status)) {
       row.completed_jobs++;

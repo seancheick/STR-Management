@@ -8,6 +8,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 export type PropertyRecord = {
   id: string;
   owner_id: string;
+  physical_unit_id: string | null;
   name: string;
   address_line_1: string | null;
   city: string | null;
@@ -40,6 +41,7 @@ export const listProperties = cache(async (): Promise<PropertiesQueryResult> => 
       [
         "id",
         "owner_id",
+        "physical_unit_id",
         "name",
         "address_line_1",
         "city",
@@ -75,6 +77,7 @@ export async function getProperty(propertyId: string) {
       [
         "id",
         "owner_id",
+        "physical_unit_id",
         "name",
         "address_line_1",
         "city",

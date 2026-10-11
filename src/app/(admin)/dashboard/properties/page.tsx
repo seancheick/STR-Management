@@ -26,11 +26,14 @@ function statusMessage(status?: string, message?: string) {
   }
 }
 
-export default async function PropertiesPage({ searchParams }: PropertiesPageProps) {
+export default async function PropertiesPage({
+  searchParams,
+}: PropertiesPageProps) {
   await requireRole(["owner", "admin"]);
   const params = (await searchParams) ?? {};
   const status = typeof params.status === "string" ? params.status : undefined;
-  const message = typeof params.message === "string" ? params.message : undefined;
+  const message =
+    typeof params.message === "string" ? params.message : undefined;
   const banner = statusMessage(status, message);
   const bannerIsError = status === "error";
   const result = await listProperties();
@@ -43,8 +46,12 @@ export default async function PropertiesPage({ searchParams }: PropertiesPagePro
         <div>
           <h1 className="text-4xl font-semibold tracking-tight">Properties</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Manage the homes, condos, and units that drive assignment creation and
-            checklist enforcement.
+            {
+              activeProperties.filter((property) => !property.physical_unit_id)
+                .length
+            }{" "}
+            physical units · {activeProperties.length} booking configurations.
+            Configurations on the same floor share one cleaning schedule.
           </p>
         </div>
         <Link
@@ -75,10 +82,12 @@ export default async function PropertiesPage({ searchParams }: PropertiesPagePro
 
       {result.error ? (
         <section className="rounded-2xl border border-destructive/30 bg-card p-6">
-          <h2 className="text-lg font-semibold">Properties are not queryable yet</h2>
+          <h2 className="text-lg font-semibold">
+            Properties are not queryable yet
+          </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {result.error}. Apply the migration to the hosted Supabase project, then
-            reload this page.
+            {result.error}. Apply the migration to the hosted Supabase project,
+            then reload this page.
           </p>
         </section>
       ) : activeProperties.length === 0 && archivedProperties.length === 0 ? (
@@ -87,8 +96,8 @@ export default async function PropertiesPage({ searchParams }: PropertiesPagePro
           <div>
             <h2 className="text-xl font-semibold">No properties yet</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Add your first listing so assignment scheduling can attach to a real
-              property.
+              Add your first listing so assignment scheduling can attach to a
+              real property.
             </p>
           </div>
           <Link
@@ -99,7 +108,10 @@ export default async function PropertiesPage({ searchParams }: PropertiesPagePro
           </Link>
         </section>
       ) : (
-        <PropertiesView activeProperties={activeProperties} archivedProperties={archivedProperties} />
+        <PropertiesView
+          activeProperties={activeProperties}
+          archivedProperties={archivedProperties}
+        />
       )}
     </main>
   );
