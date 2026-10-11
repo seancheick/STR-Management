@@ -160,3 +160,15 @@ hidden, while meaningful cancellation notices remain.
 Live saves also uncovered an unrelated invalid server-action export in auth:
 move the sign-up initial state into the client form, leaving only async runtime
 exports in the server module.
+
+
+## Batch offers and live responses — October 11, 2026
+
+- Owner-selected batches now assign jobs and create individual inbox offers atomically through `assign_cleaning_batch`. Existing assignments are skipped; retries do not duplicate offers. One push alert links to the inbox for the entire batch.
+- Each cleaner can accept or decline on the phone. Decline checks the authenticated assigned cleaner under a row lock, records the reason and clears the assignment in one transaction. Accepted jobs retain their cleaner; declined jobs return to the host's picker.
+- Owner and cleaner layouts share authenticated live job invalidation, with focus/reconnection refresh and a 10-second fallback while disconnected. The calendar's loaded viewport responds to that same signal through `getScheduleRange`; stale or cancelled fetches cannot replace newer results. Route cache invalidation refreshes the rest of the portal.
+- Notification badges use the same current-offer visibility rules as the inbox, exclude answered or revoked offers, deduplicate delivery copies, and paginate beyond 1,000 rows.
+- Calendar cards explicitly show Awaiting response, Accepted, or Declined / choose a cleaner. Inbox cards identify the original bedroom configuration and cleaning date. Push delivery failures do not hide inbox offers or imply that a phone received the alert.
+- Live checks used temporary Test Cleaner jobs: two-job batch, mobile accept and decline at 390px, reassign and accept, owner Schedule updates, and an open dashboard calendar moving between pending/accepted/declined without manual reload. Authenticated Realtime subscriptions were verified in the database. Test records and their notifications were removed.
+- Database transaction checks verified atomic offers, repeat assignment skips, cleaner acceptance and atomic decline. 284 unit tests passed; production build/typecheck passed; lint has only the two pre-existing warnings.
+- Mary has no active push subscription. She must enable Job notifications in her Settings on the phone to receive background alerts. All 13 real future Hostex jobs remain unassigned until Sean chooses a cleaner; historical ledger jobs are unchanged.

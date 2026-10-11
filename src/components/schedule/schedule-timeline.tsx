@@ -1,5 +1,6 @@
 "use client";
 
+import { JOBS_CHANGED_EVENT } from "@/lib/services/job-updates";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
@@ -127,14 +128,15 @@ export function ScheduleTimeline({
     }
   }, [filterQuery]);
 
-  const incomingProps = useRef({ assignments: initialAssignments, reservations: initialReservations });
+  // Each server refresh reconciles the loaded viewport. A cancelled request
+  // must never mark incoming props as already applied and skip its replacement.
   useEffect(() => {
-    if (incomingProps.current.assignments === initialAssignments && incomingProps.current.reservations === initialReservations) return;
-    incomingProps.current = { assignments: initialAssignments, reservations: initialReservations };
     const start = daysRef.current[0];
     const end = daysRef.current[daysRef.current.length - 1];
     const controller = new AbortController();
+    let refreshVersion = 0;
     async function refreshLoadedWindow() {
+      const version = ++refreshVersion;
       try {
         const freshAssignments: AssignmentScheduleRecord[] = [];
         const freshReservations: ReservationRecord[] = [];
@@ -145,7 +147,7 @@ export function ScheduleTimeline({
           freshAssignments.push(...data.assignments);
           freshReservations.push(...data.reservations);
         }
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || version !== refreshVersion) return;
         const timezone = (row: { property_id: string; listing_property_id?: string | null }) => properties.find((p) => p.id === calendarListingId(row))?.timezone;
         setAssignments((current) => calendarRefreshRows(current, freshAssignments, (row) => calendarWindowContains(row.checkout_at ?? row.due_at, start, end, timezone(row))));
         setReservations((current) => calendarRefreshRows(current, freshReservations, (row) => calendarInstantKey(row.start_at, timezone(row)) <= end && calendarInstantKey(row.end_at, timezone(row)) >= start));
@@ -153,8 +155,10 @@ export function ScheduleTimeline({
         if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : "Could not refresh the calendar.");
       }
     }
-    void refreshLoadedWindow();
-    return () => controller.abort();
+    const refresh = () => { void refreshLoadedWindow(); };
+    refresh();
+    window.addEventListener(JOBS_CHANGED_EVENT, refresh);
+    return () => { controller.abort(); window.removeEventListener(JOBS_CHANGED_EVENT, refresh); };
   }, [initialAssignments, initialReservations, filterQuery, properties]);
 
   const scrollWeeks = useCallback(async (direction: "previous" | "next") => {

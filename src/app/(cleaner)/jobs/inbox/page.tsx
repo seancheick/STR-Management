@@ -93,27 +93,21 @@ export default async function CleanerInboxPage() {
                   href={href}
                 >
                   <span
-                    className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                      n.status === "sent"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : n.status === "failed"
-                          ? "bg-red-50 text-red-700"
-                          : "bg-amber-50 text-amber-700"
-                    }`}
+                    className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-primary"
                   >
                     <Bell className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="truncate text-sm font-semibold">
-                        {n.title}
+                        {n.assignment?.listing_properties?.name ?? n.assignment?.properties?.name ?? n.title}
                       </p>
                       <span className="shrink-0 text-[11px] text-muted-foreground">
                         {formatWhen(n.created_at)}
                       </span>
                     </div>
                     <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-                      {n.body}
+                      {n.assignment ? formatInTimeZone(n.assignment.checkout_at ?? n.assignment.due_at, { month: "short", day: "numeric" }, n.assignment.listing_properties?.timezone ?? n.assignment.properties?.timezone ?? "America/New_York") : n.body}
                     </p>
                     {n.assignment && (
                       <p className="mt-1 text-xs font-medium text-primary">
@@ -121,7 +115,9 @@ export default async function CleanerInboxPage() {
                           ? "Completed · no action needed"
                           : n.assignment.status === "confirmed"
                             ? "Accepted · see schedule"
-                            : n.assignment.status.replace(/_/g, " ")}
+                            : n.assignment.status === "assigned" && n.assignment.ack_status === "pending"
+                              ? "Awaiting your response"
+                              : n.assignment.status.replace(/_/g, " ")}
                       </p>
                     )}
                   </div>

@@ -11,7 +11,8 @@ export function CleaningCalendarEvent({ assignment, onClick, dimmed = false, pro
   const urgent = !complete && (timing.mode === "firm" || timing.mode === "conflict" || reclean);
   const person = assignment.cleaners?.full_name?.split(" ")[0] ?? "Unassigned";
   const label = reclean ? "Re-clean" : complete ? "Completed" : !assignment.cleaner_id ? "Assign cleaner" : person;
-  const description = `${propertyName ?? assignment.properties?.name ?? "Property"} · ${person} · ${complete ? "Completed cleaning" : `${timing.summary}. ${timing.detail}`}`;
+  const response = assignment.status === "assigned" ? "Awaiting response" : assignment.status === "confirmed" ? "Accepted" : !assignment.cleaner_id && assignment.ack_status === "declined" ? "Declined · choose a cleaner" : null;
+  const description = `${propertyName ?? assignment.properties?.name ?? "Property"} · ${person}${response ? ` · ${response}` : ""} · ${complete ? "Completed cleaning" : `${timing.summary}. ${timing.detail}`}`;
   return (
     <button type="button" onClick={onClick} title={description} aria-label={description}
       data-cleaning-event={complete ? "complete" : timing.mode}
@@ -20,6 +21,7 @@ export function CleaningCalendarEvent({ assignment, onClick, dimmed = false, pro
         <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${urgent ? "bg-destructive" : complete ? "bg-accent" : "bg-primary"}`} />
         <span className="min-w-0 break-words">{label}{complete && assignment.cleaner_id ? ` · ${person}` : ""}</span>
       </span>
+      {response && <span className="mb-1 block text-[11px] leading-snug text-muted-foreground">{response}</span>}
       {complete ? <span className="block text-[11px] leading-snug text-muted-foreground">Recorded cleaning</span> : <CleaningTiming timing={timing} compact />}
     </button>
   );

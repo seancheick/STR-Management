@@ -141,3 +141,23 @@ export async function findSLABreaches(): Promise<AtRiskAssignment[]> {
 
   return ((data as unknown as AtRiskAssignment[]) ?? []).map(withListingConfiguration);
 }
+
+/** Individual inbox offers, one push alert for the batch. Only newly assigned IDs. */
+export async function sendAssignmentBatchNotification(ownerId: string, cleanerId: string, ids: string[]) {
+  const supabase = createServiceSupabaseClient();
+  const { data, error } = await supabase.from("notifications").select("id")
+    .eq("owner_id", ownerId).eq("recipient_id", cleanerId).eq("notification_type", "new_assignment")
+    .eq("status", "pending").in("assignment_id", ids);
+  if (error) { console.error("[batch-notification]", error); return; }
+  const results = await sendPushToUser(cleanerId, {
+    title: ids.length === 1 ? "New cleaning assignment" : `${ids.length} new cleaning assignments`,
+    body: "Open your inbox to review each cleaning and accept or decline.",
+    url: "/jobs/inbox", tag: `assignment-batch-${ids[0]}`,
+  });
+  const sent = results.some((result) => result.success);
+  const failure = results.find((result) => !result.success);
+  await supabase.from("notifications").update({
+    status: sent ? "sent" : "failed", sent_at: sent ? new Date().toISOString() : null,
+    error_message: !sent && failure && "error" in failure ? failure.error : null,
+  }).in("id", (data ?? []).map((row) => row.id));
+}

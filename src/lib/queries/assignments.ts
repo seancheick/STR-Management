@@ -323,6 +323,7 @@ export type AssignmentScheduleRecord = {
   listing_property_id?: string | null;
   cleaner_id: string | null;
   status: string;
+  ack_status?: string;
   priority: string;
   checkout_at: string | null;
   due_at: string;
@@ -344,7 +345,7 @@ export type AssignmentScheduleRecord = {
 };
 
 const SCHEDULE_SELECT = `
-  id, property_id, listing_property_id, cleaner_id, status, priority,
+  id, property_id, listing_property_id, cleaner_id, status, ack_status, priority,
   checkout_at, due_at, expected_duration_min, fixed_payout_amount,
   access_code, source_type, next_checkin_at,
   paid_at, payment_method, payment_reference,

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Check, Loader2, X } from "lucide-react";
 
@@ -14,6 +15,7 @@ const DECLINE_REASONS = [
 ] as const;
 
 export function InboxAcceptDecline({ assignmentId }: { assignmentId: string }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [declineOpen, setDeclineOpen] = useState(false);
 
@@ -22,6 +24,7 @@ export function InboxAcceptDecline({ assignmentId }: { assignmentId: string }) {
     e.stopPropagation();
     startTransition(async () => {
       const res = await acceptJobAction(assignmentId);
+      if (res.success) router.refresh();
       showToast(res.success ? "Accepted." : res.error ?? "Could not accept.", res.success ? "success" : "error");
     });
   }
@@ -29,6 +32,7 @@ export function InboxAcceptDecline({ assignmentId }: { assignmentId: string }) {
   function handleDecline(reason: string) {
     startTransition(async () => {
       const res = await declineJobAction(assignmentId, reason);
+      if (res.success) router.refresh();
       showToast(res.success ? "Declined." : res.error ?? "Could not decline.", res.success ? "success" : "error");
       setDeclineOpen(false);
     });

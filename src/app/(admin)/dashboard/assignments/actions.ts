@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { z } from "zod";
 
+import { sendAssignmentBatchNotification } from "@/lib/notifications/notification-service";
 import { requireRole } from "@/lib/auth/session";
 import { resolveOwnerId } from "@/lib/queries/properties";
 import { createAssignment } from "@/lib/services/assignment-service";
@@ -175,21 +176,18 @@ export async function bulkAssignCleanerAction(
   const { data: cleaner, error: cleanerError } = await supabase.from("users").select("id")
     .eq("id", parsed.data.cleanerId).eq("owner_id", ownerId).eq("role", "cleaner").eq("active", true).maybeSingle();
   if (cleanerError || !cleaner) return { error: "Choose an active cleaner from your team.", assigned: 0 };
-  const { data, error } = await supabase
-    .from("assignments")
-    .update({ cleaner_id: cleanerId, status: "assigned", ack_status: "pending" })
-    .in("id", [...new Set(parsed.data.ids)])
-    .eq("owner_id", ownerId)
-    .eq("status", "unassigned")
-    .is("cleaner_id", null)
-    .select("id");
+  const { data, error } = await supabase.rpc("assign_cleaning_batch", {
+    job_ids: [...new Set(parsed.data.ids)], target_cleaner: cleanerId,
+  });
 
   if (error) return { error: error.message, assigned: 0 };
 
+  if (data?.length) await sendAssignmentBatchNotification(ownerId, cleanerId, (data as { id: string }[]).map((job) => job.id));
   revalidatePath("/dashboard/assignments");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/schedule");
   revalidatePath("/jobs");
+  revalidatePath("/jobs/inbox");
   revalidatePath("/jobs/schedule");
   return { error: null, assigned: data?.length ?? 0 };
 }

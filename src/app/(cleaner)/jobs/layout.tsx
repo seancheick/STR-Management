@@ -1,3 +1,4 @@
+import { LiveJobUpdates } from "@/components/shared/live-job-updates";
 import type { ReactNode } from "react";
 
 import { CleanerNav } from "@/components/cleaner/cleaner-nav";
@@ -15,6 +16,7 @@ export default async function CleanerJobsLayout({
 
   return (
     <div className="min-h-screen pb-24">
+      <LiveJobUpdates ownerId={profile.owner_id} userId={profile.id} cleaner />
       {children}
       <InstallBanner />
       <CleanerNav unreadCount={unread} />

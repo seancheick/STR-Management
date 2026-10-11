@@ -36,6 +36,7 @@ export function JobStatusButton({
         }
         showToast(kind === "accept" ? "Job accepted." : "Job started.");
         // Starting a job leads straight into the checklist.
+        router.refresh();
         if (kind === "start") router.push(`/jobs/${assignmentId}` as Route);
       } catch {
         showToast("Couldn't reach the server. Check your signal and try again.", "error");

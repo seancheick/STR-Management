@@ -1,3 +1,4 @@
+import { LiveJobUpdates } from "@/components/shared/live-job-updates";
 import Image from "next/image";
 
 import { HeaderBell } from "@/components/dashboard/header-bell";
@@ -31,6 +32,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
   return (
     <div className="flex min-h-dvh">
+      <LiveJobUpdates ownerId={profile.owner_id} userId={profile.id} />
       {/* Desktop sidebar — fixed, full viewport height */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 lg:flex lg:flex-col">
         <SidebarNav branding={branding} canManage={canManage} />
