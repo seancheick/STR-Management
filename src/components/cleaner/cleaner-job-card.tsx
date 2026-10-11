@@ -1,7 +1,8 @@
 import type { Route } from "next";
 import Link from "next/link";
-import { Clock, DollarSign, MapPin } from "lucide-react";
+import { DollarSign, MapPin } from "lucide-react";
 
+import { CleaningTiming } from "@/components/shared/cleaning-timing";
 import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { JobStatusButton } from "@/components/cleaner/job-status-button";
 import { formatInTimeZone } from "@/lib/ical/timezone";
@@ -110,9 +111,9 @@ export function CleanerJobCard({
     <article className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
       <div className={`h-1 w-full ${statusBar}`} />
       <div className="p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col items-start gap-2">
           <div className="min-w-0 flex-1">
-            <h2 className="text-xl font-bold tracking-tight">
+            <h2 className="text-lg font-semibold tracking-tight">
               {assignment.properties?.name ?? "Property"}
             </h2>
             {address && (
@@ -131,13 +132,9 @@ export function CleanerJobCard({
         </div>
 
         <div className="mt-4 grid gap-2">
-          <div className="flex flex-col gap-1 rounded-xl bg-muted/60 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <span className="text-sm font-semibold">{timing.summary}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">{formatDateTime(assignment.checkout_at ?? assignment.due_at, timeZone)}</p>
-            <p className="text-xs leading-5">{timing.detail}</p>
+          <div className="border-y border-border/60 py-3">
+            <CleaningTiming timing={timing} />
+            <p className="mt-2 text-xs text-muted-foreground">{formatDateTime(assignment.checkout_at ?? assignment.due_at, timeZone)}</p>
           </div>
           {showPayout && assignment.fixed_payout_amount !== null && (
             <div className="flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2">

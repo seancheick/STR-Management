@@ -10,9 +10,8 @@ import type { ReservationRecord } from "@/lib/queries/calendar";
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { calendarDate, calendarDayKey, calendarListingId, calendarInstantKey, reservationColumns } from "@/lib/services/calendar-display";
-import { formatInTimeZone } from "@/lib/ical/timezone";
-import { getCleaningTiming } from "@/lib/services/cleaning-timing";
-import { isTightTurnover, tightTurnoverMinutes } from "@/lib/domain/assignments";
+import { CleaningCalendarEvent } from "./cleaning-calendar-event";
+import { isTightTurnover } from "@/lib/domain/assignments";
 import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -34,16 +33,6 @@ export type MonthViewProps = {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-const CLEANER_PALETTE = [
-  { bg: "bg-blue-100", ring: "ring-blue-300", text: "text-blue-900", dot: "bg-blue-500" },
-  { bg: "bg-orange-100", ring: "ring-orange-300", text: "text-orange-900", dot: "bg-orange-500" },
-  { bg: "bg-green-100", ring: "ring-green-300", text: "text-green-900", dot: "bg-green-500" },
-  { bg: "bg-pink-100", ring: "ring-pink-300", text: "text-pink-900", dot: "bg-pink-500" },
-  { bg: "bg-purple-100", ring: "ring-purple-300", text: "text-purple-900", dot: "bg-purple-500" },
-  { bg: "bg-teal-100", ring: "ring-teal-300", text: "text-teal-900", dot: "bg-teal-500" },
-  { bg: "bg-indigo-100", ring: "ring-indigo-300", text: "text-indigo-900", dot: "bg-indigo-500" },
-];
 
 const PROPERTY_DOT_PALETTE = [
   "bg-emerald-500",
@@ -77,27 +66,8 @@ function hashIndex(input: string, length: number): number {
   return Math.abs(h) % length;
 }
 
-function paletteFor(cleanerId: string | null): (typeof CLEANER_PALETTE)[number] {
-  if (!cleanerId) {
-    return {
-      bg: "bg-amber-50",
-      ring: "ring-amber-300",
-      text: "text-amber-900",
-      dot: "bg-amber-400",
-    };
-  }
-  return CLEANER_PALETTE[hashIndex(cleanerId, CLEANER_PALETTE.length)];
-}
-
 function propertyDotFor(propertyId: string): string {
   return PROPERTY_DOT_PALETTE[hashIndex(propertyId, PROPERTY_DOT_PALETTE.length)];
-}
-
-function shortTime(iso: string | null, timezone?: string | null): string {
-  if (!iso) return "";
-  return formatInTimeZone(iso, { hour: "numeric", minute: "2-digit" }, timezone)
-    .replace(" ", "")
-    .replace(":00", "");
 }
 
 function sameLocalDay(a: Date, b: Date): boolean {
@@ -121,11 +91,6 @@ function priorityRank(a: AssignmentScheduleRecord): number {
   if (a.status === "assigned" || a.status === "confirmed") return 4;
   if (a.status === "approved" || a.status === "completed_pending_review") return 5;
   return 4;
-}
-
-function compactShort(name: string, max: number): string {
-  if (name.length <= max) return name;
-  return `${name.slice(0, max - 1)}…`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -652,7 +617,7 @@ function WeekRow({
               style={pillTopPad ? { marginTop: `${pillTopPad}px` } : undefined}
             >
               {shownJobs.map((a) => (
-                <CalendarPill
+                <CleaningCalendarEvent
                   assignment={a}
                   dimmed={
                     highlight !== null &&
@@ -689,102 +654,5 @@ function WeekRow({
         );
       })}
     </div>
-  );
-}
-
-// ─── Pill inside a day cell ───────────────────────────────────────────────────
-
-function CalendarPill({
-  assignment,
-  dimmed,
-  onClick,
-  propertyName,
-}: {
-  assignment: AssignmentScheduleRecord;
-  dimmed: boolean;
-  onClick: () => void;
-  propertyName: string | undefined;
-}) {
-  const tight = isTightTurnover(assignment.checkout_at, assignment.next_checkin_at);
-  const gap = tightTurnoverMinutes(assignment.checkout_at, assignment.next_checkin_at);
-  const needsReclean = assignment.status === "needs_reclean";
-  const approved = assignment.status === "approved" || assignment.status === "completed_pending_review";
-  const cleanerFirst = assignment.cleaners?.full_name?.split(" ")[0] ?? null;
-
-  let paletteClass: string;
-  let icon: React.ReactNode = <Sparkles className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />;
-  let personLabel: string;
-
-  if (needsReclean) {
-    paletteClass = "bg-red-50 ring-red-300 text-red-900";
-    icon = <AlertTriangle className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />;
-    personLabel = "Re-clean";
-  } else if (tight) {
-    paletteClass = "bg-red-50 ring-red-300 text-red-900";
-    icon = <Clock className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />;
-    personLabel = cleanerFirst ?? "Unassigned";
-  } else if (approved) {
-    paletteClass = "bg-green-50 ring-green-300 text-green-900";
-    personLabel = cleanerFirst ?? "Ready";
-  } else if (!assignment.cleaner_id) {
-    paletteClass = "bg-amber-50 ring-amber-300 text-amber-900";
-    personLabel = "Assign";
-  } else {
-    const p = paletteFor(assignment.cleaner_id);
-    paletteClass = `${p.bg} ${p.ring} ${p.text}`;
-    personLabel = cleanerFirst ?? "Assigned";
-  }
-
-  // Cleaner arrives at checkout; show checkout time on the pill.
-  const time = shortTime(assignment.checkout_at ?? assignment.due_at, assignment.properties?.timezone);
-  const propDot = propertyDotFor(calendarListingId(assignment));
-  const shortProp = propertyName ? compactShort(propertyName, 14) : "";
-  const gapHours = gap !== null ? Math.floor(gap / 60) : null;
-  const urgencyLabel = tight && gap !== null
-    ? gap < 60
-      ? `${gap}m`
-      : `${gapHours}h`
-    : null;
-  const isFromIcal = assignment.source_type === "ical";
-  const sourceLabel = isFromIcal ? "iCal" : "Manual";
-
-  const timing = getCleaningTiming(assignment);
-  return (
-    <button
-      className={`flex w-full flex-col gap-0.5 truncate rounded-md px-1.5 py-1 text-left text-[10px] font-semibold leading-tight ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${paletteClass} ${
-        dimmed ? "opacity-40" : ""
-      }`}
-      onClick={onClick}
-      title={`${propertyName ?? "Property"} · ${personLabel} · ${timing.summary}. ${timing.detail}${
-        tight && gap !== null ? ` · tight (${gap}m)` : ""
-      }`}
-      type="button"
-    >
-      <span className="flex items-center gap-1 truncate">
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${propDot}`} aria-hidden="true" />
-        {icon}
-        <span className="truncate tabular-nums">{time}</span>
-        <span className="truncate opacity-90">· {personLabel}</span>
-        {urgencyLabel && (
-          <span className="ml-auto shrink-0 rounded-full bg-red-200 px-1 text-[9px] font-bold leading-none text-red-900">
-            {urgencyLabel}
-          </span>
-        )}
-      </span>
-      <span className="whitespace-normal text-[9px] font-medium">{timing.summary}</span>
-      <span className="flex items-center gap-1.5 pl-3 text-[9px] font-medium uppercase tracking-wide opacity-70">
-        {shortProp && <span className="truncate">{shortProp}</span>}
-        <span
-          className={`ml-auto shrink-0 rounded px-1 py-px text-[8px] font-bold tracking-wide ${
-            isFromIcal
-              ? "bg-rose-100 text-rose-700"
-              : "bg-slate-100 text-slate-600"
-          }`}
-          title={isFromIcal ? "Synced from iCal" : "Added manually"}
-        >
-          {sourceLabel}
-        </span>
-      </span>
-    </button>
   );
 }

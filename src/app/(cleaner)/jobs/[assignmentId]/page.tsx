@@ -1,3 +1,4 @@
+import { CleaningTiming } from "@/components/shared/cleaning-timing";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Info } from "lucide-react";
@@ -103,9 +104,8 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
         </h1>
         <div className="mt-1 rounded-2xl border border-border/70 bg-card px-4 py-3 text-sm">
           <p className="text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">Cleaning timing</p>
-          <p className="mt-1 font-semibold leading-6">{timing.summary}</p>
+          <div className="mt-2"><CleaningTiming timing={timing} /></div>
           <p className="leading-6 text-muted-foreground">{formatDate(assignment.checkout_at ?? assignment.due_at, assignment.properties?.timezone)}</p>
-          <p className="mt-1 leading-6">{timing.detail}</p>
         </div>
       </div>
 

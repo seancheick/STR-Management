@@ -14,6 +14,7 @@ import { useEffect } from "react";
 
 import type { AssignmentDetailAction } from "@/app/actions/assignments";
 import { MarkPaidControl } from "@/components/assignments/mark-paid-control";
+import { CleaningTiming } from "@/components/shared/cleaning-timing";
 import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { formatInTimeZone } from "@/lib/ical/timezone";
 
@@ -123,8 +124,7 @@ export function AssignmentDrawer({ canManage, detail, onClose, onAssignClick }: 
               <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
                 Timing
               </p>
-              <p className="mb-1 text-sm font-semibold">{timing.summary}</p>
-              <p className="mb-3 text-xs leading-5 text-muted-foreground">{timing.detail}</p>
+              <div className="mb-3"><CleaningTiming timing={timing} /></div>
               <div className="grid grid-cols-2 gap-3">
                 {detail.checkoutAt && (
                   <div>

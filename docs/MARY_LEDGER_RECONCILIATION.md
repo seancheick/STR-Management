@@ -128,3 +128,14 @@ not the 3 PM ready target. Actual same-day arrivals show the firm cleaning windo
 without one, timing is flexible after checkout and same-day readiness is preferred
 for late reservations. Paid reports persist entry payment proof atomically so
 cleaner and owner RLS views agree. Calendar range reads paginate past 1,000 rows.
+
+## Calendar event and mobile presentation
+
+Calendar cleanings use one `CleaningCalendarEvent` across timeline and month
+views: neutral event surface, cleaner name, time, and plain-text arrival status.
+Completed records are not rendered as urgent future turnovers. `CleaningTiming`
+is shared with cleaner cards/details and the dashboard drawer, retaining the
+canonical timing calculation. Mobile navigation wraps and calendar navigation
+has 44-pixel controls; cleaner actions remain 48 pixels. Browser checks covered
+320/390/768-pixel cleaner layouts and desktop calendars, plus a browser-only
+same-day arrival fixture (no booking data changed).

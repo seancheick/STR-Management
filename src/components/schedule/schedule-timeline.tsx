@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import { Calendar, Clock, Lock, MessageSquareText, Sparkles } from "lucide-react";
+import { Calendar, Lock, Sparkles } from "lucide-react";
 
 import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { ReservationRecord } from "@/lib/queries/calendar";
@@ -11,8 +11,7 @@ import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { calendarRefreshRows, calendarWindowChunks, calendarWindowContains, calendarAdjacentDays, calendarScrollAnchor, calendarDate, calendarDayKey, calendarEdgeDirection, calendarListingId, calendarInstantKey, calendarRangeLabel, reservationColumns } from "@/lib/services/calendar-display";
 import { formatInTimeZone } from "@/lib/ical/timezone";
-import { getCleaningTiming } from "@/lib/services/cleaning-timing";
-import { isTightTurnover } from "@/lib/domain/assignments";
+import { CleaningCalendarEvent } from "./cleaning-calendar-event";
 import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -370,38 +369,38 @@ export function ScheduleTimeline({
   }, [assignments, dayKeys, timezoneByProperty]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       {/* Header: range nav + range label + legend */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <button
             type="button"
             aria-label="Previous 2 weeks"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card text-sm font-medium transition hover:bg-muted"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card text-sm font-medium transition hover:bg-muted"
             onClick={() => void scrollWeeks("previous")}
           >
             ←
           </button>
-          <span className="min-w-[180px] text-center text-sm font-semibold">
+          <span className="min-w-0 text-center sm:min-w-[180px] text-sm font-semibold">
             {rangeLabel}
           </span>
           <button
             type="button"
             aria-label="Next 2 weeks"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card text-sm font-medium transition hover:bg-muted"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card text-sm font-medium transition hover:bg-muted"
             onClick={() => void scrollWeeks("next")}
           >
             →
           </button>
           <button
-            className="ml-1 inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 text-xs font-medium transition hover:bg-muted"
+            className="ml-1 inline-flex h-11 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 text-xs font-medium transition hover:bg-muted"
             onClick={scrollToToday}
             type="button"
           >
             <Calendar className="h-3 w-3" aria-hidden="true" />
             Today
           </button>
-          <a className="inline-flex h-9 items-center rounded-full border border-border/70 bg-card px-3 text-xs font-medium hover:bg-muted" download
+          <a className="inline-flex h-11 items-center rounded-full border border-border/70 bg-card px-3 text-xs font-medium hover:bg-muted" download
             href={`/api/schedule/export.csv?start=${days[0]}&end=${days[days.length - 1]}${filterQuery}`}
             title="Download all loaded dates as CSV">⬇ CSV</a>
         </div>
@@ -654,7 +653,7 @@ function PropertyRow({
                 >
                   {/* Every job that day (e.g. a re-clean plus a turnover), not just the first */}
                   {dayAssignments.map((a) => (
-                    <CleaningChip
+                    <CleaningCalendarEvent
                       assignment={a}
                       key={a.id}
                       onClick={() => onSelectAssignment(a.id)}
@@ -672,57 +671,6 @@ function PropertyRow({
 
 // ─── Cleaning chip ────────────────────────────────────────────────────────────
 
-function CleaningChip({
-  assignment,
-  onClick,
-}: {
-  assignment: AssignmentScheduleRecord;
-  onClick: () => void;
-}) {
-  const timing = getCleaningTiming(assignment);
-  const needsReclean = assignment.status === "needs_reclean";
-  const tight = isTightTurnover(assignment.checkout_at, assignment.next_checkin_at);
-  const cleanerFirst = assignment.cleaners?.full_name?.split(" ")[0] ?? null;
-
-  // Palette: green for assigned/approved, amber for unassigned, red for tight/reclean
-  let style = "border-green-300 bg-green-50 text-green-700";
-  let label: string;
-
-  if (needsReclean) {
-    style = "border-red-300 bg-red-50 text-red-700";
-    label = "Re-clean";
-  } else if (timing.mode === "firm") {
-    style = tight ? "border-red-300 bg-red-50 text-red-700" : "border-amber-300 bg-amber-50 text-amber-700";
-    label = `Same-day check-in · ${cleanerFirst ?? "Unassigned"}`;
-  } else if (assignment.status === "approved" || assignment.status === "completed_pending_review") {
-    style = "border-green-300 bg-green-50 text-green-700";
-    label = `Clean · ${cleanerFirst ?? "✓"}`;
-  } else if (!assignment.cleaner_id) {
-    style = "border-amber-300 bg-amber-50 text-amber-700";
-    label = "Assign →";
-  } else {
-    label = `Clean · ${cleanerFirst ?? "—"}`;
-  }
-
-  return (
-    <button
-      className={`inline-flex w-full min-w-0 flex-col items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition hover:shadow-sm ${style}`}
-      onClick={onClick}
-      title={`${label} · ${timing.summary}. ${timing.detail}`}
-      type="button"
-    >
-      <span className="flex items-center gap-1">
-      {tight ? (
-        <Clock className="h-3 w-3 shrink-0" aria-hidden="true" />
-      ) : (
-        <MessageSquareText className="h-3 w-3 shrink-0" aria-hidden="true" />
-      )}
-      <span className="truncate">{label}</span>
-      </span>
-      <span className="whitespace-normal text-center text-[9px] font-medium leading-tight">{timing.summary}</span>
-    </button>
-  );
-}
 
 function Legend({ color, label }: { color: string; label: string }) {
   return (
