@@ -79,3 +79,14 @@ export function isReconciledJob(
     dateKeyInTimeZone(new Date(dueAt), timezone) <= account.reconciled_through
   );
 }
+
+export function isHistoricalPayoutReport(
+  report: { cleaner_filter: string | null; period_end: string },
+  accounts: { cleaner_id: string; reconciled_through: string }[],
+) {
+  return accounts.some(
+    (account) =>
+      account.cleaner_id === report.cleaner_filter &&
+      report.period_end <= account.reconciled_through,
+  );
+}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Info } from "lucide-react";
 
+import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { requireRole } from "@/lib/auth/session";
 import { formatInTimeZone } from "@/lib/ical/timezone";
 import { getAssignmentDetail } from "@/lib/queries/assignments";
@@ -56,6 +57,7 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
     notFound();
   }
 
+  const timing = getCleaningTiming(assignment);
   const isExecutable = assignment.status === "in_progress";
   const isReadOnly = !isExecutable;
 
@@ -99,26 +101,12 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
         <h1 className="text-3xl font-semibold tracking-tight">
           {assignment.properties?.name ?? "Job"}
         </h1>
-        {assignment.checkout_at ? (
-          <div className="mt-1 rounded-2xl border border-border/70 bg-card px-4 py-3 text-sm">
-            <p className="text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">
-              Cleaning window
-            </p>
-            <p className="mt-1 leading-6">
-              <span className="font-semibold text-foreground">Start anytime after</span>{" "}
-              {formatDate(assignment.checkout_at, assignment.properties?.timezone)}
-            </p>
-            <p className="leading-6">
-              <span className="font-semibold text-foreground">Must be done by</span>{" "}
-              {formatDate(assignment.due_at, assignment.properties?.timezone)}
-            </p>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">Must be done by</span>{" "}
-            {formatDate(assignment.due_at, assignment.properties?.timezone)}
-          </p>
-        )}
+        <div className="mt-1 rounded-2xl border border-border/70 bg-card px-4 py-3 text-sm">
+          <p className="text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground">Cleaning timing</p>
+          <p className="mt-1 font-semibold leading-6">{timing.summary}</p>
+          <p className="leading-6 text-muted-foreground">{formatDate(assignment.checkout_at ?? assignment.due_at, assignment.properties?.timezone)}</p>
+          <p className="mt-1 leading-6">{timing.detail}</p>
+        </div>
       </div>
 
       {/* Not started yet — say why the checklist is locked and offer the next step */}

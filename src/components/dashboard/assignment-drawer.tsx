@@ -14,6 +14,7 @@ import { useEffect } from "react";
 
 import type { AssignmentDetailAction } from "@/app/actions/assignments";
 import { MarkPaidControl } from "@/components/assignments/mark-paid-control";
+import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { formatInTimeZone } from "@/lib/ical/timezone";
 
 // ─── Status helpers ────────────────────────────────────────────────────────────
@@ -28,8 +29,8 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   needs_reclean:            { label: "Needs Re-clean",    cls: "bg-red-50 text-red-700 border-red-200" },
 };
 
-function formatTime(iso: string) {
-  return formatInTimeZone(iso, { hour: "numeric", minute: "2-digit" });
+function formatTime(iso: string, timezone?: string | null) {
+  return formatInTimeZone(iso, { hour: "numeric", minute: "2-digit" }, timezone);
 }
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -56,7 +57,8 @@ export function AssignmentDrawer({ canManage, detail, onClose, onAssignClick }: 
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Turnover window (no next_checkin_at — column removed; show tight-window warning via expected duration only)
+  const timing = getCleaningTiming({ checkout_at: detail.checkoutAt, due_at: detail.dueAt, next_checkin_at: detail.nextCheckinAt, properties: { timezone: detail.timeZone } });
+  const dateTime = (iso: string) => formatInTimeZone(iso, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }, detail.timeZone);
 
   // Checklist progress
   const checklistPct =
@@ -121,16 +123,18 @@ export function AssignmentDrawer({ canManage, detail, onClose, onAssignClick }: 
               <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
                 Timing
               </p>
+              <p className="mb-1 text-sm font-semibold">{timing.summary}</p>
+              <p className="mb-3 text-xs leading-5 text-muted-foreground">{timing.detail}</p>
               <div className="grid grid-cols-2 gap-3">
                 {detail.checkoutAt && (
                   <div>
                     <p className="text-[11px] text-muted-foreground/70">Guest checkout</p>
-                    <p className="mt-0.5 text-sm font-medium">{formatTime(detail.checkoutAt)}</p>
+                    <p className="mt-0.5 text-sm font-medium">{dateTime(detail.checkoutAt)}</p>
                   </div>
                 )}
                 <div>
-                  <p className="text-[11px] text-muted-foreground/70">Cleaning due</p>
-                  <p className="mt-0.5 text-sm font-medium">{formatTime(detail.dueAt)}</p>
+                  <p className="text-[11px] text-muted-foreground/70">{timing.mode === "firm" ? "Next guest check-in" : timing.mode === "flexible" ? "Preferred ready target" : "Cleaning deadline"}</p>
+                  <p className="mt-0.5 text-sm font-medium">{dateTime(timing.mode === "firm" && detail.nextCheckinAt ? detail.nextCheckinAt : detail.dueAt)}</p>
                 </div>
                 {detail.expectedDurationMin && (
                   <div>
@@ -238,7 +242,7 @@ export function AssignmentDrawer({ canManage, detail, onClose, onAssignClick }: 
                       >
                         <p className="whitespace-pre-wrap text-sm leading-6">{note.body}</p>
                         <p className="mt-1 text-[11px] text-muted-foreground">
-                          {note.authorName ?? "Cleaner"} · {formatTime(note.createdAt)}
+                          {note.authorName ?? "Cleaner"} · {formatTime(note.createdAt, detail.timeZone)}
                         </p>
                       </div>
                     ))}

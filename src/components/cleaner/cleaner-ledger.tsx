@@ -38,7 +38,7 @@ export function CleanerLedger({
           </div>
           <div className="flex justify-between gap-3 border-t pt-3 text-xl font-semibold text-primary">
             <dt>
-              {summary.balance < 0 ? "Credit balance" : "Amount still owed"}
+              {summary.balance < 0 ? "Credit balance" : "Ledger balance"}
             </dt>
             <dd>{money(Math.abs(summary.balance))}</dd>
           </div>
@@ -53,7 +53,10 @@ export function CleanerLedger({
         </summary>
         <ul className="divide-y divide-border px-4">
           {summary.paymentsList.map((e) => (
-            <li key={e.id} className="flex justify-between gap-4 py-3">
+            <li
+              key={e.id}
+              className="-mx-4 flex justify-between gap-4 bg-green-50/60 px-4 py-3 dark:bg-green-950/20"
+            >
               <div className="min-w-0">
                 <p className="text-sm font-medium">{e.description}</p>
                 <p className="text-sm text-muted-foreground">
@@ -96,7 +99,14 @@ export function CleanerLedger({
             </div>
             <ol className="divide-y divide-border px-4">
               {month.entries.map((e) => (
-                <li key={e.id} className="py-3">
+                <li
+                  key={e.id}
+                  className={
+                    e.kind === "payment"
+                      ? "-mx-4 bg-green-50/60 px-4 py-3 dark:bg-green-950/20"
+                      : "py-3"
+                  }
+                >
                   <div className="flex justify-between gap-3">
                     <span className="min-w-0 text-sm font-medium">
                       {e.description}

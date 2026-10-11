@@ -123,7 +123,7 @@ export async function removeCalendarSourceAction(
 
   const { error } = await supabase
     .from("property_calendar_sources")
-    .update({ active: false })
+    .update({ active: false, retired_at: new Date().toISOString() })
     .eq("id", sourceId);
 
   revalidatePath("/dashboard/calendar");

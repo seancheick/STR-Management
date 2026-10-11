@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CheckSquare2, Clock, Sparkles } from "lucide-react";
 
 import type { AssignmentListRecord, AssignmentScheduleRecord } from "@/lib/queries/assignments";
-import { isTightTurnover } from "@/lib/domain/assignments";
+import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { dateKeyInTimeZone, formatInTimeZone } from "@/lib/ical/timezone";
 
 type Props = {
@@ -77,7 +77,7 @@ export function RightNowHero({
 
   // 2. Tight turnover today
   const tightToday = todaysJobs.find((a) =>
-    isTightTurnover(a.checkout_at, a.next_checkin_at),
+    getCleaningTiming(a).mode === "firm",
   );
   if (tightToday) {
     return (
@@ -85,11 +85,9 @@ export function RightNowHero({
         cta="Review"
         href={"/dashboard/schedule" as Route}
         icon={<Clock className="h-5 w-5" aria-hidden="true" />}
-        message={`Tight turn today: ${tightToday.properties?.name ?? "Property"} at ${formatWhen(tightToday.due_at, tightToday.properties?.timezone)}`}
+        message={`Same-day check-in: ${tightToday.properties?.name ?? "Property"}`}
         subtitle={
-          tightToday.cleaners?.full_name
-            ? `${tightToday.cleaners.full_name} needs to be on-site by checkout.`
-            : "Still unassigned. Assign a cleaner now."
+          `${tightToday.cleaners?.full_name ?? "Unassigned"} · ${getCleaningTiming(tightToday).summary}. ${getCleaningTiming(tightToday).detail}`
         }
         tone="red"
       />
@@ -146,14 +144,8 @@ export function RightNowHero({
         cta="See schedule"
         href={"/dashboard/schedule" as Route}
         icon={<Clock className="h-5 w-5" aria-hidden="true" />}
-        message={`Next up: ${nextUp.properties?.name ?? "Property"} ${formatRelative(nextUp.due_at)}`}
-        subtitle={
-          nextUp.cleaners?.full_name
-            ? `${nextUp.cleaners.full_name} is on deck for ${formatWhen(nextUp.due_at, nextUp.properties?.timezone)}.`
-            : unassignedCount > 0
-              ? `Unassigned — pick a cleaner before the turnover.`
-              : `Scheduled for ${formatWhen(nextUp.due_at, nextUp.properties?.timezone)}.`
-        }
+        message={`Next cleaning: ${nextUp.properties?.name ?? "Property"} · ${formatInTimeZone(nextUp.checkout_at ?? nextUp.due_at, { month: "short", day: "numeric" }, nextUp.properties?.timezone)}`}
+        subtitle={`${nextUp.cleaners?.full_name ?? (unassignedCount > 0 ? "Unassigned — choose a cleaner" : "Unassigned")} · ${getCleaningTiming(nextUp).summary}. ${getCleaningTiming(nextUp).detail}`}
         tone="neutral"
       />
     );

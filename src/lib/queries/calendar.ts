@@ -1,4 +1,5 @@
 import "server-only";
+import { visibleCalendarReservations } from "@/lib/services/calendar-history";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
@@ -99,6 +100,7 @@ export type ReservationRecord = {
   id: string;
   property_id: string;
   listing_property_id?: string | null;
+  historical?: boolean;
   platform: "airbnb" | "vrbo" | "booking" | "hostex" | "other";
   guest_name: string | null;
   start_at: string;
@@ -116,18 +118,25 @@ export async function listReservationsForRange(
   endISO: string,
 ): Promise<ReservationRecord[]> {
   const supabase = await createServerSupabaseClient();
-  const { data } = await supabase
-    .from("reservations")
-    .select(`
-      id, property_id, listing_property_id, platform, guest_name, start_at, end_at, summary,
-      calendar_source_id, source:calendar_source_id ( active ),
-      properties:property_id ( name )
-    `)
-    .lte("start_at", endISO)
-    .gte("end_at", startISO)
-    .order("start_at", { ascending: true });
-
-  return ((data ?? []) as unknown as (ReservationRecord & {calendar_source_id:string|null;source:{active:boolean}|null})[]).filter(r=>!r.calendar_source_id || r.source?.active);
+  type SourceReservation = ReservationRecord & { calendar_source_id: string | null; source: { active: boolean; retired_at: string | null } | null };
+  const rows: SourceReservation[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase
+      .from("reservations")
+      .select(`
+        id, property_id, listing_property_id, platform, guest_name, start_at, end_at, summary,
+        calendar_source_id, source:calendar_source_id ( active, retired_at ),
+        properties:property_id ( name )
+      `)
+      .lte("start_at", endISO)
+      .gte("end_at", startISO)
+      .order("start_at", { ascending: true }).order("id")
+      .range(offset, offset + 999);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as unknown as SourceReservation[]));
+    if ((data?.length ?? 0) < 1000) break;
+  }
+  return visibleCalendarReservations(rows);
 }
 
 export async function listRecentSyncLogs(limit = 20): Promise<SyncLogRecord[]> {

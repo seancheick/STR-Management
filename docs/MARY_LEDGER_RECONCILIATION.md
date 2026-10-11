@@ -87,7 +87,7 @@ rows retained in `ops_reconciliation_audit`. Ledger balance remains $2,124.
 Five Hostex feeds replaced the old feeds. Their authenticated URLs are stored
 only in the database, never in source control. Initial sync created 13 upcoming
 jobs assigned to Mary, with pending acceptance. Old source reservations remain
-stored but are excluded from the live calendar.
+stored; the follow-up below restores past bookings without stale future imports.
 
 The five visible configurations remain separate: basement 1 bedroom ($75), each
 floor 2 bedrooms ($90), and each floor 3 bedrooms ($120). Physical-unit identity
@@ -102,3 +102,29 @@ offers no longer require accept/decline; fresh cancellation updates still show.
 The one-time `longmont-jobs-reconciliation.sql` is an operational snapshot import;
 do not replay it after activating replacement feeds, as it archives old future
 imports. The original ledger data import remains idempotent.
+
+## Follow-up calendar and payout clarity
+
+The timeline now grows continuously in fourteen-day chunks, preserving visible
+positions when earlier dates are prepended. Scrolling no longer replaces the
+route with a separate page. Retired-feed cutoffs restore 76 past Airbnb bookings;
+older unavailable booking data is not invented, and obsolete futures stay hidden.
+Historical reservation bars are labelled accordingly.
+
+Payout report creation is collapsed by default, with cleaner balances first.
+Historical reports are a separate collapsed archive. Payment ledger rows use a
+subtle green highlight in the shared owner/cleaner component.
+
+Owner payout balances, dashboard pending payouts, cleaner Pay and owner ledger
+current totals now read `cleaner-finance.ts`, which owns cutoff, committed-report,
+payment-stamp and duplicate-job rules. Draft reports do not own accounting yet.
+Historical report detail is labelled reference-only and does not expose payment
+mutations. Dashboard and Schedule both render the same calendar and read the same
+schedule provider, including bookings, configuration labels, filters and CSV.
+
+Cleaning timing is shared across the dashboard hero/drawer, both calendars and
+cleaner cards/details. Checkout is the start-after time (11 AM for current jobs),
+not the 3 PM ready target. Actual same-day arrivals show the firm cleaning window;
+without one, timing is flexible after checkout and same-day readiness is preferred
+for late reservations. Paid reports persist entry payment proof atomically so
+cleaner and owner RLS views agree. Calendar range reads paginate past 1,000 rows.

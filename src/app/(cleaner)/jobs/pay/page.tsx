@@ -1,17 +1,11 @@
 import Link from "next/link";
 import { CleanerLedger } from "@/components/cleaner/cleaner-ledger";
-import { getCleanerLedger } from "@/lib/queries/cleaner-ledger";
-import { summarizeLedger } from "@/lib/services/cleaner-ledger";
-import { dateKeyInTimeZone } from "@/lib/ical/timezone";
+import { getCleanerFinancialSummary } from "@/lib/queries/cleaner-finance";
 import { CheckCircle2, Clock3, FileText, Wallet } from "lucide-react";
 
 import { requireRole } from "@/lib/auth/session";
 import { formatInTimeZone } from "@/lib/ical/timezone";
-import {
-  listMyPayoutEntries,
-  listPendingCleanerPayoutAssignments,
-} from "@/lib/queries/payouts";
-import { calculateCleanerPaySummary } from "@/lib/services/cleaner-portal";
+
 
 function money(n: number) {
   return n.toLocaleString("en-US", {
@@ -99,41 +93,9 @@ export default async function CleanerPayPage() {
     "admin",
     "supervisor",
   ]);
-  const [allEntries, allJobs, ledger] = await Promise.all([
-    listMyPayoutEntries(profile.id),
-    listPendingCleanerPayoutAssignments(profile.id),
-    getCleanerLedger(profile.id),
-  ]);
-  const rawEntries = allEntries.filter(
-    (e) =>
-      !ledger ||
-      (e.assignments?.due_at &&
-        dateKeyInTimeZone(
-          new Date(e.assignments.due_at),
-          e.properties?.timezone,
-        ) > ledger.account.reconciled_through),
-  );
-  const jobsOutsideReports = allJobs.filter(
-    (a) =>
-      !ledger ||
-      dateKeyInTimeZone(new Date(a.due_at), a.properties?.timezone) >
-        ledger.account.reconciled_through,
-  );
-  // A job marked paid on the schedule stamps the assignment, not the entry.
-  const entries = rawEntries.map((entry) => ({
-    ...entry,
-    paid_at: entry.paid_at ?? entry.assignments?.paid_at ?? null,
-  }));
-  const summary = calculateCleanerPaySummary({
-    payoutEntries: entries,
-    pendingAssignments: jobsOutsideReports,
-  });
-
-  const historicalBalance = ledger
-    ? summarizeLedger(ledger.entries).balance
-    : 0;
-  const totalDue =
-    historicalBalance + summary.projectedTotal - summary.paidTotal;
+  const financial = await getCleanerFinancialSummary(profile.id);
+  const { ledger, entries, jobsOutsideReports, summary } = financial;
+  const totalDue = financial.balance;
   const awaiting = jobsOutsideReports.filter((a) => !a.paid_at);
   const settled = [
     ...entries.map((entry) => ({

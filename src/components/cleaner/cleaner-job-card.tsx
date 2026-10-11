@@ -2,6 +2,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { Clock, DollarSign, MapPin } from "lucide-react";
 
+import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { JobStatusButton } from "@/components/cleaner/job-status-button";
 import { formatInTimeZone } from "@/lib/ical/timezone";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
@@ -73,6 +74,7 @@ export function CleanerJobCard({
     "border-border bg-muted text-muted-foreground";
   const statusBar = STATUS_BARS[assignment.status] ?? "bg-border";
   const timeZone = assignment.properties?.timezone;
+  const timing = getCleaningTiming(assignment);
 
   if (compact)
     return (
@@ -84,6 +86,7 @@ export function CleanerJobCard({
           <p className="text-sm font-semibold">
             {assignment.properties?.name ?? "Property"}
           </p>
+          <p className="mt-1 text-xs text-muted-foreground" title={timing.detail}>{timing.summary}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {assignment.ledger_entry_id
               ? "Recorded from ledger"
@@ -128,41 +131,14 @@ export function CleanerJobCard({
         </div>
 
         <div className="mt-4 grid gap-2">
-          {assignment.checkout_at ? (
-            <div className="flex flex-col gap-0.5 rounded-xl bg-muted/60 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <Clock
-                  className="h-4 w-4 shrink-0 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Window
-                </span>
-              </div>
-              <p className="text-xs leading-5 text-foreground">
-                <span className="text-muted-foreground">Start after</span>{" "}
-                <span className="font-semibold">
-                  {formatDateTime(assignment.checkout_at, timeZone)}
-                </span>
-              </p>
-              <p className="text-xs leading-5 text-foreground">
-                <span className="text-muted-foreground">Done by</span>{" "}
-                <span className="font-semibold">
-                  {formatDateTime(assignment.due_at, timeZone)}
-                </span>
-              </p>
+          <div className="flex flex-col gap-1 rounded-xl bg-muted/60 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="text-sm font-semibold">{timing.summary}</span>
             </div>
-          ) : (
-            <div className="flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2">
-              <Clock
-                className="h-4 w-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <span className="text-sm font-medium">
-                Done by {formatDateTime(assignment.due_at, timeZone)}
-              </span>
-            </div>
-          )}
+            <p className="text-xs text-muted-foreground">{formatDateTime(assignment.checkout_at ?? assignment.due_at, timeZone)}</p>
+            <p className="text-xs leading-5">{timing.detail}</p>
+          </div>
           {showPayout && assignment.fixed_payout_amount !== null && (
             <div className="flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2">
               <DollarSign

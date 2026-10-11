@@ -361,19 +361,23 @@ export async function listAssignmentsForSchedule(
   // A cleaning's anchor day is its CHECKOUT day (when the guest leaves).
   // For manually-added jobs without a checkout, fall back to due_at.
   // This OR filter catches both shapes.
-  const { data } = await supabase
-    .from("assignments")
-    .select(SCHEDULE_SELECT)
-    .or(
-      `and(checkout_at.gte.${weekStart},checkout_at.lte.${weekEnd}),` +
-        `and(checkout_at.is.null,due_at.gte.${weekStart},due_at.lte.${weekEnd})`,
-    )
-    .not("status", "eq", "cancelled")
-    .order("due_at", { ascending: true });
-
-  return ((data as unknown as AssignmentScheduleRecord[] | null) ?? []).map(
-    withListingConfiguration,
-  );
+  const rows: AssignmentScheduleRecord[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase
+      .from("assignments")
+      .select(SCHEDULE_SELECT)
+      .or(
+        `and(checkout_at.gte.${weekStart},checkout_at.lte.${weekEnd}),` +
+          `and(checkout_at.is.null,due_at.gte.${weekStart},due_at.lte.${weekEnd})`,
+      )
+      .not("status", "eq", "cancelled")
+      .order("due_at", { ascending: true }).order("id")
+      .range(offset, offset + 999);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as unknown as AssignmentScheduleRecord[]));
+    if ((data?.length ?? 0) < 1000) break;
+  }
+  return rows.map(withListingConfiguration);
 }
 
 export type PropertyTodayStatus = {

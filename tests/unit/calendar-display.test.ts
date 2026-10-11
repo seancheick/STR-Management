@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calendarDate, calendarDayKey, calendarInstantKey, calendarRangeLabel, reservationColumns, calendarWindow, calendarWindowContains, calendarListingId, calendarEdgeDirection } from "@/lib/services/calendar-display";
+import { calendarDate, calendarDayKey, calendarInstantKey, calendarRangeLabel, reservationColumns, calendarWindow, calendarWindowContains, calendarListingId, calendarEdgeDirection, calendarAdjacentDays, calendarScrollAnchor, calendarWindowChunks, calendarRefreshRows, calendarTimelineDays } from "@/lib/services/calendar-display";
 
 describe("calendar display", () => {
   it("formats same-month and cross-year ranges without incomplete Intl skeletons", () => {
@@ -67,4 +67,33 @@ describe("horizontal calendar paging", () => {
     expect(calendarEdgeDirection(0, 900, 900, -40)).toBeNull();
     expect(calendarEdgeDirection(1279.5, 2180, 900, 20)).toBe("next");
   });
+});
+
+
+it("extends adjacent dates across year boundaries and preserves the existing scroll anchor", () => {
+  const days = ["2026-12-31", "2027-01-01"];
+  expect(calendarAdjacentDays(days, "next", 2)).toEqual(["2027-01-02", "2027-01-03"]);
+  expect(calendarAdjacentDays(days, "previous", 2)).toEqual(["2026-12-29", "2026-12-30"]);
+  expect(calendarScrollAnchor(300, 14)).toBe(2260);
+  expect(calendarScrollAnchor(300, 0)).toBe(300);
+});
+
+
+it("refreshes changed and removed jobs without losing newly extended dates", () => {
+  const current = [{ id: "changed", day: "2026-10-11", status: "assigned" }, { id: "removed", day: "2026-10-12", status: "assigned" }, { id: "extension", day: "2026-11-01", status: "assigned" }];
+  const result = calendarRefreshRows(current, [{ id: "changed", day: "2026-10-11", status: "confirmed" }], (row) => row.day <= "2026-10-23");
+  expect(result).toEqual([{ id: "extension", day: "2026-11-01", status: "assigned" }, { id: "changed", day: "2026-10-11", status: "confirmed" }]);
+});
+
+it("chunks a timeline longer than a year into adjacent bounded refresh requests", () => {
+  const chunks = calendarWindowChunks("2026-01-01", "2027-01-03");
+  expect(chunks).toEqual([{ start: "2026-01-01", end: "2026-12-31" }, { start: "2027-01-01", end: "2027-01-03" }]);
+});
+
+
+it("starts both owner calendars yesterday in the app timezone with fourteen civil days", () => {
+  const days = calendarTimelineDays(0, new Date("2026-10-12T01:00:00Z"));
+  expect(days).toHaveLength(14);
+  expect(days[0]).toBe("2026-10-10");
+  expect(days[13]).toBe("2026-10-23");
 });

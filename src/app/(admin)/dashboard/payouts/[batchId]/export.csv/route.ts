@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { csvDownloadDisposition } from "@/lib/services/csv-download";
 
 import { requireRole } from "@/lib/auth/session";
 import { getPayoutBatch, listPayoutEntries } from "@/lib/queries/payouts";
@@ -56,12 +57,11 @@ export async function GET(
   }
 
   const csv = rows.join("\n");
-  const filename = `payout-${batch.label.replace(/\s+/g, "-").toLowerCase()}.csv`;
 
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": csvDownloadDisposition(batch.label),
     },
   });
 }

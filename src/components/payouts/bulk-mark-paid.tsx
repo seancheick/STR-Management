@@ -91,7 +91,7 @@ export function BulkMarkPaid({ jobs }: { jobs: AssignmentListRecord[] }) {
     return (
       <div className="flex items-center gap-2 rounded-2xl border border-dashed border-border/70 bg-card px-4 py-3 text-sm text-muted-foreground">
         <CheckCircle2 className="h-4 w-4 text-green-600" aria-hidden="true" />
-        Every completed cleaning has been paid.
+        No separate completed jobs awaiting payment. Cleaner ledger balances are shown above.
       </div>
     );
   }

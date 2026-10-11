@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
 
+import { listCleanerFinancialSummaries } from "@/lib/queries/cleaner-finance";
+import { isHistoricalPayoutReport } from "@/lib/services/cleaner-ledger";
 import { requireRole } from "@/lib/auth/session";
 import {
   getPayoutBatch,
@@ -51,7 +53,7 @@ export default async function PayoutBatchDetailPage({
   const { batchId } = await params;
   const profile = await requireRole(["owner", "admin", "supervisor"]);
   // Mutations here are owner/admin-only; supervisors get a read-only view.
-  const canManage = profile.role === "owner" || profile.role === "admin";
+  const canManageRole = profile.role === "owner" || profile.role === "admin";
 
   const [batch, entries] = await Promise.all([
     getPayoutBatch(batchId),
@@ -60,6 +62,12 @@ export default async function PayoutBatchDetailPage({
 
   if (!batch) notFound();
 
+  const finances = await listCleanerFinancialSummaries();
+  const historical = isHistoricalPayoutReport(
+    batch,
+    finances.flatMap((item) => (item.ledger ? [item.ledger.account] : [])),
+  );
+  const canManage = canManageRole && !historical;
   const statements = groupEntriesByClean(entries);
   const isDraft = batch.status === "draft";
   const canApprove = batch.status === "draft";
@@ -89,17 +97,32 @@ export default async function PayoutBatchDetailPage({
             </p>
           </div>
           <span
-            className={`rounded-full px-3 py-1.5 text-sm font-medium ${statusColors[batch.status]}`}
+            className={`rounded-full px-3 py-1.5 text-sm font-medium ${historical ? "bg-muted text-muted-foreground" : statusColors[batch.status]}`}
           >
-            {batch.status}
+            {historical ? "Archived report" : batch.status}
           </span>
         </div>
       </div>
 
+      {historical && (
+        <p className="rounded-2xl border border-border bg-muted/40 p-4 text-sm">
+          Historical reference only. This report’s paid labels and amounts were
+          replaced by the reconciled cleaner ledger.{" "}
+          <Link
+            className="font-medium text-primary underline"
+            href="/dashboard/payouts"
+          >
+            View current cleaner balances
+          </Link>
+        </p>
+      )}
+
       {/* KPI row */}
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-border/70 bg-card p-5">
-          <p className="text-sm text-muted-foreground">Total payout</p>
+          <p className="text-sm text-muted-foreground">
+            {historical ? "Archived report amount" : "Report amount"}
+          </p>
           <p className="mt-3 text-3xl font-semibold">
             ${Number(batch.total_amount).toFixed(2)}
           </p>
@@ -121,7 +144,10 @@ export default async function PayoutBatchDetailPage({
             <span>Approved {formatDateTime(batch.approved_at)}</span>
           )}
           {batch.paid_at && (
-            <span>Paid {formatDateTime(batch.paid_at)}</span>
+            <span>
+              {historical ? "Report marked paid" : "Paid"}{" "}
+              {formatDateTime(batch.paid_at)}
+            </span>
           )}
         </section>
       )}
@@ -198,9 +224,7 @@ export default async function PayoutBatchDetailPage({
                       key={e.id}
                       className="border-b border-border/70 last:border-0"
                     >
-                      <td className="px-4 py-3">
-                        {e.properties?.name ?? "—"}
-                      </td>
+                      <td className="px-4 py-3">{e.properties?.name ?? "—"}</td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {e.assignments?.due_at
                           ? formatDate(e.assignments.due_at)
@@ -224,9 +248,13 @@ export default async function PayoutBatchDetailPage({
                         {canManage ? (
                           <EntryPaidToggle entryId={e.id} paidAt={e.paid_at} />
                         ) : e.paid_at ? (
-                          <span className="text-xs font-medium text-green-700">Paid</span>
+                          <span className="text-xs font-medium text-green-700">
+                            Paid
+                          </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Unpaid</span>
+                          <span className="text-xs text-muted-foreground">
+                            Unpaid
+                          </span>
                         )}
                       </td>
                     </tr>

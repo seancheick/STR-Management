@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { Calendar, Clock, Lock, MessageSquareText, Sparkles } from "lucide-react";
 
@@ -10,8 +9,9 @@ import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { ReservationRecord } from "@/lib/queries/calendar";
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
-import { calendarDate, calendarDayKey, calendarEdgeDirection, calendarListingId, calendarInstantKey, calendarRangeLabel, reservationColumns } from "@/lib/services/calendar-display";
+import { calendarRefreshRows, calendarWindowChunks, calendarWindowContains, calendarAdjacentDays, calendarScrollAnchor, calendarDate, calendarDayKey, calendarEdgeDirection, calendarListingId, calendarInstantKey, calendarRangeLabel, reservationColumns } from "@/lib/services/calendar-display";
 import { formatInTimeZone } from "@/lib/ical/timezone";
+import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { isTightTurnover } from "@/lib/domain/assignments";
 import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
 
@@ -75,19 +75,107 @@ function dayIndex(date: Date, windowStart: Date, windowLength: number): number |
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ScheduleTimeline({
-  assignments,
+  assignments: initialAssignments,
   properties,
-  reservations,
+  reservations: initialReservations,
   cleaners,
-  days,
-  weekOffset,
+  days: initialDays,
   filterQuery = "",
   selectedPropertyId,
 }: ScheduleTimelineProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
-  const pendingEdgePage = useRef<{ direction: "previous" | "next"; fromDay: string } | null>(null);
+  const [days, setDays] = useState(initialDays);
+  const [assignments, setAssignments] = useState(initialAssignments);
+  const [reservations, setReservations] = useState(initialReservations);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
+  const daysRef = useRef(days);
+  const scrollAnchor = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    daysRef.current = days;
+    if (scrollAnchor.current !== null && scrollerRef.current) {
+      scrollerRef.current.scrollLeft = scrollAnchor.current;
+      scrollAnchor.current = null;
+    }
+  }, [days]);
+
+  const extendDays = useCallback(async (direction: "previous" | "next") => {
+    if (loadingRef.current) return false;
+    loadingRef.current = true;
+    setLoading(true);
+    setLoadError(null);
+    const extra = calendarAdjacentDays(daysRef.current, direction);
+    try {
+      const response = await fetch(`/api/schedule/range?start=${extra[0]}&end=${extra[extra.length - 1]}${filterQuery}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Could not load more dates. Scroll again to retry.");
+      const data = await response.json() as { assignments: AssignmentScheduleRecord[]; reservations: ReservationRecord[] };
+      scrollAnchor.current = calendarScrollAnchor(scrollerRef.current?.scrollLeft ?? 0, direction === "previous" ? extra.length : 0);
+      const merge = <T extends { id: string }>(current: T[], incoming: T[]) => Array.from(new Map([...current, ...incoming].map((row) => [row.id, row])).values());
+      setAssignments((current) => merge(current, data.assignments));
+      setReservations((current) => merge(current, data.reservations));
+      const expanded = direction === "previous" ? [...extra, ...daysRef.current] : [...daysRef.current, ...extra];
+      daysRef.current = expanded;
+      setDays(expanded);
+      return true;
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Could not load more dates.");
+      return false;
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
+    }
+  }, [filterQuery]);
+
+  const incomingProps = useRef({ assignments: initialAssignments, reservations: initialReservations });
+  useEffect(() => {
+    if (incomingProps.current.assignments === initialAssignments && incomingProps.current.reservations === initialReservations) return;
+    incomingProps.current = { assignments: initialAssignments, reservations: initialReservations };
+    const start = daysRef.current[0];
+    const end = daysRef.current[daysRef.current.length - 1];
+    const controller = new AbortController();
+    async function refreshLoadedWindow() {
+      try {
+        const freshAssignments: AssignmentScheduleRecord[] = [];
+        const freshReservations: ReservationRecord[] = [];
+        for (const chunk of calendarWindowChunks(start, end)) {
+          const response = await fetch(`/api/schedule/range?start=${chunk.start}&end=${chunk.end}${filterQuery}`, { cache: "no-store", signal: controller.signal });
+          if (!response.ok) throw new Error("Could not refresh the calendar. Reload to retry.");
+          const data = await response.json() as { assignments: AssignmentScheduleRecord[]; reservations: ReservationRecord[] };
+          freshAssignments.push(...data.assignments);
+          freshReservations.push(...data.reservations);
+        }
+        if (controller.signal.aborted) return;
+        const timezone = (row: { property_id: string; listing_property_id?: string | null }) => properties.find((p) => p.id === calendarListingId(row))?.timezone;
+        setAssignments((current) => calendarRefreshRows(current, freshAssignments, (row) => calendarWindowContains(row.checkout_at ?? row.due_at, start, end, timezone(row))));
+        setReservations((current) => calendarRefreshRows(current, freshReservations, (row) => calendarInstantKey(row.start_at, timezone(row)) <= end && calendarInstantKey(row.end_at, timezone(row)) >= start));
+      } catch (error) {
+        if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : "Could not refresh the calendar.");
+      }
+    }
+    void refreshLoadedWindow();
+    return () => controller.abort();
+  }, [initialAssignments, initialReservations, filterQuery, properties]);
+
+  const scrollWeeks = useCallback(async (direction: "previous" | "next") => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    let target = el.scrollLeft + (direction === "next" ? 1960 : -1960);
+    if (target < 0 || target > el.scrollWidth - el.clientWidth) {
+      if (!await extendDays(direction)) return;
+      if (direction === "previous") target += 1960;
+      requestAnimationFrame(() => el.scrollTo({ left: Math.max(0, target), behavior: "smooth" }));
+    } else el.scrollTo({ left: target, behavior: "smooth" });
+  }, [extendDays]);
+
+  const scrollToToday = useCallback(async () => {
+    const todayKey = calendarInstantKey(new Date().toISOString());
+    while (!daysRef.current.includes(todayKey)) {
+      if (!await extendDays(todayKey < daysRef.current[0] ? "previous" : "next")) return;
+    }
+    requestAnimationFrame(() => scrollerRef.current?.scrollTo({ left: Math.max(0, (daysRef.current.indexOf(todayKey) - 2) * 140), behavior: "smooth" }));
+  }, [extendDays]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -107,24 +195,13 @@ export function ScheduleTimeline({
       // Ignore modifier combos (user may be copying etc.)
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
-      const params = new URLSearchParams(window.location.search);
-      if (e.key === "ArrowLeft") {
-        params.set("week", String(weekOffset - 2));
-        params.set("view", "week");
-        router.push(`?${params.toString()}`);
-      } else if (e.key === "ArrowRight") {
-        params.set("week", String(weekOffset + 2));
-        params.set("view", "week");
-        router.push(`?${params.toString()}`);
-      } else if (e.key === "Home") {
-        params.set("week", "0");
-        params.set("view", "week");
-        router.push(`?${params.toString()}`);
-      }
+      if (e.key === "ArrowLeft") { e.preventDefault(); void scrollWeeks("previous"); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); void scrollWeeks("next"); }
+      else if (e.key === "Home") { e.preventDefault(); void scrollToToday(); }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [router, weekOffset]);
+  }, [scrollWeeks, scrollToToday]);
 
   // Pointer-drag-to-scroll for desktop mice / trackpads. Native touch-pan
   // already works on mobile.
@@ -133,8 +210,7 @@ export function ScheduleTimeline({
     if (!el) return;
 
     let isDown = false;
-    let startX = 0;
-    let startScroll = 0;
+    let lastX = 0;
 
     function onDown(e: PointerEvent) {
       if (e.pointerType === "touch") return;
@@ -142,14 +218,15 @@ export function ScheduleTimeline({
       const target = e.target as HTMLElement;
       if (target.closest("button,a,input,select")) return;
       isDown = true;
-      startX = e.clientX;
-      startScroll = el!.scrollLeft;
+      lastX = e.clientX;
       el!.setPointerCapture(e.pointerId);
       el!.style.cursor = "grabbing";
     }
     function onMove(e: PointerEvent) {
       if (!isDown) return;
-      el!.scrollLeft = startScroll - (e.clientX - startX);
+      // Incremental movement survives prepending columns during a drag.
+      el!.scrollLeft += lastX - e.clientX;
+      lastX = e.clientX;
     }
     function onUp(e: PointerEvent) {
       isDown = false;
@@ -173,33 +250,27 @@ export function ScheduleTimeline({
   // for it when the window opens on past/future days.
   useEffect(() => {
     const el = scrollerRef.current;
-    if (!el || !days.length) return;
-    const todayCol = dayIndex(new Date(), calendarDate(days[0]), days.length);
+    if (!el || !initialDays.length) return;
+    const todayCol = dayIndex(new Date(), calendarDate(initialDays[0]), initialDays.length);
     if (todayCol === null || todayCol < 3) return;
-    // Each day ≈ (el.scrollWidth - propertyCol) / days.length
+    // Each day ≈ (el.scrollWidth - propertyCol) / initialDays.length
     const propertyColPx = 220;
-    const perDay = (el.scrollWidth - propertyColPx) / days.length;
+    const perDay = (el.scrollWidth - propertyColPx) / initialDays.length;
     el.scrollLeft = Math.max(0, perDay * (todayCol - 2));
-  }, [days]);
+  }, [initialDays]);
 
-  // Route paging only follows user gestures, never initial/programmatic scrolling.
+  // Continuous paging only follows user gestures, never initial/programmatic scrolling.
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    const pending = pendingEdgePage.current;
-    if (pending && pending.fromDay !== days[0]) {
-      el.scrollLeft = pending.direction === "next" ? 1 : Math.max(0, el.scrollWidth - el.clientWidth - 1);
-      pendingEdgePage.current = null;
-    }
     let frame = 0;
     let pointerX: number | null = null;
     let gestureDelta = 0;
     function checkEdge() {
-      if (pendingEdgePage.current) return;
+      if (loadingRef.current) return;
       const direction = calendarEdgeDirection(el!.scrollLeft, el!.scrollWidth, el!.clientWidth, gestureDelta);
       if (!direction) return;
-      pendingEdgePage.current = { direction, fromDay: days[0] };
-      router.push(`?view=week&week=${weekOffset + (direction === "next" ? 2 : -2)}${filterQuery}` as Route, { scroll: false });
+      void extendDays(direction);
     }
     function scheduleCheck(delta: number) {
       if (!delta) return;
@@ -234,22 +305,7 @@ export function ScheduleTimeline({
       el.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("pointercancel", onPointerUp);
     };
-  }, [days, router, weekOffset, filterQuery]);
-
-  function scrollToToday() {
-    // Today isn't in this window when paged away: jump back to it first.
-    if (weekOffset !== 0) {
-      router.push(`?view=week&week=0${filterQuery}` as Route);
-      return;
-    }
-    const el = scrollerRef.current;
-    if (!el || !days.length) return;
-    const todayCol = dayIndex(new Date(), calendarDate(days[0]), days.length);
-    if (todayCol === null) return;
-    const propertyColPx = 220;
-    const perDay = (el.scrollWidth - propertyColPx) / days.length;
-    el.scrollTo({ left: Math.max(0, perDay * (todayCol - 2)), behavior: "smooth" });
-  }
+  }, [extendDays]);
 
   const today = new Date();
   const dayDates = useMemo(() => days.map(calendarDate), [days]);
@@ -318,23 +374,25 @@ export function ScheduleTimeline({
       {/* Header: range nav + range label + legend */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3">
         <div className="flex items-center gap-2">
-          <Link
+          <button
+            type="button"
             aria-label="Previous 2 weeks"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card text-sm font-medium transition hover:bg-muted"
-            href={`?view=week&week=${weekOffset - 2}${filterQuery}` as Route}
+            onClick={() => void scrollWeeks("previous")}
           >
             ←
-          </Link>
+          </button>
           <span className="min-w-[180px] text-center text-sm font-semibold">
             {rangeLabel}
           </span>
-          <Link
+          <button
+            type="button"
             aria-label="Next 2 weeks"
             className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-card text-sm font-medium transition hover:bg-muted"
-            href={`?view=week&week=${weekOffset + 2}${filterQuery}` as Route}
+            onClick={() => void scrollWeeks("next")}
           >
             →
-          </Link>
+          </button>
           <button
             className="ml-1 inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-card px-3 text-xs font-medium transition hover:bg-muted"
             onClick={scrollToToday}
@@ -343,6 +401,9 @@ export function ScheduleTimeline({
             <Calendar className="h-3 w-3" aria-hidden="true" />
             Today
           </button>
+          <a className="inline-flex h-9 items-center rounded-full border border-border/70 bg-card px-3 text-xs font-medium hover:bg-muted" download
+            href={`/api/schedule/export.csv?start=${days[0]}&end=${days[days.length - 1]}${filterQuery}`}
+            title="Download all loaded dates as CSV">⬇ CSV</a>
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
@@ -353,6 +414,8 @@ export function ScheduleTimeline({
         </div>
       </div>
 
+      {loading && <p role="status" className="text-xs text-muted-foreground">Loading more dates…</p>}
+      {loadError && <p role="alert" className="text-xs text-destructive">{loadError}</p>}
       <p className="text-xs text-muted-foreground">Scroll sideways to browse dates. At either edge, keep scrolling to load earlier or later weeks.</p>
 
       {/* Timeline — grid with property column + N day columns.
@@ -366,9 +429,10 @@ export function ScheduleTimeline({
         style={{ scrollSnapType: "none", overscrollBehaviorX: "contain" }}
       >
         <div
-          className="grid min-w-[2180px]"
+          className="grid"
           style={{
-            gridTemplateColumns: `220px repeat(${days.length}, minmax(140px, 1fr))`,
+            width: `${220 + days.length * 140}px`,
+            gridTemplateColumns: `220px repeat(${days.length}, 140px)`,
           }}
         >
           {/* Header row: blank property cell + day labels.
@@ -387,7 +451,8 @@ export function ScheduleTimeline({
                 className={`sticky top-0 z-20 border-b border-r border-border/50 bg-card px-2 py-2 text-center last:border-r-0 ${
                   isToday ? "bg-primary/5" : ""
                 }`}
-                key={i}
+                key={days[i]}
+                data-calendar-day={days[i]}
               >
                 <div
                   className={`text-[10px] font-semibold uppercase tracking-wider ${
@@ -545,7 +610,8 @@ function PropertyRow({
               const blocked =
                 clip.res.summary?.toLowerCase().includes("not available") ||
                 clip.res.summary?.toLowerCase().includes("blocked");
-              const style = PLATFORM_STYLE[clip.res.platform];
+              const platformStyle = PLATFORM_STYLE[clip.res.platform];
+              const style = clip.res.historical ? { ...platformStyle, barBg: "bg-slate-400", label: `${platformStyle.label} · Historical` } : platformStyle;
               return blocked ? (
                 <div
                   className="flex items-center justify-center truncate rounded-full border border-dashed border-muted-foreground/40 bg-[repeating-linear-gradient(45deg,transparent,transparent_6px,rgba(0,0,0,0.08)_6px,rgba(0,0,0,0.08)_12px)] px-3 text-[11px] font-semibold text-muted-foreground"
@@ -613,6 +679,7 @@ function CleaningChip({
   assignment: AssignmentScheduleRecord;
   onClick: () => void;
 }) {
+  const timing = getCleaningTiming(assignment);
   const needsReclean = assignment.status === "needs_reclean";
   const tight = isTightTurnover(assignment.checkout_at, assignment.next_checkin_at);
   const cleanerFirst = assignment.cleaners?.full_name?.split(" ")[0] ?? null;
@@ -624,9 +691,9 @@ function CleaningChip({
   if (needsReclean) {
     style = "border-red-300 bg-red-50 text-red-700";
     label = "Re-clean";
-  } else if (tight) {
-    style = "border-red-300 bg-red-50 text-red-700";
-    label = `Tight · ${cleanerFirst ?? "?"}`;
+  } else if (timing.mode === "firm") {
+    style = tight ? "border-red-300 bg-red-50 text-red-700" : "border-amber-300 bg-amber-50 text-amber-700";
+    label = `Same-day check-in · ${cleanerFirst ?? "Unassigned"}`;
   } else if (assignment.status === "approved" || assignment.status === "completed_pending_review") {
     style = "border-green-300 bg-green-50 text-green-700";
     label = `Clean · ${cleanerFirst ?? "✓"}`;
@@ -639,17 +706,20 @@ function CleaningChip({
 
   return (
     <button
-      className={`inline-flex min-w-0 items-center gap-1 truncate rounded-full border px-2.5 py-1 text-[11px] font-semibold transition hover:shadow-sm ${style}`}
+      className={`inline-flex w-full min-w-0 flex-col items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition hover:shadow-sm ${style}`}
       onClick={onClick}
-      title={`${label}${assignment.source_type === "ical" ? " · iCal" : " · Manual"}`}
+      title={`${label} · ${timing.summary}. ${timing.detail}`}
       type="button"
     >
+      <span className="flex items-center gap-1">
       {tight ? (
         <Clock className="h-3 w-3 shrink-0" aria-hidden="true" />
       ) : (
         <MessageSquareText className="h-3 w-3 shrink-0" aria-hidden="true" />
       )}
       <span className="truncate">{label}</span>
+      </span>
+      <span className="whitespace-normal text-center text-[9px] font-medium leading-tight">{timing.summary}</span>
     </button>
   );
 }

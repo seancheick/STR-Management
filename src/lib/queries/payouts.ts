@@ -2,10 +2,9 @@ import "server-only";
 import { withListingConfiguration } from "@/lib/services/booking-configuration";
 import {
   getCleanerLedger,
-  listCleanerAccounts,
   isReconciledJob,
 } from "@/lib/queries/cleaner-ledger";
-import { summarizeLedger } from "@/lib/services/cleaner-ledger";
+import { listCleanerFinancialSummaries } from "@/lib/queries/cleaner-finance";
 
 import { DEFAULT_TIMEZONE, zonedTimeToUtc } from "@/lib/ical/timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -223,79 +222,12 @@ export async function getPendingPayoutTotal(): Promise<{
   orphanAssignments: number;
   reconciledLedgers: number;
 }> {
-  const supabase = await createServerSupabaseClient();
-
-  const accounts = await listCleanerAccounts();
-  const [entriesRes, jobsRes] = await Promise.all([
-    supabase
-      .from("payout_entries")
-      .select(
-        "amount,status,assignment_id,cleaner_id,paid_at,assignments(due_at,paid_at),properties:property_id(timezone)",
-      )
-      .eq("status", "included"),
-    supabase
-      .from("assignments")
-      .select(
-        "id,cleaner_id,due_at,fixed_payout_amount,paid_at,properties:property_id(timezone)",
-      )
-      .in("status", ["approved", "completed_pending_review"])
-      .is("paid_at", null),
-  ]);
-  if (entriesRes.error) throw new Error(entriesRes.error.message);
-  if (jobsRes.error) throw new Error(jobsRes.error.message);
-  const entries = (entriesRes.data ?? []) as unknown as Array<{
-    amount: number;
-    assignment_id: string;
-    cleaner_id: string;
-    paid_at: string | null;
-    assignments: { due_at: string; paid_at: string | null } | null;
-    properties: { timezone: string } | null;
-  }>;
-  const represented = new Set(entries.map((e) => e.assignment_id));
-  const unpaid = entries.filter(
-    (e) =>
-      !e.paid_at &&
-      !e.assignments?.paid_at &&
-      e.assignments &&
-      !isReconciledJob(
-        accounts,
-        e.cleaner_id,
-        e.assignments.due_at,
-        e.properties?.timezone,
-      ),
-  );
-  const jobs = (jobsRes.data ?? []) as unknown as Array<{
-    id: string;
-    cleaner_id: string | null;
-    due_at: string;
-    fixed_payout_amount: number | null;
-    properties: { timezone: string } | null;
-  }>;
-  const orphans = jobs.filter(
-    (a) =>
-      !represented.has(a.id) &&
-      !isReconciledJob(
-        accounts,
-        a.cleaner_id,
-        a.due_at,
-        a.properties?.timezone,
-      ),
-  );
-  const ledgers = await Promise.all(
-    accounts.map((a) => getCleanerLedger(a.cleaner_id)),
-  );
-  const ledgerTotal = ledgers.reduce(
-    (sum, l) => sum + (l ? summarizeLedger(l.entries).balance : 0),
-    0,
-  );
+  const summaries = await listCleanerFinancialSummaries();
   return {
-    amount:
-      ledgerTotal +
-      unpaid.reduce((sum, e) => sum + Number(e.amount), 0) +
-      orphans.reduce((sum, a) => sum + Number(a.fixed_payout_amount ?? 0), 0),
-    unpaidEntries: unpaid.length,
-    orphanAssignments: orphans.length,
-    reconciledLedgers: accounts.length,
+    amount: Math.round(summaries.reduce((sum, summary) => sum + Math.round(summary.balance * 100), 0)) / 100,
+    unpaidEntries: summaries.reduce((sum, summary) => sum + summary.unpaidEntries, 0),
+    orphanAssignments: summaries.reduce((sum, summary) => sum + summary.orphanAssignments, 0),
+    reconciledLedgers: summaries.filter((summary) => summary.ledger).length,
   };
 }
 

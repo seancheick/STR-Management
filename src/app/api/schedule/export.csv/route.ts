@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireRole } from "@/lib/auth/session";
-import { listAssignmentsForSchedule } from "@/lib/queries/assignments";
-import { listReservationsForRange } from "@/lib/queries/calendar";
-import { listProperties } from "@/lib/queries/properties";
-import { calendarDate, calendarDayKey, calendarInstantKey, calendarListingId, calendarWindow, calendarWindowContains } from "@/lib/services/calendar-display";
+import { getScheduleRange } from "@/lib/queries/schedule";
+import { calendarDate, calendarDayKey, calendarInstantKey, calendarListingId, calendarWindow } from "@/lib/services/calendar-display";
 import { dateKeyInTimeZone, formatInTimeZone } from "@/lib/ical/timezone";
 
 /**
@@ -20,6 +18,7 @@ export async function GET(req: NextRequest) {
   const startParam = url.searchParams.get("start");
   const endParam = url.searchParams.get("end");
   const propertyFilter = url.searchParams.get("property");
+  const cleanerFilter = url.searchParams.get("cleaner");
 
   const defaultStart = calendarDate(dateKeyInTimeZone(new Date()));
   defaultStart.setDate(defaultStart.getDate() - 1);
@@ -30,23 +29,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Use valid YYYY-MM-DD dates with start on or before end." }, { status: 400 });
   }
 
-  const [propertiesResult, assignments, reservations] = await Promise.all([
-    listProperties(),
-    listAssignmentsForSchedule(window.queryStart, window.queryEnd),
-    listReservationsForRange(window.queryStart, window.queryEnd),
-  ]);
-
-  const propById = new Map(propertiesResult.data.map((p) => [p.id, p]));
-  const activeUnitIds = new Set(propertiesResult.data.filter((p) => p.active).map((p) => p.id));
-  const matchesProperty = (id: string) => activeUnitIds.has(id) && (!propertyFilter || id === propertyFilter);
-  const filteredAssignments = assignments.filter((a) => matchesProperty(calendarListingId(a)) &&
-    calendarWindowContains(a.checkout_at ?? a.due_at, window.start, window.end, propById.get(calendarListingId(a))?.timezone),
-  );
-  const filteredReservations = reservations.filter((r) => {
-    if (!matchesProperty(calendarListingId(r))) return false;
-    const timezone = propById.get(calendarListingId(r))?.timezone;
-    return calendarInstantKey(r.start_at, timezone) <= window.end && calendarInstantKey(r.end_at, timezone) >= window.start;
-  });
+  const schedule = await getScheduleRange({ start: window.start, end: window.end, property: propertyFilter, cleaner: cleanerFilter });
+  const propById = new Map(schedule.properties.map((p) => [p.id, p]));
+  const filteredAssignments = schedule.assignments;
+  const filteredReservations = schedule.reservations;
 
   // One row per booking + one row per cleaning so the CSV can be used for
   // quick book-keeping AND schedule review.
@@ -85,7 +71,7 @@ export async function GET(req: NextRequest) {
       formatInTimeZone(res.start_at, { hour: "numeric", minute: "2-digit" }, p?.timezone),
       res.platform,
       res.guest_name ?? "",
-      "reserved",
+      res.historical ? "historical" : "reserved",
       "",
       "",
       "",

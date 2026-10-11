@@ -1,9 +1,7 @@
 import { dateKeyInTimeZone } from "@/lib/ical/timezone";
-import { calendarDate, calendarDayKey, calendarInstantKey, calendarListingId } from "@/lib/services/calendar-display";
+import { calendarDate, calendarDayKey, calendarListingId, calendarTimelineDays } from "@/lib/services/calendar-display";
 import { requireRole } from "@/lib/auth/session";
-import { listAssignmentsForSchedule } from "@/lib/queries/assignments";
-import { listReservationsForRange } from "@/lib/queries/calendar";
-import { listProperties } from "@/lib/queries/properties";
+import { getScheduleRange } from "@/lib/queries/schedule";
 import { listActiveCleaners } from "@/lib/queries/team";
 import { CopyLinkButton } from "@/components/schedule/copy-link-button";
 import { ScheduleTimeline } from "@/components/schedule/schedule-timeline";
@@ -15,16 +13,7 @@ type SchedulePageProps = {
 
 /** 14 days starting from yesterday, shifted by weekOffset weeks. */
 function getTimelineDays(weekOffset: number): Date[] {
-  const now = calendarDate(dateKeyInTimeZone(new Date()));
-  const start = new Date(now);
-  start.setDate(now.getDate() - 1 + weekOffset * 7);
-  start.setHours(0, 0, 0, 0);
-
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    return d;
-  });
+  return calendarTimelineDays(weekOffset).map(calendarDate);
 }
 
 function getMonthDays(monthOffset: number): Date[] {
@@ -86,22 +75,13 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
     timelineDayISOs = timelineDays.map(calendarDayKey);
   }
 
-  const [propertiesResult, allAssignments, cleaners, reservations] = await Promise.all([
-    listProperties(),
-    listAssignmentsForSchedule(new Date(rangeStart.getTime() - 86400000).toISOString(), new Date(rangeEnd.getTime() + 86400000).toISOString()),
+  const [scheduleRange, cleaners] = await Promise.all([
+    getScheduleRange({ start: calendarDayKey(rangeStart), end: calendarDayKey(rangeEnd) }),
     listActiveCleaners(),
-    listReservationsForRange(new Date(rangeStart.getTime() - 86400000).toISOString(), new Date(rangeEnd.getTime() + 86400000).toISOString()),
   ]);
-
-  const activeProperties = propertiesResult.data.filter((p) => p.active);
-  // Fetch padding covers timezone offsets; counts still describe the visible grid.
-  const timezoneByProperty = new Map(activeProperties.map((p) => [p.id, p.timezone]));
-  const firstDay = calendarDayKey(rangeStart);
-  const lastDay = calendarDayKey(rangeEnd);
-  const visibleAssignments = allAssignments.filter((a) => {
-    const day = calendarInstantKey(a.checkout_at ?? a.due_at, timezoneByProperty.get(calendarListingId(a)));
-    return day >= firstDay && day <= lastDay;
-  });
+  const activeProperties = scheduleRange.properties;
+  const visibleAssignments = scheduleRange.assignments;
+  const reservations = scheduleRange.reservations;
 
   // Property filter applies to every downstream array so the Month view,
   // Timeline, booking stripes, and cleaner count all react.
@@ -223,6 +203,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           </a>
         )}
 
+        {view === "month" && (
         <a
           className="inline-flex h-9 items-center gap-2 rounded-full border border-border/70 bg-card px-3 text-xs font-medium transition hover:bg-muted"
           download
@@ -231,6 +212,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
         >
           ⬇ CSV
         </a>
+        )}
 
         <CopyLinkButton
           label={propertyFilter ? "Share this unit" : "Share view"}
@@ -291,6 +273,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
         />
       ) : (
         <ScheduleTimeline
+          key={`${propertyFilter ?? "all"}:${cleanerFilter ?? "all"}:${weekOffset}`}
           properties={propFilteredProperties}
           assignments={assignments}
           cleaners={cleaners}

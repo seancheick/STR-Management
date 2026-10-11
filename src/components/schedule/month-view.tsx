@@ -11,6 +11,7 @@ import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
 import { calendarDate, calendarDayKey, calendarListingId, calendarInstantKey, reservationColumns } from "@/lib/services/calendar-display";
 import { formatInTimeZone } from "@/lib/ical/timezone";
+import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { isTightTurnover, tightTurnoverMinutes } from "@/lib/domain/assignments";
 import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
 
@@ -559,7 +560,8 @@ function WeekRow({
           style={{ gap: `${STRIPE_GAP}px` }}
         >
           {stripes.visible.map((stripe, i) => {
-            const style = PLATFORM_STYLE[stripe.res.platform];
+            const platformStyle = PLATFORM_STYLE[stripe.res.platform];
+            const style = stripe.res.historical ? { ...platformStyle, bar: "bg-slate-400 text-white", label: `${platformStyle.label} · Historical` } : platformStyle;
             const propertyName =
               propertyNameById.get(calendarListingId(stripe.res)) ?? "Property";
             const propDot = propertyDotFor(calendarListingId(stripe.res));
@@ -581,7 +583,7 @@ function WeekRow({
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${propDot}`} />
                   )}
                   <span className="truncate">
-                    {stripe.startsInWeek ? propertyName : "…continued"}
+                    {stripe.startsInWeek ? propertyName : "…continued"}{stripe.res.historical ? " · Historical" : ""}
                   </span>
                 </div>
               </div>
@@ -746,13 +748,14 @@ function CalendarPill({
   const isFromIcal = assignment.source_type === "ical";
   const sourceLabel = isFromIcal ? "iCal" : "Manual";
 
+  const timing = getCleaningTiming(assignment);
   return (
     <button
       className={`flex w-full flex-col gap-0.5 truncate rounded-md px-1.5 py-1 text-left text-[10px] font-semibold leading-tight ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${paletteClass} ${
         dimmed ? "opacity-40" : ""
       }`}
       onClick={onClick}
-      title={`${propertyName ?? "Property"} · ${personLabel} · ${time}${
+      title={`${propertyName ?? "Property"} · ${personLabel} · ${timing.summary}. ${timing.detail}${
         tight && gap !== null ? ` · tight (${gap}m)` : ""
       }`}
       type="button"
@@ -768,6 +771,7 @@ function CalendarPill({
           </span>
         )}
       </span>
+      <span className="whitespace-normal text-[9px] font-medium">{timing.summary}</span>
       <span className="flex items-center gap-1.5 pl-3 text-[9px] font-medium uppercase tracking-wide opacity-70">
         {shortProp && <span className="truncate">{shortProp}</span>}
         <span

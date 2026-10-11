@@ -1,4 +1,4 @@
-import { calendarListingId } from "@/lib/services/calendar-display";
+import { calendarTimelineDays, calendarWindowContains } from "@/lib/services/calendar-display";
 import type { Route } from "next";
 import {
   AlertCircle,
@@ -19,7 +19,6 @@ import {
   getDashboardStats,
   listTodaysAssignmentsForAdmin,
   listAtRiskAssignments,
-  listAssignmentsForSchedule,
   getPropertyTodayStatuses,
   type PropertyTodayStatus,
 } from "@/lib/queries/assignments";
@@ -27,7 +26,8 @@ import { getExceptionCounts } from "@/lib/queries/issues";
 import { listProperties } from "@/lib/queries/properties";
 import { listActiveCleaners } from "@/lib/queries/team";
 import { TodayJobsTimeline, AtRiskSection } from "@/components/dashboard/today-jobs-timeline";
-import { DashboardWeekCalendar } from "@/components/dashboard/dashboard-week-calendar";
+import { ScheduleTimeline } from "@/components/schedule/schedule-timeline";
+import { getScheduleRange } from "@/lib/queries/schedule";
 import { FirstRunWizard } from "@/components/dashboard/first-run-wizard";
 import { RightNowHero } from "@/components/dashboard/right-now-hero";
 import { WeeklyRecapCard } from "@/components/dashboard/weekly-recap-card";
@@ -35,7 +35,7 @@ import { getWeeklyRecap } from "@/lib/queries/recap";
 import { getPendingPayoutTotal } from "@/lib/queries/payouts";
 import { listCalendarSources } from "@/lib/queries/calendar";
 import { listAllTeamMembers } from "@/lib/queries/team";
-import { formatInTimeZone, zonedDayTime } from "@/lib/ical/timezone";
+import { formatInTimeZone } from "@/lib/ical/timezone";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -66,16 +66,8 @@ export default async function DashboardPage() {
   const profile = await requireRole(["owner", "admin", "supervisor"]);
   const canManage = profile.role === "owner" || profile.role === "admin";
 
-  // Week window in the operator's zone. The server runs in UTC, whose
-  // midnight is the previous evening in US zones (first column = yesterday).
   const today = new Date();
-  const weekStart = zonedDayTime(today, 0, 0);
-  const weekEnd = new Date(zonedDayTime(today, 7, 0).getTime() - 1);
-
-  // 7 days as local-noon instants, so every US browser reads the same date.
-  const weekDays = Array.from({ length: 7 }, (_, i) =>
-    zonedDayTime(today, i, 12).toISOString(),
-  );
+  const weekDays = calendarTimelineDays();
 
   const [
     stats,
@@ -83,7 +75,7 @@ export default async function DashboardPage() {
     exceptions,
     propertyStatuses,
     atRiskJobs,
-    weekAssignments,
+    weekSchedule,
     propertiesResult,
     cleaners,
     calendarSources,
@@ -94,12 +86,14 @@ export default async function DashboardPage() {
     getExceptionCounts(),
     getPropertyTodayStatuses(),
     listAtRiskAssignments(),
-    listAssignmentsForSchedule(weekStart.toISOString(), weekEnd.toISOString()),
+    getScheduleRange({ start: weekDays[0], end: weekDays[weekDays.length - 1] }),
     listProperties(),
     listActiveCleaners(),
     listCalendarSources(),
     listAllTeamMembers(),
   ]);
+
+  const weekAssignments = weekSchedule.assignments;
 
   const [recap, pendingPayout] = await Promise.all([
     getWeeklyRecap(),
@@ -342,15 +336,18 @@ export default async function DashboardPage() {
               pendingReviewCount={stats.pendingReview}
               todaysJobs={todaysJobs}
               unassignedCount={stats.unassigned}
-              weekAssignments={weekAssignments}
+              weekAssignments={weekAssignments.filter((job) => calendarWindowContains(job.checkout_at ?? job.due_at, weekDays[1], weekDays[7], job.properties?.timezone))}
             />
 
             {/* Week calendar — first thing host sees */}
-            <DashboardWeekCalendar
-              assignments={weekAssignments.map((a) => ({ ...a, property_id: calendarListingId(a) }))}
+            <ScheduleTimeline
+              assignments={weekAssignments}
               cleaners={cleaners}
               days={weekDays}
-              properties={propertiesResult.data}
+              reservations={weekSchedule.reservations}
+              properties={weekSchedule.properties}
+              weekOffset={0}
+              selectedPropertyId={null}
             />
 
             {/* Last 7 days recap + Pending payout */}

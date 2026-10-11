@@ -40,6 +40,8 @@ export async function fetchAssignmentDetail(assignmentId: string) {
     priority: detail.priority,
     dueAt: detail.due_at,
     checkoutAt: detail.checkout_at,
+    nextCheckinAt: detail.next_checkin_at,
+    timeZone: detail.properties?.timezone ?? null,
     expectedDurationMin: detail.expected_duration_min,
     fixedPayoutAmount: detail.fixed_payout_amount,
     paidAt: detail.paid_at,

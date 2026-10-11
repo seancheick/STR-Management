@@ -65,7 +65,51 @@ export function calendarListingId(record: { property_id: string; listing_propert
 export function calendarEdgeDirection(scrollLeft: number, scrollWidth: number, clientWidth: number, gestureDelta: number): "previous" | "next" | null {
   const max = scrollWidth - clientWidth;
   if (max <= 2 || !Number.isFinite(gestureDelta) || gestureDelta === 0) return null;
-  if (gestureDelta < 0 && scrollLeft <= 2) return "previous";
-  if (gestureDelta > 0 && scrollLeft >= max - 2) return "next";
+  if (gestureDelta < 0 && scrollLeft <= 280) return "previous";
+  if (gestureDelta > 0 && scrollLeft >= max - 280) return "next";
   return null;
+}
+
+export function calendarAdjacentDays(days: string[], direction: "previous" | "next", count = 14): string[] {
+  const anchor = calendarDate(direction === "previous" ? days[0] : days[days.length - 1]);
+  return Array.from({ length: count }, (_, i) => {
+    const day = new Date(anchor);
+    day.setDate(anchor.getDate() + (direction === "previous" ? i - count : i + 1));
+    return calendarDayKey(day);
+  });
+}
+
+export function calendarScrollAnchor(scrollLeft: number, prependedDays: number): number {
+  return scrollLeft + prependedDays * 140;
+}
+
+/** Bounded API requests cover an arbitrarily extended timeline. */
+export function calendarWindowChunks(start: string, end: string): Array<{ start: string; end: string }> {
+  const chunks: Array<{ start: string; end: string }> = [];
+  let cursor = start;
+  while (cursor <= end) {
+    const last = calendarDate(cursor);
+    last.setDate(last.getDate() + 364);
+    const chunkEnd = calendarDayKey(last) < end ? calendarDayKey(last) : end;
+    chunks.push({ start: cursor, end: chunkEnd });
+    const next = calendarDate(chunkEnd);
+    next.setDate(next.getDate() + 1);
+    cursor = calendarDayKey(next);
+  }
+  return chunks;
+}
+
+/** Refresh removes vanished rows in its window while preserving concurrent extensions. */
+export function calendarRefreshRows<T extends { id: string }>(current: T[], incoming: T[], inWindow: (row: T) => boolean): T[] {
+  return Array.from(new Map([...current.filter((row) => !inWindow(row)), ...incoming].map((row) => [row.id, row])).values());
+}
+
+export function calendarTimelineDays(weekOffset = 0, now = new Date()): string[] {
+  const start = calendarDate(calendarInstantKey(now.toISOString()));
+  start.setDate(start.getDate() - 1 + weekOffset * 7);
+  return Array.from({ length: 14 }, (_, i) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + i);
+    return calendarDayKey(day);
+  });
 }

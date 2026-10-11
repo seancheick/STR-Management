@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCallback, useState, useTransition } from "react";
 
 import { fetchAssignmentDetail, type AssignmentDetailAction } from "@/app/actions/assignments";
+import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { formatInTimeZone } from "@/lib/ical/timezone";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
 import { AssignmentDrawer } from "./assignment-drawer";
@@ -123,7 +124,7 @@ export function TodayJobsTimeline({ jobs, canManage }: Props) {
                 {/* Time */}
                 <div className="w-16 shrink-0 text-right">
                   <p className="text-xs font-medium tabular-nums text-muted-foreground">
-                    {formatTime(a.due_at, a.properties?.timezone)}
+                    {formatTime(a.checkout_at ?? a.due_at, a.properties?.timezone)}
                   </p>
                 </div>
 
@@ -150,6 +151,7 @@ export function TodayJobsTimeline({ jobs, canManage }: Props) {
                     <p className="text-sm font-semibold leading-snug">
                       {a.properties?.name ?? "Property"}
                     </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground" title={getCleaningTiming(a).detail}>{getCleaningTiming(a).summary}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {a.cleaners?.full_name ?? (
                         <span className="font-medium text-amber-600">Unassigned</span>
@@ -258,7 +260,7 @@ export function AtRiskSection({ jobs, canManage }: AtRiskProps) {
                   <div className="flex-1">
                     <p className="text-sm font-semibold">{a.properties?.name ?? "Property"}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Due{" "}
+                      {getCleaningTiming(a).mode === "flexible" ? "Ready target" : "Deadline"}{" "}
                       {/* Overdue jobs can be from earlier days, so include the date. */}
                       {formatInTimeZone(
                         a.due_at,
