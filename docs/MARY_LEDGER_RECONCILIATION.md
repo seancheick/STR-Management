@@ -139,3 +139,24 @@ canonical timing calculation. Mobile navigation wraps and calendar navigation
 has 44-pixel controls; cleaner actions remain 48 pixels. Browser checks covered
 320/390/768-pixel cleaner layouts and desktop calendars, plus a browser-only
 same-day arrival fixture (no booking data changed).
+
+## Owner-controlled future cleaner selection
+
+At the owner's request, all five listing defaults are now empty and the 13
+pending imported future jobs were returned to unassigned. Before-images are in
+`ops_reconciliation_audit`; completed/accepted/started jobs are preserved.
+Calendar sync reads these empty defaults, so later imports wait for owner choice.
+
+Schedule and Assignments share the collapsed `AssignmentPlanner`: this week
+(remaining days through Sunday), next week (Monday–Sunday), next seven calendar
+days including today, next three/ten cleanings, or a custom count. Jobs are
+previewed with listing/date/rate and individual checkboxes. Assigned jobs are
+excluded. Both use the same bulk action, which validates the active cleaner's
+organization and only updates still-unassigned jobs. Browser tests assigned a
+single temporary job, then a batch, and verified concurrent assignment was
+skipped. All temporary jobs were removed. Stale revoked cleaner offers are
+hidden, while meaningful cancellation notices remain.
+
+Live saves also uncovered an unrelated invalid server-action export in auth:
+move the sign-up initial state into the client form, leaving only async runtime
+exports in the server module.

@@ -23,7 +23,7 @@ export function currentCleanerNotifications<T extends InboxNotification>(
       "overdue",
       "sla_breach",
     ].includes(row.notification_type);
-    if (terminal && offer) return false;
+    if (offer && (terminal || !row.assignment || row.assignment.status === "unassigned")) return false;
     if (row.notification_type === "assignment_cancelled" && row.seen_at)
       return false;
     const key = `${row.assignment_id}:${row.notification_type}`;

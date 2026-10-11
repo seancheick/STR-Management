@@ -1,9 +1,10 @@
+import { AssignmentPlanner } from "@/components/assignments/assignment-planner";
 import type { Route } from "next";
 import Link from "next/link";
 import { CheckCircle, ClipboardList } from "lucide-react";
 
 import { requireRole } from "@/lib/auth/session";
-import { listAssignmentsForAdmin } from "@/lib/queries/assignments";
+import { listAssignmentsForAdmin, listUpcomingUnassignedCleanings } from "@/lib/queries/assignments";
 import { listActiveCleaners } from "@/lib/queries/team";
 import { AssignmentsList } from "@/components/assignments/assignments-list";
 
@@ -25,9 +26,10 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
   const showApproved = params.approved === "1";
   const unpaidOnly = params.unpaid === "1";
 
-  const [allAssignments, cleaners] = await Promise.all([
+  const [allAssignments, cleaners, planningJobs] = await Promise.all([
     listAssignmentsForAdmin(),
     listActiveCleaners(),
+    canManage ? listUpcomingUnassignedCleanings() : Promise.resolve([]),
   ]);
 
   const PAYABLE_STATUSES = new Set(["approved", "completed_pending_review"]);
@@ -94,6 +96,8 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
           {banner}
         </section>
       ) : null}
+
+      {canManage && <AssignmentPlanner assignments={planningJobs} cleaners={cleaners} now={new Date().toISOString()} />}
 
       {/* Filter chips — cancelled + approved hidden by default */}
       <div className="flex flex-wrap gap-1.5 text-xs">

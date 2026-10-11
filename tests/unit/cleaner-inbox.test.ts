@@ -33,4 +33,10 @@ describe("cleaner inbox", () => {
       ]),
     ).toEqual([offer]);
   });
+  it("hides offers when a cleaner was removed or no longer has access to the job", () => {
+    const revoked = { ...row("new_assignment", "assigned"), assignment: null };
+    const cancellation = { ...row("assignment_cancelled", "cancelled"), assignment: null };
+    expect(currentCleanerNotifications([row("new_assignment", "unassigned"), revoked, cancellation])).toEqual([cancellation]);
+  });
+
 });

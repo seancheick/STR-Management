@@ -29,9 +29,6 @@ export type SignUpState = {
   values?: { fullName: string; email: string };
 };
 
-const SIGNUP_INITIAL: SignUpState = { status: "idle", message: null };
-export { SIGNUP_INITIAL as signUpInitial };
-
 /**
  * Sign up as an Airbnb host — creates a brand-new tenant.
  *  1. Auth user via Supabase Auth (sends confirmation email).

@@ -1,3 +1,5 @@
+import { AssignmentPlanner } from "@/components/assignments/assignment-planner";
+import { listUpcomingUnassignedCleanings } from "@/lib/queries/assignments";
 import { dateKeyInTimeZone } from "@/lib/ical/timezone";
 import { calendarDate, calendarDayKey, calendarListingId, calendarTimelineDays } from "@/lib/services/calendar-display";
 import { requireRole } from "@/lib/auth/session";
@@ -37,6 +39,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
   // Creating jobs is owner/admin-only (createAssignmentAction).
   const canManage = profile.role === "owner" || profile.role === "admin";
 
+  const planningJobs = canManage ? await listUpcomingUnassignedCleanings() : [];
   const params = (await searchParams) ?? {};
   const view = params.view === "month" ? "month" : "week";
   const weekOffset = typeof params.week === "string" ? parseInt(params.week, 10) || 0 : 0;
@@ -258,6 +261,8 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
           );
         })}
       </div>
+
+      {canManage && <AssignmentPlanner assignments={planningJobs} cleaners={cleaners} now={new Date().toISOString()} propertyId={propertyFilter} />}
 
       {view === "month" ? (
         <MonthView

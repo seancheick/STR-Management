@@ -551,3 +551,18 @@ export async function getDashboardStats(): Promise<{
     atRisk: atRiskRes.count ?? 0,
   };
 }
+
+/** Upcoming unassigned work, independent of the calendar's loaded date window. */
+export async function listUpcomingUnassignedCleanings(): Promise<AssignmentListRecord[]> {
+  const supabase = await createServerSupabaseClient();
+  const rows: AssignmentListRecord[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase.from("assignments").select(ASSIGNMENT_LIST_SELECT)
+      .eq("assignment_type", "cleaning").eq("status", "unassigned").is("cleaner_id", null)
+      .gte("due_at", new Date().toISOString()).order("due_at").order("id").range(offset, offset + 999);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as unknown as AssignmentListRecord[]).map(withListingConfiguration));
+    if ((data?.length ?? 0) < 1000) break;
+  }
+  return rows;
+}

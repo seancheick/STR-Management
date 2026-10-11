@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { AlertTriangle } from "lucide-react";
 
-import { signUpAsHostAction, signUpInitial } from "@/app/actions/auth";
+import { signUpAsHostAction, type SignUpState } from "@/app/actions/auth";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -24,6 +24,8 @@ function FieldError({ messages }: { messages?: string[] }) {
   if (!messages?.length) return null;
   return <p className="text-xs text-destructive">{messages[0]}</p>;
 }
+
+const signUpInitial: SignUpState = { status: "idle", message: null };
 
 export function SignUpForm() {
   const [state, formAction] = useActionState(signUpAsHostAction, signUpInitial);

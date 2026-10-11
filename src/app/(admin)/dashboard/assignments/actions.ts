@@ -122,22 +122,8 @@ export async function assignCleanerAction(
   assignmentId: string,
   cleanerId: string,
 ): Promise<{ error: string | null }> {
-  await requireRole(["owner", "admin"]);
-  const supabase = await createServerSupabaseClient();
-
-  const { error } = await supabase
-    .from("assignments")
-    .update({ cleaner_id: cleanerId, status: "assigned", ack_status: "pending" })
-    .eq("id", assignmentId)
-    .eq("status", "unassigned");
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  revalidatePath("/dashboard/assignments");
-  revalidatePath("/dashboard");
-  return { error: null };
+  const result = await bulkAssignCleanerAction([assignmentId], cleanerId);
+  return { error: result.error ?? (result.assigned === 0 ? "This job is already assigned or no longer available. Refresh and review it." : null) };
 }
 
 /**
@@ -182,19 +168,20 @@ export async function bulkAssignCleanerAction(
 ): Promise<{ error: string | null; assigned: number }> {
   await requireRole(["owner", "admin"]);
 
-  if (assignmentIds.length === 0) {
-    return { error: "Nothing selected.", assigned: 0 };
-  }
-  if (!cleanerId || typeof cleanerId !== "string") {
-    return { error: "Pick a cleaner.", assigned: 0 };
-  }
-
+  const parsed = z.object({ ids: z.array(z.string().uuid()).min(1).max(1000), cleanerId: z.string().uuid() }).safeParse({ ids: assignmentIds, cleanerId });
+  if (!parsed.success) return { error: "Select valid cleanings and a cleaner (up to 1,000 jobs).", assigned: 0 };
+  const ownerId = await resolveOwnerId();
   const supabase = await createServerSupabaseClient();
+  const { data: cleaner, error: cleanerError } = await supabase.from("users").select("id")
+    .eq("id", parsed.data.cleanerId).eq("owner_id", ownerId).eq("role", "cleaner").eq("active", true).maybeSingle();
+  if (cleanerError || !cleaner) return { error: "Choose an active cleaner from your team.", assigned: 0 };
   const { data, error } = await supabase
     .from("assignments")
     .update({ cleaner_id: cleanerId, status: "assigned", ack_status: "pending" })
-    .in("id", assignmentIds)
+    .in("id", [...new Set(parsed.data.ids)])
+    .eq("owner_id", ownerId)
     .eq("status", "unassigned")
+    .is("cleaner_id", null)
     .select("id");
 
   if (error) return { error: error.message, assigned: 0 };
