@@ -6,7 +6,7 @@
  */
 
 export async function registerPush(): Promise<{ ok: boolean; error?: string }> {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
     return { ok: false, error: "Push not supported in this browser." };
   }
 
@@ -24,7 +24,7 @@ export async function registerPush(): Promise<{ ok: boolean; error?: string }> {
     const registration = await navigator.serviceWorker.register("/sw.js");
     await navigator.serviceWorker.ready;
 
-    const subscription = await registration.pushManager.subscribe({
+    const subscription = await registration.pushManager.getSubscription() ?? await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(vapidKey).buffer as ArrayBuffer,
     });

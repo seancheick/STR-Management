@@ -14,14 +14,16 @@ type Status =
   | "unsupported"
   | "ios-install";
 
-export function EnablePushButton() {
+export function EnablePushButton({ onStatusChange }: { onStatusChange?: (status: Status) => void } = {}) {
   const [status, setStatus] = useState<Status>("unknown");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => { onStatusChange?.(status); }, [status, onStatusChange]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+    if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
       // iPhone Safari only exposes web push to Home Screen apps (iOS 16.4+).
       const ios = /iPhone|iPad|iPod/.test(window.navigator.userAgent);
       setStatus(ios ? "ios-install" : "unsupported");
@@ -46,13 +48,13 @@ export function EnablePushButton() {
       }
       const sub = await reg.pushManager.getSubscription();
       setStatus(sub ? "subscribed" : "granted");
-    });
+    }).catch(() => setStatus("prompt"));
   }, []);
 
   async function enable() {
     setBusy(true);
     setError(null);
-    const res = await registerPush();
+    const res = await registerPush().catch(() => ({ ok: false, error: "Could not enable notifications. Try again." }));
     setBusy(false);
     if (!res.ok) {
       setError(res.error ?? "Could not enable notifications.");
@@ -125,7 +127,7 @@ export function EnablePushButton() {
     <div className="flex flex-col gap-2">
       <button
         className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-60"
-        disabled={busy}
+        disabled={busy || status === "unknown"}
         onClick={enable}
         type="button"
       >
