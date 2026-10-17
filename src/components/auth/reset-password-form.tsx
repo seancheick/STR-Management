@@ -42,15 +42,16 @@ export function ResetPasswordForm() {
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
     let cancelled = false;
+    const invalidLink = new URLSearchParams(window.location.search).has("authError");
 
     supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return;
-      setSessionState(data.session ? "ready" : "missing");
+      setSessionState(!invalidLink && data.session ? "ready" : "missing");
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
-      if (event === "PASSWORD_RECOVERY" || session) {
+      if (!invalidLink && (event === "PASSWORD_RECOVERY" || session)) {
         setSessionState("ready");
       }
     });
@@ -98,8 +99,8 @@ export function ResetPasswordForm() {
           <div className="space-y-1">
             <p className="font-medium">Reset link expired or already used.</p>
             <p className="text-xs text-amber-800/80">
-              Password reset links can only be opened once, in the same browser that
-              requested them. Request a fresh link to continue.
+              Request a fresh link and open the newest email. If you requested an older
+              link in another browser, return to that browser or request a new one.
             </p>
           </div>
         </div>

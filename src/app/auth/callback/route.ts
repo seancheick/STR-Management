@@ -18,22 +18,33 @@ export async function GET(request: Request) {
   const supabaseError = url.searchParams.get("error_description") ?? url.searchParams.get("error");
   const next = safeNext(url.searchParams.get("next"), url.origin);
 
+  const recovery = url.searchParams.get("type") === "recovery" || new URL(next, url.origin).pathname === "/reset-password";
+  const failure = (reason: string) => {
+    const target = new URL(recovery ? "/reset-password" : "/sign-in", url.origin);
+    target.searchParams.set("authError", reason);
+    return NextResponse.redirect(target);
+  };
+
   // Supabase redirected back with an error before any code exchange (e.g. expired link).
   if (supabaseError) {
-    const errorUrl = new URL("/sign-in", url.origin);
-    // Pass a fixed code, never the raw text: the sign-in page renders it, and
-    // a crafted link could otherwise put any message on our domain.
-    errorUrl.searchParams.set("authError", /expired/i.test(supabaseError) ? "link_expired" : "link_invalid");
-    return NextResponse.redirect(errorUrl);
+    return failure(/expired/i.test(supabaseError) ? "link_expired" : "link_invalid");
+  }
+
+  // Email token hashes are verified directly: unlike PKCE codes they work
+  // when the email opens in a different browser from the reset request.
+  const tokenHash = url.searchParams.get("token_hash");
+  if (tokenHash && url.searchParams.get("type") === "recovery") {
+    const supabase = await createServerSupabaseClient();
+    const { error } = await supabase.auth.verifyOtp({ type: "recovery", token_hash: tokenHash });
+    if (error) return failure("link_invalid");
+    return NextResponse.redirect(new URL("/reset-password", url.origin));
   }
 
   if (code) {
     const supabase = await createServerSupabaseClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
-      const errorUrl = new URL("/sign-in", url.origin);
-      errorUrl.searchParams.set("authError", "link_invalid");
-      return NextResponse.redirect(errorUrl);
+      return failure("link_invalid");
     }
   }
 
