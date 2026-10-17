@@ -1,10 +1,13 @@
 "use client";
 
+import {assignmentStatusLabel} from "@/lib/domain/assignments";
+import {suggestCleaningOperation} from "@/lib/services/cleaning-workflow";
 import { Loader2, Pencil, Trash2, Users } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
 import {
   bulkAssignCleanerAction,
+  recordCompletedCleaningsAction,
   deleteAssignmentsAction,
 } from "@/app/(admin)/dashboard/assignments/actions";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
@@ -36,9 +39,7 @@ function statusBadgeClass(status: string) {
   return map[status] ?? "bg-gray-50 text-gray-600 border-gray-200";
 }
 
-function formatStatus(status: string) {
-  return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
+const formatStatus = assignmentStatusLabel;
 
 function formatDate(iso: string) {
   return formatInTimeZone(iso, {
@@ -54,12 +55,18 @@ type AssignmentsListProps = {
   cleaners: TeamMemberRecord[];
   /** Bulk assign/delete are owner/admin-only actions; supervisors don't get them. */
   canManage: boolean;
+  remainingAmounts?: Record<string,number>;
 };
 
-export function AssignmentsList({ assignments, cleaners, canManage }: AssignmentsListProps) {
+export function AssignmentsList({ assignments, cleaners, canManage, remainingAmounts = {} }: AssignmentsListProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [bulkCleaner, setBulkCleaner] = useState("");
+  const [openedAt]=useState(()=>Date.now());
+  const [bulkMode,setBulkMode]=useState<string|null>(null);
+  const [completionConfirmed,setCompletionConfirmed]=useState(false);
+  const isPastWork=(job:AssignmentListRecord)=>["unassigned","assigned","confirmed","in_progress","completed_pending_review","needs_reclean"].includes(job.status)&&Date.parse(job.checkout_at??job.due_at)<=openedAt;
+  const pastWorkIds=assignments.filter(isPastWork).map(job=>job.id);
   const [isPending, startTransition] = useTransition();
   const selected = assignments.find((a) => a.id === selectedId) ?? null;
 
@@ -92,6 +99,7 @@ export function AssignmentsList({ assignments, cleaners, canManage }: Assignment
       const a = assignments.find((x) => x.id === id);
       if (a) statuses.add(a.status);
     }
+    const allCompletable=checkedIds.size>0 && [...checkedIds].every(id=>{const job=assignments.find(a=>a.id===id);return !!job&&["unassigned","assigned","confirmed","in_progress","completed_pending_review","needs_reclean"].includes(job.status)&&Date.parse(job.checkout_at??job.due_at)<=openedAt;});
     const allUnassigned = statuses.size === 1 && statuses.has("unassigned");
     const allDeletable =
       statuses.size > 0 &&
@@ -99,10 +107,12 @@ export function AssignmentsList({ assignments, cleaners, canManage }: Assignment
     return {
       count: checkedIds.size,
       allUnassigned,
+      allCompletable,
       allDeletable,
-      mixed: !allUnassigned && !allDeletable && statuses.size > 0,
+      mixed: !allUnassigned && !allDeletable && !allCompletable && statuses.size > 0,
     };
-  }, [checkedIds, assignments]);
+  }, [checkedIds, assignments, openedAt]);
+  const operation=selection.allCompletable && (!selection.allUnassigned || bulkMode===null) ? "complete" : bulkMode==="complete" && !selection.allCompletable ? "request" : bulkMode??"request";
 
   function toggleChecked(id: string) {
     setCheckedIds((prev) => {
@@ -128,15 +138,17 @@ export function AssignmentsList({ assignments, cleaners, canManage }: Assignment
     if (checkedIds.size === 0 || !bulkCleaner) return;
     const ids = Array.from(checkedIds);
     startTransition(async () => {
-      const res = await bulkAssignCleanerAction(ids, bulkCleaner);
+      const completed=operation==="complete";
+      const result=completed?await recordCompletedCleaningsAction(ids,bulkCleaner,"Recorded by host: selected cleanings already completed.",completionConfirmed):await bulkAssignCleanerAction(ids,bulkCleaner,operation as "request"|"direct");
+      const res={error:result.error,assigned:"completed" in result?result.completed:result.assigned};
       if (res.error) {
         showToast(res.error, "error");
       } else {
         showToast(
-          `Assigned ${res.assigned} job${res.assigned === 1 ? "" : "s"}.`,
+          `${completed?"Completed":"Assigned"} ${res.assigned} job${res.assigned === 1 ? "" : "s"}.`,
         );
         setCheckedIds(new Set());
-        setBulkCleaner("");
+        setBulkCleaner("");setBulkMode(null);setCompletionConfirmed(false);
       }
     });
   }
@@ -163,7 +175,7 @@ export function AssignmentsList({ assignments, cleaners, canManage }: Assignment
 
   return (
     <>
-      {canManage && (unassignedIds.length > 0 || deletableIds.length > 0) && (
+      {canManage && (unassignedIds.length > 0 || deletableIds.length > 0 || pastWorkIds.length > 0) && (
         <div className="sticky top-0 z-20 -mx-2 mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-border/70 bg-card/95 px-4 py-3 shadow-sm backdrop-blur">
           {unassignedIds.length > 0 && (
             <label className="flex items-center gap-2 text-xs font-medium">
@@ -176,12 +188,13 @@ export function AssignmentsList({ assignments, cleaners, canManage }: Assignment
               Select all unassigned ({unassignedIds.length})
             </label>
           )}
+          {pastWorkIds.length>0 && <button type="button" className="min-h-11 text-xs font-medium underline" onClick={()=>{setCheckedIds(new Set(pastWorkIds));setBulkMode("complete");setCompletionConfirmed(false);}}>Select past work ({pastWorkIds.length})</button>}
           <span className="text-xs text-muted-foreground">
             {selection.count === 0
               ? "No jobs selected"
               : `${selection.count} job${selection.count === 1 ? "" : "s"} selected`}
             {selection.mixed &&
-              " · mix of statuses — pick either unassigned OR cancelled/approved"}
+              " · mix of statuses — pick past work, unassigned jobs, or completed/cancelled jobs"}
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {selection.allDeletable ? (
@@ -202,7 +215,7 @@ export function AssignmentsList({ assignments, cleaners, canManage }: Assignment
               <>
                 <select
                   className="h-9 rounded-full border border-input bg-background px-3 text-xs disabled:opacity-60"
-                  disabled={!selection.allUnassigned || isPending}
+                  disabled={(!selection.allUnassigned && !selection.allCompletable) || isPending}
                   onChange={(e) => setBulkCleaner(e.target.value)}
                   value={bulkCleaner}
                 >
@@ -213,10 +226,16 @@ export function AssignmentsList({ assignments, cleaners, canManage }: Assignment
                     </option>
                   ))}
                 </select>
+                <select aria-label="Action for selected cleanings" value={operation} onChange={e=>{setBulkMode(e.target.value);setCompletionConfirmed(false);}} className="min-h-11 rounded-xl border border-input bg-background px-3 text-xs" disabled={isPending||selection.count===0}>
+                {selection.count===0&&<option value="request">Choose jobs first</option>}
+                {selection.allCompletable&&<option value="complete">Record completed work</option>}
+                {selection.allUnassigned&&<><option value="request">Send request</option><option value="direct">Direct assign · not completed</option></>}
+                </select>
+                {operation==="complete"&&<label className="flex max-w-xs items-start gap-2 text-xs"><input type="checkbox" checked={completionConfirmed} onChange={e=>setCompletionConfirmed(e.target.checked)} />I confirm all selected cleanings were completed and approve their pay.</label>}
                 <button
                   className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
                   disabled={
-                    !selection.allUnassigned || !bulkCleaner || isPending
+                    !bulkCleaner || isPending || (operation==="complete" ? !selection.allCompletable || !completionConfirmed : !selection.allUnassigned)
                   }
                   onClick={handleBulkAssign}
                   type="button"
@@ -226,7 +245,7 @@ export function AssignmentsList({ assignments, cleaners, canManage }: Assignment
                   ) : (
                     <Users className="h-3.5 w-3.5" />
                   )}
-                  Assign {selection.allUnassigned ? selection.count : ""}
+                  {operation==="complete"?"Record completed":"Assign"} {selection.count||""}
                 </button>
               </>
             )}
@@ -240,7 +259,7 @@ export function AssignmentsList({ assignments, cleaners, canManage }: Assignment
           const selectable =
             a.status === "unassigned" ||
             a.status === "cancelled" ||
-            a.status === "approved";
+            a.status === "approved" || isPastWork(a);
           const isChecked = checkedIds.has(a.id);
           return (
             <article
@@ -279,6 +298,7 @@ export function AssignmentsList({ assignments, cleaners, canManage }: Assignment
                   >
                     {formatStatus(a.status)}
                   </span>
+                  {(remainingAmounts[a.id]??0)>0 && <span className="text-xs font-medium text-muted-foreground">${remainingAmounts[a.id].toFixed(2)} remaining</span>}
                   {a.paid_at && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700">
                       Paid
@@ -292,7 +312,7 @@ export function AssignmentsList({ assignments, cleaners, canManage }: Assignment
                       type="button"
                     >
                       <Pencil className="h-3 w-3" />
-                      Edit
+                      {suggestCleaningOperation(a,new Date()) === "complete" ? "Record completed work" : "Manage"}
                     </button>
                   )}
                 </div>

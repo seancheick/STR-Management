@@ -61,3 +61,9 @@ export async function listCleanerFinancialSummaries(cleanerIds?: string[]) {
   const ids = cleanerIds ?? [...new Set([...data.accounts.map((a) => a.cleaner_id), ...data.payments.map(p=>p.cleaner_id), ...data.entries.map((e) => e.cleaner_id), ...data.jobs.flatMap((j) => j.cleaner_id ? [j.cleaner_id] : [])])];
   return Promise.all(ids.map(getCleanerFinancialSummary));
 }
+
+/** Canonical completed-work balances shared by the assignment filter and payouts. */
+export async function getOutstandingJobAmounts() {
+ const summaries=await listCleanerFinancialSummaries();
+ return Object.assign({},...summaries.map(summary=>summary.jobRemainingAmounts)) as Record<string,number>;
+}

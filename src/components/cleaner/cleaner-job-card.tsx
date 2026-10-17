@@ -1,3 +1,4 @@
+import {assignmentStatusLabel} from "@/lib/domain/assignments";
 import { JobPayBreakdown } from "@/components/shared/job-pay-breakdown";
 import type { Route } from "next";
 import Link from "next/link";
@@ -8,15 +9,6 @@ import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { JobStatusButton } from "@/components/cleaner/job-status-button";
 import { formatInTimeZone } from "@/lib/ical/timezone";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
-
-const STATUS_LABELS: Record<string, string> = {
-  assigned: "Pending acceptance",
-  confirmed: "Accepted",
-  in_progress: "In progress",
-  completed_pending_review: "Submitted",
-  approved: "Unit ready",
-  needs_reclean: "Needs re-clean",
-};
 
 const STATUS_CLASSES: Record<string, string> = {
   assigned: "border-yellow-200 bg-yellow-50 text-yellow-700",
@@ -89,7 +81,7 @@ export function CleanerJobCard({
           <p className="mt-1 text-xs text-muted-foreground">
             {assignment.ledger_entry_id
               ? "Recorded from ledger"
-              : (STATUS_LABELS[assignment.status] ??
+              : (assignmentStatusLabel(assignment.status) ??
                 assignment.status.replace(/_/g, " "))}{" "}
             · View details
           </p>
@@ -119,7 +111,7 @@ export function CleanerJobCard({
           <span
             className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClass}`}
           >
-            {STATUS_LABELS[assignment.status] ??
+            {assignmentStatusLabel(assignment.status) ??
               assignment.status.replace(/_/g, " ")}
           </span>
         </div>

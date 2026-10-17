@@ -36,3 +36,26 @@ and reject reversed ranges. Report detail/print/CSV include extras and the actua
 account balance. Archived reports remain references and are excluded from live
 financial totals. Amount snapshots cannot be edited after report generation;
 paid report cancellation and cleaner payment-field tampering are blocked.
+
+## Recording past work and filtering remaining balances
+
+Previous property-local service dates suggest **Record completed work** in the
+shared job drawer and new-job form. Today/future dates retain assignment flow.
+Host confirmation is required; dates alone never complete a job. Manual work
+without a checkout can use its past service date. The same owner RPC writes
+completion/approval, notification and audit state. It never records a payment.
+
+The financial summary also returns `jobRemainingAmounts` for both the Assignments
+**Work with balance** filter and payout work list. Account payments cover the
+reconciled opening debt first, then unpaid completed jobs oldest first (date, ID).
+This display allocation does not fabricate job-specific payment stamps. Linked
+job payments are deducted once and are not allocated to another job. Reconciled
+history stays in the ledger and is excluded from new job charges. Partly covered
+jobs link to the cleaner account for the remaining payment instead of offering
+another full job payment. Undoing a payment restores the corresponding balance.
+
+The Assignments bulk bar can select past work and record it as completed with a
+cleaner and explicit confirmation. `complete_cleaning_batch` delegates each job
+to the same owner completion function in one transaction; one invalid/future job
+rolls back the whole batch. Completed status labels are shared across host and
+cleaner cards, dashboard and calendar.

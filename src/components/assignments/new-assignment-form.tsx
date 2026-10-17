@@ -1,5 +1,6 @@
 "use client";
 
+import {suggestCleaningOperation} from "@/lib/services/cleaning-workflow";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -114,6 +115,10 @@ export function NewAssignmentForm({
   const [payout, setPayout] = useState("");
   const selectedProperty = properties.find((p) => p.id === propertyId) ?? null;
 
+  const [assignmentMode,setAssignmentMode]=useState<string|null>(null);
+  const [openedAt]=useState(()=>new Date());
+  const suggested=suggestCleaningOperation({status:"unassigned",checkout_at:checkoutVal,due_at:dueVal,properties:properties.find(p=>p.id===propertyId)},openedAt);
+  const mode=assignmentMode??(suggested==="complete"?"complete":"request");
   function handlePropertyChange(id: string) {
     setPropertyId(id);
     const prop = properties.find((p) => p.id === id) ?? null;
@@ -268,7 +273,8 @@ export function NewAssignmentForm({
             ))}
           </select>
           <FieldError errors={state.fieldErrors?.cleanerId} />
-        <label className="flex flex-col gap-1 text-sm font-medium">Assignment type<select name="assignmentMode" className="h-11 rounded-xl border border-input bg-background px-3"><option value="request">Request · cleaner accepts or declines</option><option value="direct">Direct assign · confirmed, no acceptance needed</option></select></label>
+        <label className="flex flex-col gap-1 text-sm font-medium">Cleaning action<select name="assignmentMode" value={mode} onChange={e=>setAssignmentMode(e.target.value)} className="h-11 rounded-xl border border-input bg-background px-3"><option value="request">Request · cleaner accepts or declines</option><option value="direct">Direct assign · confirmed, not completed</option><option value="complete">Record completed work</option></select></label>
+        {mode==="complete"&&<div className="space-y-3 rounded-xl border border-border p-3"><p className="text-sm text-muted-foreground">For cleaning already done. Choose a cleaner above. Completion updates the shared balance once; history already in the reconciled ledger is not charged again. This does not record a payment.</p><label className="block text-sm">Reason<textarea name="completionReason" defaultValue="Recorded by host: cleaning already completed." required minLength={3} maxLength={1000} className="mt-1 min-h-20 w-full rounded-xl border border-input bg-background p-3" /></label><label className="flex items-start gap-2 text-sm"><input name="completionConfirmed" required type="checkbox" className="mt-1" />I confirm this cleaning was completed and approve it for payment.</label></div>}
         </div>
 
         {/* Checklist template */}

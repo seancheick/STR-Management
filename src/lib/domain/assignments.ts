@@ -76,3 +76,9 @@ export function formatTurnoverWindow(minutes: number | null): string | null {
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
 }
+
+/** Shared lifecycle wording for host and cleaner views. Completion is separate from payment. */
+export function assignmentStatusLabel(status:string):string {
+ const labels:Record<string,string>={unassigned:"Unassigned",assigned:"Awaiting acceptance",confirmed:"Confirmed",in_progress:"In progress",completed_pending_review:"Completed · awaiting review",approved:"Completed",needs_reclean:"Needs re-clean",cancelled:"Cancelled"};
+ return labels[status]??status.replace(/_/g," ");
+}

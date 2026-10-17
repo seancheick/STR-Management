@@ -1,3 +1,4 @@
+import {getOutstandingJobAmounts} from "@/lib/queries/cleaner-finance";
 import { AssignmentPlanner } from "@/components/assignments/assignment-planner";
 import type { Route } from "next";
 import Link from "next/link";
@@ -26,10 +27,11 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
   const showApproved = params.approved === "1";
   const unpaidOnly = params.unpaid === "1";
 
-  const [allAssignments, cleaners, planningJobs] = await Promise.all([
+  const [allAssignments, cleaners, planningJobs, remainingAmounts] = await Promise.all([
     listAssignmentsForAdmin(),
     listActiveCleaners(),
     canManage ? listUpcomingUnassignedCleanings() : Promise.resolve([]),
+    getOutstandingJobAmounts(),
   ]);
 
   const PAYABLE_STATUSES = new Set(["approved", "completed_pending_review"]);
@@ -44,14 +46,14 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
     // Most unpaid jobs are approved, so this view ignores the approved toggle;
     // otherwise the chip's count and the list disagree.
     assignments = allAssignments.filter(
-      (a) => PAYABLE_STATUSES.has(a.status) && a.paid_at === null,
+      (a) => PAYABLE_STATUSES.has(a.status) && (remainingAmounts[a.id]??0)>0,
     );
   }
 
   const cancelledCount = allAssignments.filter((a) => a.status === "cancelled").length;
   const approvedCount = allAssignments.filter((a) => a.status === "approved").length;
   const unpaidCount = allAssignments.filter(
-    (a) => PAYABLE_STATUSES.has(a.status) && a.paid_at === null,
+    (a) => PAYABLE_STATUSES.has(a.status) && (remainingAmounts[a.id]??0)>0,
   ).length;
 
   function buildHref(over: {
@@ -99,6 +101,7 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
 
       {canManage && <AssignmentPlanner assignments={planningJobs} cleaners={cleaners} now={new Date().toISOString()} />}
 
+      {unpaidOnly && <p className="text-sm text-muted-foreground">Completed work with an amount remaining after recorded payments and credits. Account payments cover older balances first. Reconciled history is included in each cleaner’s ledger, not charged again.</p>}
       {/* Filter chips — cancelled + approved hidden by default */}
       <div className="flex flex-wrap gap-1.5 text-xs">
         <span className="mr-1 self-center font-medium uppercase tracking-wider text-muted-foreground">
@@ -106,7 +109,7 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
         </span>
         {[
           {
-            label: "Unpaid only",
+            label: "Work with balance",
             count: unpaidCount,
             on: unpaidOnly,
             href: (unpaidOnly
@@ -122,7 +125,7 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
               : buildHref({ cancelled: "1" })) as Route,
           },
           {
-            label: "Approved",
+            label: "Completed",
             count: approvedCount,
             on: showApproved,
             href: (showApproved
@@ -178,7 +181,7 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
           )}
         </section>
       ) : (
-        <AssignmentsList assignments={assignments} canManage={canManage} cleaners={cleaners} />
+        <AssignmentsList remainingAmounts={remainingAmounts} assignments={assignments} canManage={canManage} cleaners={cleaners} />
       )}
     </main>
   );

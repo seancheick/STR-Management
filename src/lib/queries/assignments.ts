@@ -1,9 +1,6 @@
+import { getOutstandingJobAmounts } from "@/lib/queries/cleaner-finance";
 import "server-only";
 import { withListingConfiguration } from "@/lib/services/booking-configuration";
-import {
-  listCleanerAccounts,
-  isReconciledJob,
-} from "@/lib/queries/cleaner-ledger";
 
 import { zonedDayTime } from "@/lib/ical/timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -114,38 +111,21 @@ export async function listAssignmentsForAdmin(): Promise<
   AssignmentListRecord[]
 > {
   const supabase = await createServerSupabaseClient();
-  const { data } = await supabase
-    .from("assignments")
-    .select(ASSIGNMENT_LIST_SELECT)
-    .order("due_at", { ascending: true });
-
-  return ((data as unknown as AssignmentListRecord[] | null) ?? []).map(
-    withListingConfiguration,
-  );
+  const rows: AssignmentListRecord[]=[];
+  for(let offset=0;;offset+=1000) {
+    const {data,error}=await supabase.from("assignments").select(ASSIGNMENT_LIST_SELECT).order("due_at",{ascending:false}).order("id").range(offset,offset+999);
+    if(error)throw new Error(error.message);
+    rows.push(...((data??[]) as unknown as AssignmentListRecord[]));
+    if((data?.length??0)<1000)break;
+  }
+  return rows.map(withListingConfiguration);
 }
 
 /** Payable but unpaid: approved/completed jobs that haven't been marked paid yet. */
 export async function listUnpaidPayableJobs(): Promise<AssignmentListRecord[]> {
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("assignments")
-    .select(ASSIGNMENT_LIST_SELECT)
-    .in("status", ["approved", "completed_pending_review"])
-    .is("paid_at", null)
-    .order("due_at", { ascending: true });
-  if (error) throw new Error(error.message);
-  const accounts = await listCleanerAccounts();
-  return ((data as unknown as AssignmentListRecord[] | null) ?? [])
-    .map(withListingConfiguration)
-    .filter(
-      (a) =>
-        !isReconciledJob(
-          accounts,
-          a.cleaner_id,
-          a.due_at,
-          a.properties?.timezone,
-        ),
-    );
+  const [jobs,remaining]=await Promise.all([listAssignmentsForAdmin(),getOutstandingJobAmounts()]);
+  return jobs.filter(job=>(remaining[job.id]??0)>0);
+
 }
 
 export async function listTodaysAssignmentsForAdmin(): Promise<

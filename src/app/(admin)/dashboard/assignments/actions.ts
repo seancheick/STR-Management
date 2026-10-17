@@ -66,6 +66,10 @@ export async function createAssignmentAction(
       return { status: "error", message: "Invalid form data." };
     }
 
+    const mode=String(formData.get("assignmentMode")??"request");
+    const completionReason=String(formData.get("completionReason")??"").trim();
+    if(!["request","direct","complete"].includes(mode))return {status:"error",message:"Choose a cleaning action."};
+    if(mode==="complete" && (!values.cleanerId || formData.get("completionConfirmed")!=="on" || completionReason.length<3 || completionReason.length>1000 || Date.parse(values.checkoutAt??values.dueAt)>Date.now()))return {status:"error",message:"Choose a cleaner, a past checkout or service date, and confirm the completed work."};
     const supabase = await createServerSupabaseClient();
 
     const ownerId = await resolveOwnerId();
@@ -103,12 +107,18 @@ export async function createAssignmentAction(
     }
 
     if (values.cleanerId) {
-      const assigned = await bulkAssignCleanerAction([result.assignmentId], values.cleanerId,
-        formData.get("assignmentMode") === "direct" ? "direct" : "request");
-      if (assigned.error || !assigned.assigned) return { status: "error", message: `Cleaning created as unassigned. ${assigned.error ?? "Assign a cleaner from the schedule."}` };
+      if(mode==="complete") {
+        const {error}=await supabase.rpc("owner_manage_cleaning",{target_id:result.assignmentId,operation:"complete",target_cleaner:values.cleanerId,audit_reason:completionReason,confirmed:true});
+        if(error)return {status:"error",message:`Cleaning created as unassigned. ${error.message}`};
+        await sendAssignmentBatchNotification(ownerId,values.cleanerId,[result.assignmentId],"complete").catch(error=>console.error("[completion-notification]",error));
+      } else {
+        const assigned=await bulkAssignCleanerAction([result.assignmentId],values.cleanerId,mode as "direct"|"request");
+        if(assigned.error||!assigned.assigned)return {status:"error",message:`Cleaning created as unassigned. ${assigned.error??"Assign a cleaner from the schedule."}`};
+      }
     }
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard", "layout");
+    revalidatePath("/dashboard/payouts");
     revalidatePath("/dashboard/assignments");
     revalidatePath("/dashboard/schedule");
     revalidatePath("/jobs");
@@ -199,3 +209,15 @@ export async function bulkAssignCleanerAction(
   return { error: null, assigned: data?.length ?? 0 };
 }
 
+
+export async function recordCompletedCleaningsAction(ids:string[],cleanerId:string,reason:string,confirmed:boolean):Promise<{error:string|null;completed:number}> {
+ const actor=await requireRole(["owner","admin"]);
+ const parsed=z.object({ids:z.array(z.string().uuid()).min(1).max(1000),cleaner:z.string().uuid(),reason:z.string().trim().min(3).max(1000),confirmed:z.literal(true)}).safeParse({ids,cleaner:cleanerId,reason,confirmed});
+ if(!parsed.success)return {error:"Choose jobs, a cleaner, and confirm the completed work.",completed:0};
+ const supabase=await createServerSupabaseClient();
+ const {data,error}=await supabase.rpc("complete_cleaning_batch",{job_ids:[...new Set(ids)],target_cleaner:cleanerId,audit_reason:parsed.data.reason,confirmed:true});
+ if(error)return {error:error.message,completed:0};
+ await sendAssignmentBatchNotification(actor.owner_id,cleanerId,ids,"complete").catch(error=>console.error("[completion-notification]",error));
+ revalidatePath("/dashboard","layout");revalidatePath("/jobs","layout");
+ return {error:null,completed:Number(data??0)};
+}

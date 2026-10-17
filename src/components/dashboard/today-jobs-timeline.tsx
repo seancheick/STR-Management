@@ -1,5 +1,6 @@
 "use client";
 
+import {assignmentStatusLabel} from "@/lib/domain/assignments";
 import { AlertCircle, CalendarDays, ArrowRight } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -27,10 +28,7 @@ function statusBadgeClass(status: string) {
   return map[status] ?? "bg-muted text-muted-foreground border-border";
 }
 
-function formatStatus(s: string) {
-  if (s === "approved") return "Unit Ready";
-  return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
+const formatStatus = assignmentStatusLabel;
 
 // Explicit zone: this renders on the server (UTC) and then in the browser,
 // which must agree, and times should read as property-local.

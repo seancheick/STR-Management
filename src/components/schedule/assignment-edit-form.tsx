@@ -11,6 +11,7 @@ import {
   type RescheduleState,
 } from "@/app/(admin)/dashboard/schedule/actions";
 import {
+  assignmentStatusLabel,
   formatTurnoverWindow,
   isTightTurnover,
   tightTurnoverMinutes,
@@ -25,6 +26,7 @@ import { showToast } from "@/components/ui/toast";
 export type EditableAssignment = {
   id: string;
   status: string;
+  properties?: {timezone?:string|null}|null;
   priority: string;
   checkout_at: string | null;
   due_at: string;
@@ -124,7 +126,7 @@ export function AssignmentEditForm({
         >
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>
-            This job is <strong className="font-semibold capitalize">{assignment.status.replace(/_/g, " ")}</strong>.
+            This job is <strong className="font-semibold capitalize">{assignmentStatusLabel(assignment.status)}</strong>.
             Timing edits are locked while this job is in this state.
           </span>
         </div>

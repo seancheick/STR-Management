@@ -1,3 +1,4 @@
+import {assignmentStatusLabel} from "@/lib/domain/assignments";
 import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { CleaningTiming } from "@/components/shared/cleaning-timing";
@@ -10,8 +11,8 @@ export function CleaningCalendarEvent({ assignment, onClick, dimmed = false, pro
   const reclean = assignment.status === "needs_reclean";
   const urgent = !complete && (timing.mode === "firm" || timing.mode === "conflict" || reclean);
   const person = assignment.cleaners?.full_name?.split(" ")[0] ?? "Unassigned";
-  const label = reclean ? "Re-clean" : complete ? "Completed" : !assignment.cleaner_id ? "Assign cleaner" : person;
-  const response = assignment.status === "assigned" ? "Awaiting response" : assignment.status === "confirmed" ? "Accepted" : !assignment.cleaner_id && assignment.ack_status === "declined" ? "Declined · choose a cleaner" : null;
+  const label = reclean ? "Re-clean" : complete ? assignmentStatusLabel(assignment.status) : !assignment.cleaner_id ? "Assign cleaner" : person;
+  const response = assignment.status === "assigned" ? "Awaiting response" : assignment.status === "confirmed" ? assignmentStatusLabel(assignment.status) : !assignment.cleaner_id && assignment.ack_status === "declined" ? "Declined · choose a cleaner" : null;
   const description = `${propertyName ?? assignment.properties?.name ?? "Property"} · ${person}${response ? ` · ${response}` : ""} · ${complete ? "Completed cleaning" : `${timing.summary}. ${timing.detail}`}`;
   return (
     <button type="button" onClick={onClick} title={description} aria-label={description}

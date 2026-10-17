@@ -347,6 +347,7 @@ export async function manageCleaningAction(_prev: RescheduleState, formData: For
   if (error) return { status: "error", message: error.message };
   await sendAssignmentBatchNotification(actor.owner_id,parsed.data.cleaner,[parsed.data.id],parsed.data.operation).catch(error=>console.error("[job-notification]",error));
   if(before?.cleaner_id && before.cleaner_id !== parsed.data.cleaner) await sendAssignmentBatchNotification(actor.owner_id,before.cleaner_id,[parsed.data.id],"removed").catch(error=>console.error("[job-notification]",error));
+  revalidatePath("/dashboard", "layout");
   revalidatePath("/jobs", "layout");
   for (const path of ["/dashboard", "/dashboard/assignments", "/dashboard/schedule", "/dashboard/payouts", "/jobs", "/jobs/inbox", "/jobs/schedule"]) revalidatePath(path);
   return { status: "success", message: parsed.data.operation === "complete" ? "Cleaning completed and approved." : parsed.data.operation === "direct" ? "Cleaning confirmed. No acceptance needed." : "Cleaning requested. Cleaner can accept or decline." };

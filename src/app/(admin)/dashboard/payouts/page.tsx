@@ -62,6 +62,9 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
   const financeByCleaner = new Map(
     finances.map((item) => [item.cleanerId, item]),
   );
+  const remainingAmounts=Object.assign({},...finances.map(item=>item.jobRemainingAmounts)) as Record<string,number>;
+  const partialJobs=unpaidJobs.filter(job=>(remainingAmounts[job.id]??0)<Number(job.fixed_payout_amount??0));
+  const fullJobs=unpaidJobs.filter(job=>(remainingAmounts[job.id]??0)>=Number(job.fixed_payout_amount??0));
   const accounts = finances.flatMap((item) =>
     item.ledger ? [item.ledger.account] : [],
   );
@@ -170,7 +173,8 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
         )}
       </section>
       {/* Quick-pay: individual jobs (Zelle/Venmo/cash) outside the batch flow */}
-      {canManage && <BulkMarkPaid jobs={unpaidJobs} />}
+      {partialJobs.length>0 && <section className="space-y-2 rounded-2xl border border-border bg-card p-4"><h2 className="font-semibold">Partly covered by account payments</h2><p className="text-sm text-muted-foreground">Older balances are covered first. Record the remaining payment from the cleaner’s account to avoid recording a full job payment again.</p>{partialJobs.map(job=><p key={job.id} className="text-sm">{job.properties?.name} · ${remainingAmounts[job.id].toFixed(2)} remaining · <Link className="underline" href={`/dashboard/payouts/ledger/${job.cleaner_id}` as Route}>Open cleaner account</Link></p>)}</section>}
+      {canManage && <BulkMarkPaid jobs={fullJobs} />}
 
       {/* Create new report */}
       {canManage && (

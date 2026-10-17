@@ -103,3 +103,28 @@ describe("canonical recorded payments and running ledger",()=>{
   expect(isHistoricalPayoutReport(report,[{cleaner_id:"a",reconciled_through:cutoff}])).toBe(false);
  });
 });
+
+describe("shared remaining job balances",()=>{
+ const run=(jobs:FinanceJob[],payments:CleanerPayment[]=[],ledgerEntries=ledger,entries:FinanceEntry[]=[])=>calculateCleanerFinancialSummary({jobs,payments,ledgerEntries,entries,reconciledThrough:cutoff});
+ it("does not flag reconciled history as unpaid jobs",()=>{
+  expect(run([job("old",90,"2026-09-20T19:00Z")]).jobRemainingAmounts).toEqual({});
+ });
+ it("applies account payments to older ledger debt before new jobs",()=>{
+  expect(run([job("new")],[payment(2000)]).jobRemainingAmounts).toEqual({new:90});
+ });
+ it("shows only the remaining part of a job after historical debt is settled",()=>{
+  const result=run([job("new")],[payment(2164)]);
+  expect(result.jobRemainingAmounts).toEqual({new:50});expect(result.balance).toBe(50);
+ });
+ it("covers oldest work first regardless of input order and excludes fully covered jobs",()=>{
+  const result=run([job("later",90,"2026-10-06T19:00Z"),job("earlier",90)],[payment(2224)]);
+  expect(result.jobRemainingAmounts).toEqual({later:80});expect(result.balance).toBe(80);
+ });
+ it("never applies a job payment a second time to another job",()=>{
+  const result=run([job("paid"),job("open")],[payment(90,"paid")]);
+  expect(result.jobRemainingAmounts).toEqual({open:90});expect(result.balance).toBe(2214);
+ });
+ it("uses the committed report amount once and includes account credits",()=>{
+  expect(run([job("reported",90)],[payment(2244)],ledger,[entry("e","reported",120)]).jobRemainingAmounts).toEqual({});
+ });
+});

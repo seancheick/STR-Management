@@ -63,12 +63,26 @@ export function calculateCleanerFinancialSummary<E extends FinanceEntry, J exten
   }
   payments.forEach(payment=>statementEntries.push({id:`payment:${payment.id}`,entry_date:payment.payment_date,sequence:2000001,kind:"payment",description:`Payment received · ${payment.method.replace(/_/g," ")}${payment.reference ? ` · ${payment.reference}` : ""}${payment.note ? ` · ${payment.note}` : ""}`,amount:-Number(payment.amount)}));
 
+  // Account payments cover older ledger debt first, then completed jobs in date order.
+  // This is a balance allocation for display/filtering, not proof of a job-specific payment.
+  let accountCredit = Math.max(0, payments.filter(p => !p.assignment_id).reduce((sum,p) => sum+cents(p.amount),0) - Math.round(ledgerBalance*100));
+  const outstanding = [
+    ...entries.filter(e => !e.paid_at && !paidJobIds.has(e.assignment_id)).map(e => ({id:e.assignment_id,date:e.assignments!.due_at,amount:cents(e.amount)})),
+    ...jobs.filter(j => !j.paid_at && !paidJobIds.has(j.id)).map(j => ({id:j.id,date:j.due_at,amount:cents(j.fixed_payout_amount)})),
+  ].sort((a,b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  const jobRemainingAmounts: Record<string,number> = {};
+  for (const job of outstanding) {
+    const covered = Math.min(accountCredit,job.amount);
+    accountCredit -= covered;
+    if (job.amount > covered) jobRemainingAmounts[job.id] = (job.amount-covered)/100;
+  }
+
   return {
     balance: (Math.round(ledgerBalance * 100) + projectedCents - paidCents) / 100,
-    ledgerBalance, entries, jobsOutsideReports: jobs, statementEntries, payments: input.payments ?? [],
+    jobRemainingAmounts, ledgerBalance, entries, jobsOutsideReports: jobs, statementEntries, payments: input.payments ?? [],
     recordedPaymentsTotal: recordedPaymentsCents/100, legacyPaidTotal: legacyPaidCents/100,
-    unpaidEntries: entries.filter((entry) => !entry.paid_at).length,
-    orphanAssignments: jobs.filter((job) => !job.paid_at).length,
+    unpaidEntries: entries.filter((entry) => (jobRemainingAmounts[entry.assignment_id]??0)>0).length,
+    orphanAssignments: jobs.filter((job) => (jobRemainingAmounts[job.id]??0)>0).length,
     summary: { inReportsTotal: inReportsCents / 100, paidTotal: paidCents / 100, awaitingTotal: awaitingCents / 100, projectedTotal: projectedCents / 100 },
   };
 }
