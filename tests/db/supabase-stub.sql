@@ -36,3 +36,15 @@ grant execute on function auth.uid(), auth.role() to anon, authenticated, servic
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+
+-- Legacy helper exists in the hosted schema but predates recorded migrations.
+-- Keep the disposable database faithful before the hardening migration alters it.
+set check_function_bodies = off;
+create function public.increment_inventory_quantity(p_item_id uuid, p_delta integer)
+returns void language sql set search_path=public as $$
+ update public.property_inventory_items set current_quantity=greatest(0,current_quantity+p_delta),updated_at=timezone('utc',now()) where id=p_item_id;
+$$;
+set check_function_bodies = on;
+create publication supabase_realtime;
+-- Supabase's platform event-trigger helper is not invoked by these fixtures.
+create function public.rls_auto_enable() returns event_trigger language plpgsql as $$ begin end $$;

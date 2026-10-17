@@ -1,10 +1,11 @@
 "use server";
 
+import { bulkAssignCleanerAction } from "@/app/(admin)/dashboard/assignments/actions";
+import { listActiveCleaners } from "@/lib/queries/team";
 import { getAssignmentDetail } from "@/lib/queries/assignments";
 import { requireRole } from "@/lib/auth/session";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { summarizeReviewEvidence } from "@/lib/services/review-evidence";
-import { revalidatePath } from "next/cache";
 
 export type CleanerSuggestion = {
   id: string;
@@ -30,6 +31,8 @@ export async function fetchAssignmentDetail(assignmentId: string) {
   });
 
   return {
+    availableCleaners: await listActiveCleaners(),
+    extras: detail.assignment_extras ?? [],
     id: detail.id,
     propertyName: detail.properties?.name ?? "Property",
     propertyAddress: detail.properties?.address_line_1 ?? null,
@@ -69,27 +72,9 @@ export async function fetchAssignmentDetail(assignmentId: string) {
   };
 }
 
-export async function assignCleanerAction(
-  assignmentId: string,
-  cleanerId: string,
-): Promise<{ ok: boolean; error?: string }> {
-  try {
-    await requireRole(["owner", "admin", "supervisor"]);
-    const supabase = await createServerSupabaseClient();
-
-    const { error } = await supabase
-      .from("assignments")
-      .update({ cleaner_id: cleanerId, status: "assigned", ack_status: "pending" })
-      .eq("id", assignmentId)
-      .eq("status", "unassigned"); // optimistic lock — only update if still unassigned
-
-    if (error) return { ok: false, error: error.message };
-
-    revalidatePath("/dashboard");
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
-  }
+export async function assignCleanerAction(assignmentId: string, cleanerId: string, mode: "request" | "direct" = "request"): Promise<{ok:boolean;error?:string}> {
+ const result = await bulkAssignCleanerAction([assignmentId],cleanerId,mode);
+ return result.error || !result.assigned ? {ok:false,error:result.error ?? "This job is no longer unassigned. Refresh and review it."} : {ok:true};
 }
 
 export async function getCleanerSuggestionsAction(

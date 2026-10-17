@@ -1,3 +1,4 @@
+import { JobPayBreakdown } from "@/components/shared/job-pay-breakdown";
 import { CleaningTiming } from "@/components/shared/cleaning-timing";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -109,6 +110,10 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
         </div>
       </div>
 
+      <section className="rounded-2xl border border-border/70 bg-card p-4">
+        <JobPayBreakdown total={assignment.fixed_payout_amount} extras={assignment.assignment_extras} />
+      </section>
+
       {/* Not started yet — say why the checklist is locked and offer the next step */}
       {(assignment.status === "assigned" || assignment.status === "confirmed") &&
         assignment.cleaner_id === profile.id && (
@@ -134,6 +139,7 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
           .filter(Boolean)
           .join(", ") || null}
         assignmentId={assignmentId}
+        ackStatus={assignment.ack_status}
         status={assignment.status}
       />
 

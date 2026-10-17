@@ -14,6 +14,7 @@ export function AssignmentPlanner({ assignments, cleaners, now, propertyId }: { 
   const router = useRouter();
   const [preset, setPreset] = useState<PlanningPreset>("seven-days");
   const [count, setCount] = useState(3);
+  const [assignmentMode, setAssignmentMode] = useState<"request" | "direct">("request");
   const [cleanerId, setCleanerId] = useState("");
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [applied, setApplied] = useState<Set<string>>(new Set());
@@ -25,7 +26,7 @@ export function AssignmentPlanner({ assignments, cleaners, now, propertyId }: { 
   function apply() {
     startTransition(async () => {
       try {
-        const result = await bulkAssignCleanerAction(selected.map(a => a.id), cleanerId);
+        const result = await bulkAssignCleanerAction(selected.map(a => a.id), cleanerId, assignmentMode);
         if (result.error) { setMessage(result.error); showToast(result.error, "error"); return; }
         const skipped = selected.length - result.assigned;
         const text = `Assigned ${result.assigned} cleaning${result.assigned === 1 ? "" : "s"} to ${cleaner?.full_name ?? "the cleaner"}.${skipped ? ` ${skipped} changed since this page loaded and ${skipped === 1 ? "was" : "were"} skipped.` : ""}`;
@@ -52,6 +53,7 @@ export function AssignmentPlanner({ assignments, cleaners, now, propertyId }: { 
           </label>
           <label className="space-y-1 text-sm font-medium"><span>Assign to</span><select aria-label="Assign to" className="h-11 w-full rounded-xl border border-input bg-background px-3" value={cleanerId} disabled={pending} onChange={e => setCleanerId(e.target.value)}><option value="">Choose a cleaner</option>{cleaners.map(c => <option key={c.id} value={c.id}>{c.full_name}</option>)}</select></label>
         </div>
+        <label className="block text-sm font-medium">Assignment type<select value={assignmentMode} disabled={pending} onChange={e=>setAssignmentMode(e.target.value as "request" | "direct")} className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3"><option value="request">Request · cleaner accepts or declines</option><option value="direct">Direct assign · confirmed, no acceptance needed</option></select></label>
         {preset === "next-count" && <label className="flex items-center gap-3 text-sm">Number of cleanings<input aria-label="Number of cleanings" type="number" min="1" max="100" value={count} disabled={pending} onChange={e=>{setCount(Number(e.target.value)); setExcluded(new Set());}} className="h-11 w-24 rounded-xl border border-input bg-background px-3" /></label>}
         {!!jobs.length && <div className="flex items-center justify-between gap-3 text-sm"><span className="font-medium">Review {jobs.length} cleaning{jobs.length === 1 ? "" : "s"}</span><button type="button" disabled={pending} className="min-h-11 px-2 text-primary underline underline-offset-4" onClick={() => setExcluded(selected.length ? new Set(jobs.map(job => job.id)) : new Set())}>{selected.length ? "Clear selection" : "Select all"}</button></div>}
         <div className="max-h-80 overflow-y-auto divide-y divide-border/60">

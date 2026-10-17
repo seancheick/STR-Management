@@ -29,6 +29,7 @@ export function AssignCleanerModal({
   onClose,
   onAssigned,
 }: Props) {
+  const [mode,setMode] = useState<"request" | "direct">("request");
   const [suggestions, setSuggestions] = useState<CleanerSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export function AssignCleanerModal({
       setAssigning(cleanerId);
       setError(null);
       startTransition(async () => {
-        const result = await assignCleanerAction(assignmentId, cleanerId);
+        const result = await assignCleanerAction(assignmentId, cleanerId,mode);
         if (result.ok) {
           onAssigned();
         } else {
@@ -65,7 +66,7 @@ export function AssignCleanerModal({
         }
       });
     },
-    [assignmentId, onAssigned],
+    [assignmentId, onAssigned,mode],
   );
 
   return (
@@ -103,6 +104,7 @@ export function AssignCleanerModal({
           </button>
         </div>
 
+        <label className="block px-5 py-3 text-sm font-medium">Assignment type<select value={mode} disabled={isPending} onChange={event=>setMode(event.target.value as "request"|"direct")} className="mt-2 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-base"><option value="request">Send request · accept or decline</option><option value="direct">Direct assign · already agreed</option></select><span className="mt-2 block text-xs font-normal text-muted-foreground">{mode === "direct" ? "Use after agreeing with the cleaner, for example by phone. They will be notified; no acceptance is needed." : "The cleaner is notified and can accept or decline."}</span></label>
         {/* Body */}
         <div className="max-h-80 overflow-y-auto px-3 py-3">
           {loading ? (

@@ -8,7 +8,17 @@ import {
 import { zonedDayTime } from "@/lib/ical/timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+export type AssignmentExtraRecord = {
+  id: string;
+  assignment_id: string;
+  description: string;
+  amount: number;
+  kind: "service" | "reimbursement";
+  created_at: string;
+};
+
 export type AssignmentListRecord = {
+  assignment_extras?: AssignmentExtraRecord[];
   id: string;
   owner_id: string;
   property_id: string;
@@ -96,6 +106,7 @@ const ASSIGNMENT_LIST_SELECT = `
   paid_at, payment_method, payment_reference, ledger_entry_id, created_at,
   properties:property_id ( name, address_line_1, city, timezone ),
   listing_properties:assignments_listing_property_fk ( name, address_line_1, city, timezone ),
+  assignment_extras ( id, assignment_id, description, amount, kind, created_at ),
   cleaners:cleaner_id ( full_name )
 `.trim();
 
@@ -318,6 +329,7 @@ export async function getDashboardCounts(): Promise<{
 // ─── Schedule view ────────────────────────────────────────────────────────────
 
 export type AssignmentScheduleRecord = {
+  assignment_extras?: AssignmentExtraRecord[];
   id: string;
   property_id: string;
   listing_property_id?: string | null;
@@ -351,6 +363,7 @@ const SCHEDULE_SELECT = `
   paid_at, payment_method, payment_reference,
   properties:property_id ( name, address_line_1, city, timezone ),
   listing_properties:assignments_listing_property_fk ( name, address_line_1, city, timezone ),
+  assignment_extras ( id, assignment_id, description, amount, kind, created_at ),
   cleaners:cleaner_id ( full_name )
 `.trim();
 

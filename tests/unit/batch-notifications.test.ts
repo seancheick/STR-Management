@@ -21,6 +21,11 @@ describe("batch phone alerts", () => {
     expect(mocks.push).toHaveBeenCalledWith("cleaner", expect.objectContaining({ title: "2 new cleaning assignments", url: "/jobs/inbox" }));
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ status: "sent" }));
   });
+  it("direct assignments notify without asking for acceptance", async () => {
+    mocks.push.mockResolvedValue([{success:true}]);
+    await sendAssignmentBatchNotification("owner","cleaner",["job1"],"direct");
+    expect(mocks.push).toHaveBeenCalledWith("cleaner",expect.objectContaining({url:"/jobs/schedule",body:expect.not.stringContaining("accept or decline")}));
+  });
   it("records an honest delivery failure without removing inbox offers", async () => {
     mocks.push.mockResolvedValue([{ success: false, error: "No active push subscriptions." }]);
     await sendAssignmentBatchNotification("owner", "cleaner", ["job1"]);

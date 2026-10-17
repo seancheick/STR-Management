@@ -10,6 +10,7 @@ import { showToast } from "@/components/ui/toast";
 type Props = {
   assignmentId: string;
   status: string;
+  ackStatus?: string;
   address: string | null;
 };
 
@@ -22,8 +23,8 @@ const DECLINE_REASONS: Array<{ key: string; label: string }> = [
 
 const ETA_PRESETS = [15, 30, 45, 60];
 
-export function JobQuickActions({ assignmentId, status, address }: Props) {
-  const canDecline = status === "assigned" || status === "confirmed";
+export function JobQuickActions({ assignmentId, status, address, ackStatus }: Props) {
+  const canDecline = status === "assigned" && ackStatus === "pending";
   const canRunLate = ["confirmed", "in_progress"].includes(status);
   const [declineOpen, setDeclineOpen] = useState(false);
   const [lateOpen, setLateOpen] = useState(false);

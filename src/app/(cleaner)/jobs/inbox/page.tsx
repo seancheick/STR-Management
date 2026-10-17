@@ -75,7 +75,7 @@ export default async function CleanerInboxPage() {
       ) : (
         <ul className="flex flex-col gap-3">
           {notifications.map((n) => {
-            const href: Route = n.assignment_id
+            const href: Route = n.assignment_id && n.assignment
               ? (`/jobs/${n.assignment_id}` as Route)
               : ("/jobs" as Route);
             const showActions =

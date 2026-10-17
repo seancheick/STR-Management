@@ -88,7 +88,7 @@ export async function createAssignmentAction(
       ownerId,
       propertyId: selectedProperty.physical_unit_id ?? selectedProperty.id,
       listingPropertyId: selectedProperty.id,
-      cleanerId: values.cleanerId,
+      cleanerId: null,
       dueAt: values.dueAt,
       checkoutAt: values.checkoutAt,
       priority: values.priority,
@@ -100,6 +100,12 @@ export async function createAssignmentAction(
 
     if (!result.success) {
       return { status: "error", message: result.error };
+    }
+
+    if (values.cleanerId) {
+      const assigned = await bulkAssignCleanerAction([result.assignmentId], values.cleanerId,
+        formData.get("assignmentMode") === "direct" ? "direct" : "request");
+      if (assigned.error || !assigned.assigned) return { status: "error", message: `Cleaning created as unassigned. ${assigned.error ?? "Assign a cleaner from the schedule."}` };
     }
 
     revalidatePath("/dashboard");
@@ -166,6 +172,7 @@ export async function deleteAssignmentsAction(
 export async function bulkAssignCleanerAction(
   assignmentIds: string[],
   cleanerId: string,
+  assignmentMode: "request" | "direct" = "request",
 ): Promise<{ error: string | null; assigned: number }> {
   await requireRole(["owner", "admin"]);
 
@@ -176,13 +183,13 @@ export async function bulkAssignCleanerAction(
   const { data: cleaner, error: cleanerError } = await supabase.from("users").select("id")
     .eq("id", parsed.data.cleanerId).eq("owner_id", ownerId).eq("role", "cleaner").eq("active", true).maybeSingle();
   if (cleanerError || !cleaner) return { error: "Choose an active cleaner from your team.", assigned: 0 };
-  const { data, error } = await supabase.rpc("assign_cleaning_batch", {
-    job_ids: [...new Set(parsed.data.ids)], target_cleaner: cleanerId,
+  const { data, error } = await supabase.rpc("assign_cleaning_batch_mode", {
+    job_ids: [...new Set(parsed.data.ids)], target_cleaner: cleanerId, assignment_mode: assignmentMode,
   });
 
   if (error) return { error: error.message, assigned: 0 };
 
-  if (data?.length) await sendAssignmentBatchNotification(ownerId, cleanerId, (data as { id: string }[]).map((job) => job.id));
+  if (data?.length) await sendAssignmentBatchNotification(ownerId, cleanerId, (data as { id: string }[]).map((job) => job.id), assignmentMode);
   revalidatePath("/dashboard/assignments");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/schedule");

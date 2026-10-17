@@ -268,6 +268,7 @@ export function NewAssignmentForm({
             ))}
           </select>
           <FieldError errors={state.fieldErrors?.cleanerId} />
+        <label className="flex flex-col gap-1 text-sm font-medium">Assignment type<select name="assignmentMode" className="h-11 rounded-xl border border-input bg-background px-3"><option value="request">Request · cleaner accepts or declines</option><option value="direct">Direct assign · confirmed, no acceptance needed</option></select></label>
         </div>
 
         {/* Checklist template */}

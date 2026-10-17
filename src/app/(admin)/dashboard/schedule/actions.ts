@@ -3,41 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { sendAssignmentBatchNotification } from "@/lib/notifications/notification-service";
 import { requireRole } from "@/lib/auth/session";
-import { sendNotification } from "@/lib/notifications/notification-service";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { formatInTimeZone } from "@/lib/ical/timezone";
-
-/** Look up the data we need to personalise an assignment notification. */
-async function fetchAssignmentNotificationContext(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
-  assignmentId: string,
-) {
-  const { data } = await supabase
-    .from("assignments")
-    .select(
-      "id, owner_id, property_id, due_at, checkout_at, properties:property_id ( name )",
-    )
-    .eq("id", assignmentId)
-    .maybeSingle();
-  return data as
-    | {
-        id: string;
-        owner_id: string;
-        property_id: string;
-        due_at: string;
-        checkout_at: string | null;
-        properties: { name: string } | null;
-      }
-    | null;
-}
-
-function formatAnchorDate(iso: string): string {
-  return formatInTimeZone(iso, {
-    month: "short",
-    day: "numeric",
-  });
-}
 
 const quickAssignSchema = z.object({
   assignmentId: z.string().uuid(),
@@ -53,7 +21,7 @@ export async function quickAssignAction(
   _prev: QuickAssignState,
   formData: FormData,
 ): Promise<QuickAssignState> {
-  await requireRole(["owner", "admin", "supervisor"]);
+  await requireRole(["owner", "admin"]);
 
   const parsed = quickAssignSchema.safeParse({
     assignmentId: formData.get("assignmentId"),
@@ -64,37 +32,10 @@ export async function quickAssignAction(
     return { status: "error", message: "Invalid input." };
   }
 
-  const supabase = await createServerSupabaseClient();
-  const { error } = await supabase
-    .from("assignments")
-    .update({
-      cleaner_id: parsed.data.cleanerId,
-      status: "assigned",
-      ack_status: "pending",
-    })
-    .eq("id", parsed.data.assignmentId)
-    .eq("status", "unassigned"); // only allow assigning unassigned jobs
-
-  if (error) {
-    return { status: "error", message: error.message };
-  }
-
-  // Notify the cleaner. sendNotification inserts a notifications row AND
-  // attempts a web-push delivery; failures are tolerated so the assign
-  // operation itself never regresses because of delivery trouble.
-  const ctx = await fetchAssignmentNotificationContext(supabase, parsed.data.assignmentId);
-  if (ctx) {
-    const anchor = ctx.checkout_at ?? ctx.due_at;
-    await sendNotification({
-      ownerId: ctx.owner_id,
-      recipientId: parsed.data.cleanerId,
-      assignmentId: ctx.id,
-      type: "new_assignment",
-      title: `New job: ${ctx.properties?.name ?? "Cleaning"}`,
-      body: `${formatAnchorDate(anchor)} — tap to review and accept.`,
-      url: `/jobs/${ctx.id}`,
-    }).catch(() => undefined);
-  }
+  const { bulkAssignCleanerAction } = await import("@/app/(admin)/dashboard/assignments/actions");
+  const result = await bulkAssignCleanerAction([parsed.data.assignmentId], parsed.data.cleanerId,
+    formData.get("assignmentMode") === "direct" ? "direct" : "request");
+  if (result.error || !result.assigned) return { status: "error", message: result.error ?? "Cleaning is no longer unassigned. Refresh and review it." };
 
   revalidatePath("/dashboard/schedule");
   revalidatePath("/dashboard");
@@ -152,7 +93,7 @@ export async function rescheduleAssignmentAction(
   _prev: RescheduleState,
   formData: FormData,
 ): Promise<RescheduleState> {
-  await requireRole(["owner", "admin", "supervisor"]);
+  const actor = await requireRole(["owner", "admin"]);
 
   const parsed = rescheduleSchema.safeParse({
     assignmentId: formData.get("assignmentId"),
@@ -172,113 +113,19 @@ export async function rescheduleAssignmentAction(
 
   const data = parsed.data;
   const supabase = await createServerSupabaseClient();
+  const {data:before} = await supabase.from("assignments").select("cleaner_id").eq("id",data.assignmentId).eq("owner_id",actor.owner_id).maybeSingle();
+  const { error } = await supabase.rpc("owner_manage_cleaning", {
+    target_id: data.assignmentId,
+    operation: "edit",
+    assignment_patch: { due_at: data.dueAt, checkout_at: data.checkoutAt, cleaner_id: data.cleanerId,
+      priority: data.priority, expected_duration_min: data.expectedDurationMin,
+      fixed_payout_amount: data.fixedPayoutAmount, original_fixed_payout_amount: formData.get("originalPayoutAmount"), access_code: data.accessCode },
+  });
+  if (error) return { status: "error", message: error.message };
 
-  // If the cleaner is being changed (including set/unset), update status accordingly:
-  // - cleaner removed → unassigned
-  // - cleaner added to previously unassigned → assigned (ack pending)
-  // - otherwise keep existing status
-  const { data: current, error: fetchError } = await supabase
-    .from("assignments")
-    .select("cleaner_id, status")
-    .eq("id", data.assignmentId)
-    .maybeSingle();
-
-  if (fetchError || !current) {
-    return { status: "error", message: fetchError?.message ?? "Assignment not found." };
-  }
-
-  // Conflict guard: once the cleaner has started, timing/cleaner are locked.
-  // Admin can still bump priority/duration/payout on an in-progress job.
-  const editable = ["unassigned", "assigned", "confirmed", "needs_reclean"];
-  if (!editable.includes(current.status)) {
-    return {
-      status: "error",
-      message:
-        current.status === "in_progress"
-          ? "Job is in progress. Cancel and recreate instead of rescheduling."
-          : `Cannot edit an assignment in '${current.status.replace(/_/g, " ")}' state.`,
-    };
-  }
-
-  const patch: Record<string, unknown> = {
-    due_at: data.dueAt,
-    checkout_at: data.checkoutAt,
-    cleaner_id: data.cleanerId,
-    priority: data.priority,
-    expected_duration_min: data.expectedDurationMin,
-    fixed_payout_amount: data.fixedPayoutAmount,
-    access_code: data.accessCode,
-  };
-
-  const cleanerChanged =
-    data.cleanerId !== current.cleaner_id && data.cleanerId !== null;
-
-  if (data.cleanerId === null && current.cleaner_id !== null) {
-    patch.status = "unassigned";
-    patch.ack_status = "pending";
-  } else if (
-    cleanerChanged &&
-    (current.status === "unassigned" || current.cleaner_id === null)
-  ) {
-    patch.status = "assigned";
-    patch.ack_status = "pending";
-  }
-
-  const { error } = await supabase
-    .from("assignments")
-    .update(patch)
-    .eq("id", data.assignmentId);
-
-  if (error) {
-    return { status: "error", message: error.message };
-  }
-
-  // Notify the newly-assigned cleaner when the cleaner changes.
-  // Also notify the PREVIOUS cleaner when they're being swapped out or
-  // unassigned — they were expecting this job and need to know it's gone.
-  if (cleanerChanged && data.cleanerId) {
-    const ctx = await fetchAssignmentNotificationContext(supabase, data.assignmentId);
-    if (ctx) {
-      const anchor = ctx.checkout_at ?? ctx.due_at;
-      await sendNotification({
-        ownerId: ctx.owner_id,
-        recipientId: data.cleanerId,
-        assignmentId: ctx.id,
-        type: "new_assignment",
-        title: `New job: ${ctx.properties?.name ?? "Cleaning"}`,
-        body: `${formatAnchorDate(anchor)} — tap to review and accept.`,
-        url: `/jobs/${ctx.id}`,
-      }).catch(() => undefined);
-
-      if (current.cleaner_id && current.cleaner_id !== data.cleanerId) {
-        await sendNotification({
-          ownerId: ctx.owner_id,
-          recipientId: current.cleaner_id,
-          assignmentId: ctx.id,
-          type: "new_assignment",
-          title: `Job reassigned`,
-          body: `${ctx.properties?.name ?? "Cleaning"} on ${formatAnchorDate(anchor)} is no longer on your schedule.`,
-          url: `/jobs`,
-        }).catch(() => undefined);
-      }
-    }
-  } else if (data.cleanerId === null && current.cleaner_id !== null) {
-    // Cleaner was removed entirely (back to unassigned).
-    const ctx = await fetchAssignmentNotificationContext(supabase, data.assignmentId);
-    if (ctx) {
-      const anchor = ctx.checkout_at ?? ctx.due_at;
-      await sendNotification({
-        ownerId: ctx.owner_id,
-        recipientId: current.cleaner_id,
-        assignmentId: ctx.id,
-        type: "new_assignment",
-        title: `Job unassigned`,
-        body: `${ctx.properties?.name ?? "Cleaning"} on ${formatAnchorDate(anchor)} was removed from your schedule.`,
-        url: `/jobs`,
-      }).catch(() => undefined);
-    }
-  }
-
+  if (data.cleanerId) await sendAssignmentBatchNotification(actor.owner_id,data.cleanerId,[data.assignmentId]).catch(error=>console.error("[job-notification]",error));
+  if (before?.cleaner_id && before.cleaner_id !== data.cleanerId) await sendAssignmentBatchNotification(actor.owner_id,before.cleaner_id,[data.assignmentId],"removed").catch(error=>console.error("[job-notification]",error));
+  revalidatePath("/jobs", "layout");
   revalidatePath("/dashboard/schedule");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/assignments");
@@ -505,4 +352,22 @@ export async function unassignCleanerAction(
   revalidatePath("/jobs");
   revalidatePath("/jobs/schedule");
   return { status: "success", message: "Cleaner unassigned." };
+}
+
+export async function manageCleaningAction(_prev: RescheduleState, formData: FormData): Promise<RescheduleState> {
+  const actor = await requireRole(["owner", "admin"]);
+  const parsed = z.object({ id: z.string().uuid(), operation: z.enum(["request", "direct", "complete"]), cleaner: z.string().uuid("Choose a cleaner.") }).safeParse({
+    id: formData.get("assignmentId"), operation: formData.get("operation"), cleaner: formData.get("cleanerId"),
+  });
+  if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Invalid input." };
+  const supabase = await createServerSupabaseClient();
+  const {data:before} = await supabase.from("assignments").select("cleaner_id").eq("id",parsed.data.id).eq("owner_id",actor.owner_id).maybeSingle();
+  const { error } = await supabase.rpc("owner_manage_cleaning", { target_id: parsed.data.id, operation: parsed.data.operation,
+    target_cleaner: parsed.data.cleaner, audit_reason: String(formData.get("reason") ?? ""), confirmed: formData.get("confirmed") === "on" });
+  if (error) return { status: "error", message: error.message };
+  await sendAssignmentBatchNotification(actor.owner_id,parsed.data.cleaner,[parsed.data.id],parsed.data.operation).catch(error=>console.error("[job-notification]",error));
+  if(before?.cleaner_id && before.cleaner_id !== parsed.data.cleaner) await sendAssignmentBatchNotification(actor.owner_id,before.cleaner_id,[parsed.data.id],"removed").catch(error=>console.error("[job-notification]",error));
+  revalidatePath("/jobs", "layout");
+  for (const path of ["/dashboard", "/dashboard/assignments", "/dashboard/schedule", "/dashboard/payouts", "/jobs", "/jobs/inbox", "/jobs/schedule"]) revalidatePath(path);
+  return { status: "success", message: parsed.data.operation === "complete" ? "Cleaning completed and approved." : parsed.data.operation === "direct" ? "Cleaning confirmed. No acceptance needed." : "Cleaning requested. Cleaner can accept or decline." };
 }

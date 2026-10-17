@@ -143,16 +143,17 @@ export async function findSLABreaches(): Promise<AtRiskAssignment[]> {
 }
 
 /** Individual inbox offers, one push alert for the batch. Only newly assigned IDs. */
-export async function sendAssignmentBatchNotification(ownerId: string, cleanerId: string, ids: string[]) {
+export async function sendAssignmentBatchNotification(ownerId: string, cleanerId: string, ids: string[], mode: "request" | "direct" | "complete" | "removed" = "request") {
   const supabase = createServiceSupabaseClient();
   const { data, error } = await supabase.from("notifications").select("id")
-    .eq("owner_id", ownerId).eq("recipient_id", cleanerId).eq("notification_type", "new_assignment")
+    .eq("owner_id", ownerId).eq("recipient_id", cleanerId).eq("notification_type", mode === "removed" ? "assignment_removed" : mode === "complete" ? "owner_completed" : "new_assignment")
     .eq("status", "pending").in("assignment_id", ids);
   if (error) { console.error("[batch-notification]", error); return; }
+  if (!data?.length) return;
   const results = await sendPushToUser(cleanerId, {
-    title: ids.length === 1 ? "New cleaning assignment" : `${ids.length} new cleaning assignments`,
-    body: "Open your inbox to review each cleaning and accept or decline.",
-    url: "/jobs/inbox", tag: `assignment-batch-${ids[0]}`,
+    title: mode === "removed" ? "Cleaning removed from your schedule" : mode === "complete" ? "Cleaning marked completed" : ids.length === 1 ? "New cleaning assignment" : `${ids.length} new cleaning assignments`,
+    body: mode === "removed" ? "Your host updated this cleaning. It is no longer assigned to you." : mode === "complete" ? "Your host recorded this cleaning as completed and approved. Open the job to review your pay." : mode === "direct" ? "Your host confirmed these cleanings with you. Open your schedule for the details." : "Open your inbox to review each cleaning and accept or decline.",
+    url: mode === "removed" ? "/jobs/inbox" : mode === "complete" ? `/jobs/${ids[0]}` : mode === "direct" ? "/jobs/schedule" : "/jobs/inbox", tag: `assignment-batch-${ids[0]}`,
   });
   const sent = results.some((result) => result.success);
   const failure = results.find((result) => !result.success);

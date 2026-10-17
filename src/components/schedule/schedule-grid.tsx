@@ -304,6 +304,7 @@ function AssignmentDetailPanel({
                   ))}
                 </select>
               </div>
+              <label className="text-xs font-medium">Assignment type<select name="assignmentMode" className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"><option value="request">Request · cleaner accepts or declines</option><option value="direct">Direct assign · no acceptance needed</option></select></label>
               {state.status === "error" && (
                 <p className="flex items-center gap-1.5 text-xs text-destructive">
                   <AlertCircle className="h-3.5 w-3.5" />

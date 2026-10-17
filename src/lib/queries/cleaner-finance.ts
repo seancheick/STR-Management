@@ -16,7 +16,7 @@ const loadFinance = cache(async () => {
   const jobs: AssignmentListRecord[] = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from("payout_entries")
-      .select("*, properties:property_id(name,timezone),assignments(due_at,assignment_type,expected_duration_min,paid_at),payout_batches:batch_id(status,paid_at)")
+      .select("*, properties:property_id(name,timezone),assignments(due_at,assignment_type,expected_duration_min,paid_at,assignment_extras(id,assignment_id,description,amount,kind,created_at)),payout_batches:batch_id(status,paid_at)")
       .eq("owner_id", ownerId).eq("status", "included").order("id").range(offset, offset + 999);
     if (error) throw new Error(error.message);
     entries.push(...((data ?? []) as unknown as Entry[]));
@@ -24,7 +24,7 @@ const loadFinance = cache(async () => {
   }
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from("assignments")
-      .select("*,properties:property_id(name,address_line_1,city,timezone),listing_properties:assignments_listing_property_fk(name,address_line_1,city,timezone),cleaners:cleaner_id(full_name)")
+      .select("*,properties:property_id(name,address_line_1,city,timezone),listing_properties:assignments_listing_property_fk(name,address_line_1,city,timezone),cleaners:cleaner_id(full_name),assignment_extras(id,assignment_id,description,amount,kind,created_at)")
       .eq("owner_id", ownerId).in("status", ["approved", "completed_pending_review"]).order("id").range(offset, offset + 999);
     if (error) throw new Error(error.message);
     jobs.push(...((data ?? []) as unknown as AssignmentListRecord[]).map(withListingConfiguration));

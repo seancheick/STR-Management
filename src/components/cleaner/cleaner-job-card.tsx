@@ -1,6 +1,7 @@
+import { JobPayBreakdown } from "@/components/shared/job-pay-breakdown";
 import type { Route } from "next";
 import Link from "next/link";
-import { DollarSign, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 
 import { CleaningTiming } from "@/components/shared/cleaning-timing";
 import { getCleaningTiming } from "@/lib/services/cleaning-timing";
@@ -79,11 +80,8 @@ export function CleanerJobCard({
 
   if (compact)
     return (
-      <Link
-        href={`/jobs/${assignment.id}` as Route}
-        className="flex min-h-16 items-center justify-between gap-3 border-b border-border py-3 last:border-b-0"
-      >
-        <div className="min-w-0">
+      <article className="border-b border-border py-3 last:border-b-0">
+        <Link href={`/jobs/${assignment.id}` as Route} className="block min-h-16 min-w-0">
           <p className="text-sm font-semibold">
             {assignment.properties?.name ?? "Property"}
           </p>
@@ -95,16 +93,11 @@ export function CleanerJobCard({
                 assignment.status.replace(/_/g, " "))}{" "}
             · View details
           </p>
-        </div>
+        </Link>
         {showPayout && assignment.fixed_payout_amount !== null && (
-          <span className="shrink-0 text-sm font-semibold tabular-nums">
-            {Number(assignment.fixed_payout_amount).toLocaleString("en-US", {
-              style: "currency",
-              currency: "USD",
-            })}
-          </span>
+          <JobPayBreakdown total={assignment.fixed_payout_amount} extras={assignment.assignment_extras} />
         )}
-      </Link>
+      </article>
     );
 
   return (
@@ -137,15 +130,7 @@ export function CleanerJobCard({
             <p className="mt-2 text-xs text-muted-foreground">{formatDateTime(assignment.checkout_at ?? assignment.due_at, timeZone)}</p>
           </div>
           {showPayout && assignment.fixed_payout_amount !== null && (
-            <div className="flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2">
-              <DollarSign
-                className="h-4 w-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <span className="text-sm font-medium">
-                ${Number(assignment.fixed_payout_amount).toFixed(2)}
-              </span>
-            </div>
+            <JobPayBreakdown total={assignment.fixed_payout_amount} extras={assignment.assignment_extras} className="rounded-xl bg-muted/60 px-3 py-2" />
           )}
         </div>
 

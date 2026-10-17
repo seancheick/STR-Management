@@ -1,3 +1,5 @@
+import { JobPayBreakdown } from "@/components/shared/job-pay-breakdown";
+import type { AssignmentExtraRecord } from "@/lib/queries/assignments";
 import Link from "next/link";
 import { CleanerLedger } from "@/components/cleaner/cleaner-ledger";
 import { getCleanerFinancialSummary } from "@/lib/queries/cleaner-finance";
@@ -54,15 +56,17 @@ function PayRow({
   date,
   amount,
   status,
+  extras,
 }: {
   name: string;
   date: string;
   amount: number;
   status: PayStatus;
+  extras?: AssignmentExtraRecord[];
 }) {
   const { label, icon: Icon, tone } = PAY_STATUS[status];
   return (
-    <li className="flex items-center justify-between gap-3 px-4 py-3.5">
+    <li className="space-y-2 px-4 py-3.5">
       <div className="flex min-w-0 items-center gap-3">
         <span
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tone}`}
@@ -79,9 +83,7 @@ function PayRow({
           </p>
         </div>
       </div>
-      <span className="shrink-0 text-base font-semibold tabular-nums">
-        {money(amount)}
-      </span>
+      <JobPayBreakdown total={amount} extras={extras} />
     </li>
   );
 }
@@ -104,6 +106,7 @@ export default async function CleanerPayPage() {
       dueAt: entry.assignments?.due_at ?? null,
       timeZone: entry.properties?.timezone,
       amount: Number(entry.amount),
+      extras: entry.assignments?.assignment_extras,
       status: (entry.paid_at ? "paid" : "report") as PayStatus,
     })),
     ...jobsOutsideReports
@@ -114,6 +117,7 @@ export default async function CleanerPayPage() {
         dueAt: a.due_at,
         timeZone: a.properties?.timezone,
         amount: Number(a.fixed_payout_amount ?? 0),
+        extras: a.assignment_extras,
         status: "paid" as PayStatus,
       })),
   ].sort((a, b) => (b.dueAt ?? "").localeCompare(a.dueAt ?? ""));
@@ -232,6 +236,7 @@ export default async function CleanerPayPage() {
                     name={a.properties?.name ?? "Property"}
                     date={shortDate(a.due_at, a.properties?.timezone)}
                     amount={Number(a.fixed_payout_amount ?? 0)}
+                    extras={a.assignment_extras}
                     status="awaiting"
                   />
                 ))}
@@ -267,6 +272,7 @@ export default async function CleanerPayPage() {
                     name={row.name}
                     date={shortDate(row.dueAt, row.timeZone)}
                     amount={row.amount}
+                    extras={row.extras}
                     status={row.status}
                   />
                 ))}

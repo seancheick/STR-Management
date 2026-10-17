@@ -1,5 +1,6 @@
 "use client";
 
+import { CleaningWorkflowForm } from "./cleaning-workflow-form";
 import { AlertCircle, Clock, Loader2, Trash2 } from "lucide-react";
 import { useActionState, useEffect, useState } from "react";
 
@@ -124,11 +125,13 @@ export function AssignmentEditForm({
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>
             This job is <strong className="font-semibold capitalize">{assignment.status.replace(/_/g, " ")}</strong>.
-            Cancel and recreate if timing needs to change.
+            Timing edits are locked while this job is in this state.
           </span>
         </div>
       )}
 
+      <CleaningWorkflowForm key={assignment.id} assignment={assignment} cleaners={cleaners} onSaved={onSaved} />
+      <details className="rounded-xl border border-border p-3"><summary className="min-h-11 cursor-pointer content-center text-sm font-medium">Edit timing and job details</summary>
       <form
         action={(fd) => {
           const raw: Record<string, string> = {};
@@ -150,12 +153,13 @@ export function AssignmentEditForm({
         className="flex flex-col gap-3"
       >
         <input type="hidden" name="assignmentId" value={assignment.id} />
+        <input type="hidden" name="originalPayoutAmount" value={assignment.fixed_payout_amount ?? ""} />
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Guest checkout</span>
             <input
-              className="h-10 rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-60"
+              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-60"
               defaultValue={kept("checkoutAt", toDatetimeLocal(assignment.checkout_at))}
               disabled={isLocked}
               name="checkoutAt"
@@ -165,7 +169,7 @@ export function AssignmentEditForm({
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Next check-in</span>
             <input
-              className="h-10 rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-60"
+              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-60"
               defaultValue={kept("dueAt", toDatetimeLocal(assignment.due_at))}
               disabled={isLocked}
               name="dueAt"
@@ -179,28 +183,13 @@ export function AssignmentEditForm({
           — the standard Airbnb/VRBO times your feed uses. Override if your listing is different.
         </p>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Cleaner</span>
-          <select
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-60"
-            defaultValue={kept("cleanerId", assignment.cleaner_id ?? "")}
-            disabled={isLocked}
-            name="cleanerId"
-          >
-            <option value="">Unassigned</option>
-            {cleaners.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.full_name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <input type="hidden" name="cleanerId" value={assignment.cleaner_id ?? ""} />
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid gap-3 sm:grid-cols-3">
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Priority</span>
             <select
-              className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
+              className="min-h-11 rounded-xl border border-input bg-background px-2 text-sm"
               defaultValue={kept("priority", assignment.priority)}
               disabled={isLocked}
               name="priority"
@@ -213,7 +202,7 @@ export function AssignmentEditForm({
           <label className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Duration (min)</span>
             <input
-              className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm"
               defaultValue={kept("expectedDurationMin", assignment.expected_duration_min ?? "")}
               disabled={isLocked}
               min="15"
@@ -223,9 +212,9 @@ export function AssignmentEditForm({
             />
           </label>
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Payout ($)</span>
+            <span className="text-xs font-medium text-muted-foreground">Total pay ($)</span>
             <input
-              className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+              className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm"
               defaultValue={kept(
                 "fixedPayoutAmount",
                 assignment.fixed_payout_amount !== null
@@ -246,7 +235,7 @@ export function AssignmentEditForm({
             Door / gate code <span className="opacity-60">(visible to cleaner only)</span>
           </span>
           <input
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm font-mono"
+            className="min-h-11 rounded-xl border border-input bg-background px-3 text-sm font-mono"
             defaultValue={kept("accessCode", assignment.access_code ?? "")}
             disabled={isLocked}
             maxLength={64}
@@ -258,7 +247,7 @@ export function AssignmentEditForm({
 
         <div className="mt-1 flex items-center gap-2">
           <button
-            className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+            className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
             disabled={isPending || isLocked}
             type="submit"
           >
@@ -266,7 +255,7 @@ export function AssignmentEditForm({
             Save changes
           </button>
           <button
-            className="inline-flex h-9 items-center justify-center rounded-full border border-border/70 px-4 text-sm font-medium transition hover:bg-muted"
+            className="inline-flex min-h-11 items-center justify-center rounded-full border border-border/70 px-4 text-sm font-medium transition hover:bg-muted"
             onClick={onCancel}
             type="button"
           >
@@ -274,12 +263,14 @@ export function AssignmentEditForm({
           </button>
         </div>
       </form>
+      <p className="mt-3 text-xs text-muted-foreground">Total pay includes any itemized extras below.</p>
+      </details>
 
       {canDelete && (
         <div className="border-t border-border/60 pt-3">
           {!confirmDelete ? (
             <button
-              className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-full border border-red-200 text-sm font-medium text-red-700 transition hover:bg-red-50"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-red-200 text-sm font-medium text-red-700 transition hover:bg-red-50"
               onClick={() => setConfirmDelete(true)}
               type="button"
             >
@@ -292,6 +283,7 @@ export function AssignmentEditForm({
               className="flex flex-col gap-2 rounded-xl border border-red-200 bg-red-50/50 p-3"
             >
               <input type="hidden" name="assignmentId" value={assignment.id} />
+        <input type="hidden" name="originalPayoutAmount" value={assignment.fixed_payout_amount ?? ""} />
               <p className="text-xs text-red-800">
                 This removes the job from the schedule and the cleaner&apos;s app. Continue?
               </p>

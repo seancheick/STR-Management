@@ -1,4 +1,7 @@
 "use client";
+import { CleaningWorkflowForm } from "@/components/schedule/cleaning-workflow-form";
+import { JobPayBreakdown } from "@/components/shared/job-pay-breakdown";
+import { JobExtrasEditor } from "@/components/assignments/job-extras-editor";
 
 import {
   AlertTriangle,
@@ -215,17 +218,9 @@ export function AssignmentDrawer({ canManage, detail, onClose, onAssignClick }: 
               </div>
             )}
 
-            {/* Payout */}
-            {detail.fixedPayoutAmount != null && (
-              <div className="rounded-2xl border border-border/70 bg-background/60 px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
-                  Payout
-                </p>
-                <p className="mt-2 text-2xl font-semibold tabular-nums">
-                  ${detail.fixedPayoutAmount.toFixed(2)}
-                </p>
-              </div>
-            )}
+            {canManage && <CleaningWorkflowForm assignment={{id:detail.id,status:detail.status,priority:detail.priority,cleaner_id:detail.cleanerId,checkout_at:detail.checkoutAt,due_at:detail.dueAt,next_checkin_at:detail.nextCheckinAt,expected_duration_min:detail.expectedDurationMin,fixed_payout_amount:detail.fixedPayoutAmount}} cleaners={detail.availableCleaners} onSaved={onClose} />}
+            {canManage && <JobExtrasEditor key={detail.id} assignmentId={detail.id} />}
+            {!canManage && <JobPayBreakdown total={detail.fixedPayoutAmount} extras={detail.extras} />}
 
             {hasCleanerEvidence && (
               <div className="rounded-2xl border border-border/70 bg-background/60 px-4 py-4">

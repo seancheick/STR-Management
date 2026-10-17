@@ -8,7 +8,7 @@ import { listCleanerFinancialSummaries } from "@/lib/queries/cleaner-finance";
 
 import { DEFAULT_TIMEZONE, zonedTimeToUtc } from "@/lib/ical/timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { AssignmentListRecord } from "@/lib/queries/assignments";
+import type { AssignmentExtraRecord, AssignmentListRecord } from "@/lib/queries/assignments";
 
 export type PayoutBatchRecord = {
   id: string;
@@ -48,6 +48,7 @@ export type PayoutEntryRecord = {
     due_at: string;
     assignment_type: string;
     expected_duration_min: number | null;
+    assignment_extras?: AssignmentExtraRecord[];
     paid_at?: string | null;
   } | null;
 };
