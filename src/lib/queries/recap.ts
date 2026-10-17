@@ -1,4 +1,7 @@
 import "server-only";
+import {listCleanerFinancialSummaries} from "@/lib/queries/cleaner-finance";
+import {cashPaidInRange} from "@/lib/services/cleaning-spending";
+import {dateKeyInTimeZone} from "@/lib/ical/timezone";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -22,29 +25,20 @@ export async function getWeeklyRecap(): Promise<WeeklyRecap> {
   const now = new Date();
   const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const [approvedRes, recleanRes, allRes, paidRes, upcomingRes] =
+  const [approvedRes, recleanRes, finances, upcomingRes] =
     await Promise.all([
       supabase
         .from("assignments")
-        .select("id, due_at, approved_at", { count: "exact" })
-        .gte("approved_at", start.toISOString())
-        .lte("approved_at", now.toISOString())
+        .select("id, due_at, completed_at, ledger_entry_id", { count: "exact" })
+        .gte("due_at", start.toISOString())
+        .lte("due_at", now.toISOString())
         .eq("status", "approved"),
       supabase
         .from("assignments")
         .select("id", { count: "exact", head: true })
         .gte("updated_at", start.toISOString())
         .eq("status", "needs_reclean"),
-      supabase
-        .from("assignments")
-        .select("id", { count: "exact", head: true })
-        .gte("approved_at", start.toISOString())
-        .lte("approved_at", now.toISOString()),
-      supabase
-        .from("payout_entries")
-        .select("amount")
-        .gte("paid_at", start.toISOString())
-        .lte("paid_at", now.toISOString()),
+      listCleanerFinancialSummaries(),
       supabase
         .from("assignments")
         .select("id", { count: "exact", head: true })
@@ -52,24 +46,22 @@ export async function getWeeklyRecap(): Promise<WeeklyRecap> {
         .gte("due_at", now.toISOString()),
     ]);
 
-  const approved = (approvedRes.data as Array<{ due_at: string; approved_at: string }> | null) ?? [];
-  const onTime = approved.filter((a) => {
+  const approved = (approvedRes.data as Array<{ due_at: string; completed_at: string|null; ledger_entry_id:string|null }> | null) ?? [];
+  const timed=approved.filter(a=>!a.ledger_entry_id&&a.completed_at);
+  const onTime = timed.filter((a) => {
     const due = new Date(a.due_at).getTime();
-    const done = new Date(a.approved_at).getTime();
+    const done = new Date(a.completed_at!).getTime();
     return done <= due + 2 * 60 * 60 * 1000; // within 2h grace
   }).length;
 
-  const totalPaid = ((paidRes.data as Array<{ amount: number }> | null) ?? []).reduce(
-    (sum, r) => sum + Number(r.amount),
-    0,
-  );
+  const totalPaid=cashPaidInRange(finances,dateKeyInTimeZone(start),dateKeyInTimeZone(now));
 
   return {
     windowStart: start.toISOString(),
     windowEnd: now.toISOString(),
     completed: approved.length,
     reCleans: recleanRes.count ?? 0,
-    onTimeRate: approved.length > 0 ? onTime / approved.length : null,
+    onTimeRate: timed.length > 0 ? onTime / timed.length : null,
     totalPaid,
     upcomingUnassigned: upcomingRes.count ?? 0,
   };

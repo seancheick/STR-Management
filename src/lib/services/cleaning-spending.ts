@@ -54,3 +54,8 @@ export function spendingCsv(report: CleaningSpending) {
 export function spendingYear(value: string | undefined, today: string) {
   return value && /^\d{4}$/.test(value) && Number(value)>=2000 && Number(value)<=9999 ? Number(value) : Number(today.slice(0,4));
 }
+
+/** Cash basis for short dashboard windows, from the same canonical statements. */
+export function cashPaidInRange(summaries:SpendingInput[],start:string,end:string) {
+ return -summaries.reduce((sum,summary)=>sum+summary.statementEntries.filter(entry=>entry.kind==="payment"&&entry.entry_date>=start&&entry.entry_date<=end).reduce((subtotal,entry)=>subtotal+Math.round(Number(entry.amount)*100),0),0)/100;
+}

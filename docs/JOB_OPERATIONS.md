@@ -86,3 +86,6 @@ month/YTD and current all-year remaining balances; the spending report adds year
 selection, monthly and payee totals, and CSV. Older annual payment exports now
 use the same statement and include account payments without counting job/report
 proof twice.
+The weekly dashboard cash figure uses the same statement/payment-date calculation;
+import approval timestamps do not count old ledger jobs as this week's turnovers.
+Historical ledger rows without actual completion timing are excluded from on-time rates.
