@@ -1,4 +1,5 @@
 "use server";
+import {cleanupNewAuthUser} from "@/lib/services/auth-cleanup";
 
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
@@ -99,7 +100,7 @@ export async function signUpAsHostAction(
       .eq("id", userId);
 
     if (ensureError) {
-      await service.auth.admin.deleteUser(userId).catch(() => undefined);
+      await cleanupNewAuthUser(service,userId,userId);
       return { status: "error", values, message: ensureError.message };
     }
 

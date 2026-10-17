@@ -147,7 +147,7 @@ export async function getHealthReport(): Promise<HealthReport> {
       .lt("due_at", h24),
     supabase.from("properties").select("id", { count: "exact", head: true }),
     supabase
-      .from("users")
+      .from("cleaners")
       .select("id", { count: "exact", head: true })
       .eq("role", "cleaner")
       .eq("active", true),

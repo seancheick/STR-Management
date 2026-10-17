@@ -7,8 +7,8 @@ import { refreshJobViewsAction } from "@/app/actions/refresh-job-views";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 /** Database events invalidate server views; no second client-side job store. */
-export function LiveJobUpdates({ ownerId, userId, cleaner = false }: {
-  ownerId: string; userId: string; cleaner?: boolean;
+export function LiveJobUpdates({ ownerId, userId, cleanerId = userId, cleaner = false }: {
+  ownerId: string; userId: string; cleanerId?:string; cleaner?: boolean;
 }) {
   const router = useRouter();
   const routerRef = useRef(router);
@@ -33,14 +33,14 @@ export function LiveJobUpdates({ ownerId, userId, cleaner = false }: {
     const channel = supabase.channel(`jobs:${userId}`)
       .on("postgres_changes", {
         event: "*", schema: "public", table: "assignments",
-        filter: cleaner ? `cleaner_id=eq.${userId}` : `owner_id=eq.${ownerId}`,
+        filter: cleaner ? `cleaner_id=eq.${cleanerId}` : `owner_id=eq.${ownerId}`,
       }, refresh)
       .on("postgres_changes", {
         event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}`,
       }, refresh)
       .on("postgres_changes", {
         event: "*", schema: "public", table: "cleaner_payments",
-        filter: cleaner ? `cleaner_id=eq.${userId}` : `owner_id=eq.${ownerId}`,
+        filter: cleaner ? `cleaner_id=eq.${cleanerId}` : `owner_id=eq.${ownerId}`,
       }, refresh);
     // Browser cookie sessions must be loaded before Realtime joins. Otherwise
     // the channel can report SUBSCRIBED as anon and silently receive no rows.
@@ -70,6 +70,6 @@ export function LiveJobUpdates({ ownerId, userId, cleaner = false }: {
       document.removeEventListener("visibilitychange", refresh);
       void supabase.removeChannel(channel);
     };
-  }, [ownerId, userId, cleaner]);
+  }, [ownerId, userId, cleanerId, cleaner]);
   return null;
 }

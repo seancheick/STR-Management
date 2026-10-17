@@ -1,3 +1,5 @@
+import { getCleaningSpending } from "@/lib/queries/cleaning-spending";
+import { CleaningSpendingCard } from "@/components/dashboard/cleaning-spending-card";
 import { calendarTimelineDays, calendarWindowContains } from "@/lib/services/calendar-display";
 import type { Route } from "next";
 import {
@@ -95,9 +97,10 @@ export default async function DashboardPage() {
 
   const weekAssignments = weekSchedule.assignments;
 
-  const [recap, pendingPayout] = await Promise.all([
+  const [recap, pendingPayout, spending] = await Promise.all([
     getWeeklyRecap(),
     getPendingPayoutTotal(),
+    canManage ? getCleaningSpending() : Promise.resolve(null),
   ]);
 
   const firstName = profile.full_name.split(" ")[0];
@@ -373,6 +376,8 @@ export default async function DashboardPage() {
                 </Link>
               )}
             </div>
+
+            {spending && <CleaningSpendingCard report={spending} />}
 
             {/* Today's jobs — interactive, drawer on click */}
             <section aria-label="Today's jobs">

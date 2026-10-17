@@ -30,7 +30,7 @@ export default async function AnnualPayoutExportPage({ params }: Props) {
 
   const supabase = await createServerSupabaseClient();
   const { data: cleaner } = await supabase
-    .from("users")
+    .from("cleaners")
     .select("id, full_name, email, phone, is_1099_contractor")
     .eq("id", cleanerId)
     .maybeSingle();

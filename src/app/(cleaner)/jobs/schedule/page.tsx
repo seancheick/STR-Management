@@ -19,7 +19,7 @@ function formatGroupDate(dateKey: string) {
 
 export default async function CleanerSchedulePage() {
   const profile = await requireRole(["cleaner", "owner", "admin", "supervisor"]);
-  const assignments = await listCleanerPortalAssignments(profile.id);
+  const assignments = await listCleanerPortalAssignments(profile.cleanerId??profile.id);
   const buckets = getCleanerAssignmentBuckets(assignments);
   const groups = groupCleanerAssignmentsByDate([...buckets.active, ...buckets.schedule]);
 

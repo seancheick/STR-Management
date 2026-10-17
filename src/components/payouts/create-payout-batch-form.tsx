@@ -1,4 +1,5 @@
 "use client";
+import {cleanerChoiceLabel} from "@/lib/services/cleaner-access";
 
 import { useActionState, useMemo, useRef, useState } from "react";
 
@@ -127,7 +128,7 @@ export function CreatePayoutBatchForm({ cleaners }: Props) {
           <option value="">All cleaners</option>
           {cleaners.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.full_name}
+              {cleanerChoiceLabel(c)}
             </option>
           ))}
         </select>

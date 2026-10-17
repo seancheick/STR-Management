@@ -1,5 +1,6 @@
 "use server";
 
+import {cleanupNewAuthUser} from "@/lib/services/auth-cleanup";
 import { revalidatePath } from "next/cache";
 
 import { requireRole } from "@/lib/auth/session";
@@ -31,6 +32,12 @@ export async function inviteTeamMemberAction(
   if (!fullName) return { error: "Full name is required." };
   if (!VALID_ROLES.includes(role as TeamRole)) return { error: "Invalid role." };
 
+  const contractorId=String(formData.get("contractorId")??"");
+  const client=await createServerSupabaseClient();
+  if(contractorId) {
+    const {data:person}=await client.from("cleaners").select("id,user_id,active").eq("id",contractorId).eq("owner_id",tenantId).eq("role","cleaner").maybeSingle();
+    if(!person||person.user_id||!person.active||role!=="cleaner")return {error:"Choose an active contractor without app access."};
+  }
   const service = createServiceSupabaseClient();
 
   // Invite via Supabase Auth — sends magic link email. Role and tenant are
@@ -62,11 +69,17 @@ export async function inviteTeamMemberAction(
       // Roll back the auth invite so the user isn't stranded with a working
       // login that has no tenant binding. Swallow the cleanup error — surfacing
       // the original upsert error is more useful to the caller.
-      await service.auth.admin.deleteUser(data.user.id).catch(() => undefined);
+      await cleanupNewAuthUser(service,data.user.id,tenantId);
       return { error: upsertError.message };
     }
   }
 
+  if(contractorId && data.user) {
+    const {error}=await client.rpc("link_contractor_access",{target_id:contractorId,target_user:data.user.id});
+    if(error){await cleanupNewAuthUser(service,data.user.id,tenantId);return {error:error.message};}
+  }
+  revalidatePath("/dashboard","layout");
+  revalidatePath("/jobs","layout");
   revalidatePath("/dashboard/team");
   return { error: null };
 }
@@ -79,11 +92,10 @@ export async function toggleMemberActiveAction(
   await requireRole(["owner", "admin"]);
   const supabase = await createServerSupabaseClient();
 
-  const { error } = await supabase
-    .from("users")
-    .update({ active })
-    .eq("id", memberId);
+  const {error}=await supabase.rpc("manage_cleaner_state",{target_id:memberId,new_active:active});
 
+  revalidatePath("/dashboard","layout");
+  revalidatePath("/jobs","layout");
   revalidatePath("/dashboard/team");
   return { error: error?.message ?? null };
 }
@@ -95,10 +107,9 @@ export async function toggleContractorFlagAction(
 ): Promise<TeamActionResult> {
   await requireRole(["owner", "admin"]);
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase
-    .from("users")
-    .update({ is_1099_contractor: is1099 })
-    .eq("id", memberId);
+  const {error}=await supabase.rpc("manage_cleaner_state",{target_id:memberId,new_1099:is1099});
+  revalidatePath("/dashboard","layout");
+  revalidatePath("/jobs","layout");
   revalidatePath("/dashboard/team");
   return { error: error?.message ?? null };
 }
@@ -113,11 +124,19 @@ export async function updateMemberRoleAction(
   if (!VALID_ROLES.includes(role as TeamRole)) return { error: "Invalid role." };
 
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase
-    .from("users")
-    .update({ role })
-    .eq("id", memberId);
+  const {error}=await supabase.rpc("manage_cleaner_state",{target_id:memberId,new_role:role});
 
+  revalidatePath("/dashboard","layout");
+  revalidatePath("/jobs","layout");
   revalidatePath("/dashboard/team");
   return { error: error?.message ?? null };
+}
+
+export async function saveContractorAction(_prev:TeamActionResult,formData:FormData):Promise<TeamActionResult & {saved?:boolean}> {
+ await requireRole(["owner","admin"]);
+ const client=await createServerSupabaseClient();
+ const {error}=await client.rpc("save_contractor",{target_id:String(formData.get("id")),contractor_name:String(formData.get("name")??""),contractor_email:String(formData.get("email")??""),contractor_phone:String(formData.get("phone")??""),contractor_details:String(formData.get("details")??""),contractor_active:formData.get("active")!=="false"});
+ if(error)return {error:error.message};
+ revalidatePath("/dashboard","layout");
+ return {error:null,saved:true};
 }

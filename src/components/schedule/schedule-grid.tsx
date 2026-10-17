@@ -1,4 +1,5 @@
 "use client";
+import {cleanerChoiceLabel} from "@/lib/services/cleaner-access";
 
 import { calendarListingId } from "@/lib/services/calendar-display";
 
@@ -299,7 +300,7 @@ function AssignmentDetailPanel({
                   <option value="">Select a cleaner…</option>
                   {cleaners.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.full_name}
+                      {cleanerChoiceLabel(c)}
                     </option>
                   ))}
                 </select>

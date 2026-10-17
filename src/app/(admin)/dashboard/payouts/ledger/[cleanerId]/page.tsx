@@ -9,7 +9,7 @@ import {dateKeyInTimeZone} from "@/lib/ical/timezone";
 const money=(n:number)=>n.toLocaleString("en-US",{style:"currency",currency:"USD"});
 export default async function CleanerAccountPage({params}:{params:Promise<{cleanerId:string}>}) {
  const profile=await requireRole(["owner","admin","supervisor"]);const {cleanerId}=await params;
- const client=await createServerSupabaseClient();const {data:cleaner}=await client.from("users").select("full_name").eq("id",cleanerId).eq("owner_id",profile.owner_id).eq("role","cleaner").maybeSingle();
+ const client=await createServerSupabaseClient();const {data:cleaner}=await client.from("cleaners").select("full_name").eq("id",cleanerId).eq("owner_id",profile.owner_id).eq("role","cleaner").maybeSingle();
  if(!cleaner)notFound();
  const finance=await getCleanerFinancialSummary(cleanerId);const ledger=finance.ledger;
  const account=ledger?.account??{cleaner_id:cleanerId,owner_id:profile.owner_id,label:cleaner.full_name,reconciled_through:"1900-01-01",source_note:"Completed cleaning pay and recorded payments."};

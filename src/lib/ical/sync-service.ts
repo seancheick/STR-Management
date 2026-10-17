@@ -243,16 +243,24 @@ async function importCandidate(
     };
   }
 
+  let cleanerId=context.defaultCleanerId;
+  let noAccess=false;
+  if(cleanerId){
+    const {data:person,error:personError}=await supabase.from("cleaners").select("user_id").eq("id",cleanerId).eq("owner_id",input.ownerId).eq("role","cleaner").eq("active",true).maybeSingle();
+    if(personError)throw new Error(personError.message);
+    if(!person)cleanerId=null;else noAccess=person.user_id===null;
+  }
   // Insert regardless of conflict (conflict is surfaced as a warning, not a blocker)
   const { error } = await supabase.from("assignments").insert({
     owner_id: input.ownerId,
     property_id: input.propertyId,
     listing_property_id: context.listingPropertyId,
-    cleaner_id: context.defaultCleanerId,
+    cleaner_id: cleanerId,
     assignment_type: "cleaning",
     fixed_payout_amount: context.fixedPayoutAmount,
-    status: context.defaultCleanerId ? "assigned" : "unassigned",
-    ack_status: "pending",
+    status: cleanerId ? noAccess?"confirmed":"assigned" : "unassigned",
+    ack_status: noAccess?"accepted":"pending",
+    accepted_at:noAccess?new Date().toISOString():null,
     priority: "normal",
     checkout_at: candidate.checkoutAt,
     due_at: candidate.dueAt,

@@ -24,8 +24,19 @@ type SendNotificationInput = {
   url?: string;
 };
 
+async function notificationUserId(recipientId:string,ownerId:string|null):Promise<string|null> {
+ const client=createServiceSupabaseClient();
+ const {data:payee,error}=await client.from("cleaners").select("user_id,active,owner_id").eq("id",recipientId).maybeSingle();
+ if(error){console.error("[notification-recipient]",error);return null;}
+ if(payee)return payee.active&&(!ownerId||payee.owner_id===ownerId)?payee.user_id:null;
+ const {data:user}=await client.from("users").select("id,active,owner_id").eq("id",recipientId).maybeSingle();
+ return user?.active&&(!ownerId||user.owner_id===ownerId)?user.id:null;
+}
+
 export async function sendNotification(input: SendNotificationInput): Promise<void> {
   const supabase = createServiceSupabaseClient();
+  const recipient=await notificationUserId(input.recipientId,input.ownerId);
+  if(!recipient)return;
 
   // Insert notification record and capture its id so the status update
   // later targets THIS exact row. The previous "match by recipient + type +
@@ -35,7 +46,7 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
     .from("notifications")
     .insert({
       owner_id: input.ownerId,
-      recipient_id: input.recipientId,
+      recipient_id: recipient,
       assignment_id: input.assignmentId,
       channel: "push",
       status: "pending",
@@ -54,7 +65,7 @@ export async function sendNotification(input: SendNotificationInput): Promise<vo
   }
 
   // Attempt push delivery
-  const results = await sendPushToUser(input.recipientId, {
+  const results = await sendPushToUser(recipient, {
     title: input.title,
     body: input.body,
     url: input.url,
@@ -145,12 +156,14 @@ export async function findSLABreaches(): Promise<AtRiskAssignment[]> {
 /** Individual inbox offers, one push alert for the batch. Only newly assigned IDs. */
 export async function sendAssignmentBatchNotification(ownerId: string, cleanerId: string, ids: string[], mode: "request" | "direct" | "complete" | "removed" = "request") {
   const supabase = createServiceSupabaseClient();
+  const recipient=await notificationUserId(cleanerId,ownerId);
+  if(!recipient)return;
   const { data, error } = await supabase.from("notifications").select("id")
-    .eq("owner_id", ownerId).eq("recipient_id", cleanerId).eq("notification_type", mode === "removed" ? "assignment_removed" : mode === "complete" ? "owner_completed" : "new_assignment")
+    .eq("owner_id", ownerId).eq("recipient_id", recipient).eq("notification_type", mode === "removed" ? "assignment_removed" : mode === "complete" ? "owner_completed" : "new_assignment")
     .eq("status", "pending").in("assignment_id", ids);
   if (error) { console.error("[batch-notification]", error); return; }
   if (!data?.length) return;
-  const results = await sendPushToUser(cleanerId, {
+  const results = await sendPushToUser(recipient, {
     title: mode === "removed" ? "Cleaning removed from your schedule" : mode === "complete" ? "Cleaning marked completed" : ids.length === 1 ? "New cleaning assignment" : `${ids.length} new cleaning assignments`,
     body: mode === "removed" ? "Your host updated this cleaning. It is no longer assigned to you." : mode === "complete" ? "Your host recorded this cleaning as completed and approved. Open the job to review your pay." : mode === "direct" ? "Your host confirmed these cleanings with you. Open your schedule for the details." : "Open your inbox to review each cleaning and accept or decline.",
     url: mode === "removed" ? "/jobs/inbox" : mode === "complete" ? `/jobs/${ids[0]}` : mode === "direct" ? "/jobs/schedule" : "/jobs/inbox", tag: `assignment-batch-${ids[0]}`,

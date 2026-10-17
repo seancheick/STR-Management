@@ -1,5 +1,6 @@
 "use client";
 
+import {ContractorForm,InviteContractorForm} from "@/components/team/contractor-form";
 import { FileText } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -29,6 +30,7 @@ export function TeamMemberRow({ member }: Props) {
   // The workspace owner isn't an editable role; changing or deactivating
   // that row from here would lock the owner out.
   const isOwner = member.role === "owner";
+  const noAccess=member.user_id===null;
 
   function handleToggleActive() {
     if (member.active && !window.confirm(`Deactivate ${member.full_name}? They won't be able to sign in.`)) {
@@ -80,13 +82,13 @@ export function TeamMemberRow({ member }: Props) {
     >
       <div className="flex-1 space-y-0.5">
         <p className="font-medium">{member.full_name}</p>
-        <p className="text-sm text-muted-foreground">{member.email}</p>
+        {member.email&&<p className="text-sm text-muted-foreground">{member.email}</p>}
         {member.phone && (
           <p className="text-xs text-muted-foreground">{member.phone}</p>
         )}
       </div>
 
-      {isOwner ? (
+      {noAccess?<span className="text-xs text-muted-foreground">Contractor · no app access</span>:isOwner ? (
         <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary">
           Owner
         </span>
@@ -146,6 +148,7 @@ export function TeamMemberRow({ member }: Props) {
         {member.active ? "Deactivate" : "Reactivate"}
       </button>
       )}
+      {noAccess&&<div className="w-full space-y-3"><details><summary className="min-h-11 cursor-pointer content-center text-sm underline">Edit contractor details</summary><ContractorForm person={member}/></details>{member.active&&<details><summary className="min-h-11 cursor-pointer content-center text-sm underline">Invite to app</summary><InviteContractorForm person={member}/></details>}</div>}
     </div>
   );
 }

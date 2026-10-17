@@ -1,4 +1,5 @@
 "use client";
+import {cleanerChoiceLabel} from "@/lib/services/cleaner-access";
 
 import {assignmentStatusLabel} from "@/lib/domain/assignments";
 import {suggestCleaningOperation} from "@/lib/services/cleaning-workflow";
@@ -112,7 +113,10 @@ export function AssignmentsList({ assignments, cleaners, canManage, remainingAmo
       mixed: !allUnassigned && !allDeletable && !allCompletable && statuses.size > 0,
     };
   }, [checkedIds, assignments, openedAt]);
-  const operation=selection.allCompletable && (!selection.allUnassigned || bulkMode===null) ? "complete" : bulkMode==="complete" && !selection.allCompletable ? "request" : bulkMode??"request";
+  const requestedOperation=selection.allCompletable && (!selection.allUnassigned || bulkMode===null) ? "complete" : bulkMode==="complete" && !selection.allCompletable ? "request" : bulkMode??"request";
+
+  const noAppAccess=cleaners.find(c=>c.id===bulkCleaner)?.user_id===null;
+  const operation=noAppAccess&&requestedOperation==="request"?"direct":requestedOperation;
 
   function toggleChecked(id: string) {
     setCheckedIds((prev) => {
@@ -222,14 +226,14 @@ export function AssignmentsList({ assignments, cleaners, canManage, remainingAmo
                   <option value="">Choose cleaner…</option>
                   {cleaners.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.full_name}
+                      {cleanerChoiceLabel(c)}
                     </option>
                   ))}
                 </select>
                 <select aria-label="Action for selected cleanings" value={operation} onChange={e=>{setBulkMode(e.target.value);setCompletionConfirmed(false);}} className="min-h-11 rounded-xl border border-input bg-background px-3 text-xs" disabled={isPending||selection.count===0}>
                 {selection.count===0&&<option value="request">Choose jobs first</option>}
                 {selection.allCompletable&&<option value="complete">Record completed work</option>}
-                {selection.allUnassigned&&<><option value="request">Send request</option><option value="direct">Direct assign · not completed</option></>}
+                {selection.allUnassigned&&<><option disabled={noAppAccess} value="request">Send request</option><option value="direct">Direct assign · not completed</option></>}
                 </select>
                 {operation==="complete"&&<label className="flex max-w-xs items-start gap-2 text-xs"><input type="checkbox" checked={completionConfirmed} onChange={e=>setCompletionConfirmed(e.target.checked)} />I confirm all selected cleanings were completed and approve their pay.</label>}
                 <button

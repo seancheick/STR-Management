@@ -96,7 +96,7 @@ export default async function CleanerPayPage() {
     "admin",
     "supervisor",
   ]);
-  const financial = await getCleanerFinancialSummary(profile.id);
+  const financial = await getCleanerFinancialSummary(profile.cleanerId??profile.id);
   const { ledger, entries, jobsOutsideReports, summary } = financial;
   const totalDue = financial.balance;
   const awaiting = jobsOutsideReports.filter((a) => !a.paid_at);

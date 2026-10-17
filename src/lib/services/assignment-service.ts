@@ -47,6 +47,12 @@ export async function createAssignment(
   const templateId = input.primaryChecklistTemplateId ?? listing.primary_checklist_template_id;
 
   const hasClean = input.cleanerId !== null;
+  let noAccess=false;
+  if(input.cleanerId){
+    const {data:person,error}=await supabase.from("cleaners").select("user_id").eq("id",input.cleanerId).eq("owner_id",input.ownerId).eq("role","cleaner").eq("active",true).maybeSingle();
+    if(error||!person)return {success:false,error:error?.message??"Choose an active cleaner from your team."};
+    noAccess=person.user_id===null;
+  }
 
   const { data: assignment, error: assignError } = await supabase
     .from("assignments")
@@ -55,8 +61,9 @@ export async function createAssignment(
       property_id: operationalPropertyId,
       listing_property_id: listing.id,
       cleaner_id: input.cleanerId,
-      status: hasClean ? "assigned" : "unassigned",
-      ack_status: "pending",
+      status: hasClean ? noAccess?"confirmed":"assigned" : "unassigned",
+      ack_status: noAccess?"accepted":"pending",
+      accepted_at:noAccess?new Date().toISOString():null,
       priority: input.priority,
       due_at: input.dueAt,
       checkout_at: input.checkoutAt,

@@ -55,7 +55,7 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
   const cleanerNotes = propertyResult.data?.cleaner_notes ?? null;
 
   // Cleaners can only see their own jobs
-  if (profile.role === "cleaner" && assignment.cleaner_id !== profile.id) {
+  if (profile.role === "cleaner" && assignment.cleaner_id !== (profile.cleanerId??profile.id)) {
     notFound();
   }
 
@@ -116,7 +116,7 @@ export default async function JobExecutionPage({ params }: JobExecutionPageProps
 
       {/* Not started yet — say why the checklist is locked and offer the next step */}
       {(assignment.status === "assigned" || assignment.status === "confirmed") &&
-        assignment.cleaner_id === profile.id && (
+        assignment.cleaner_id === (profile.cleanerId??profile.id) && (
           <section className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm">
             <p className="text-sm text-muted-foreground">
               {assignment.status === "assigned"

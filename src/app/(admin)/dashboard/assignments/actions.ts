@@ -190,7 +190,7 @@ export async function bulkAssignCleanerAction(
   if (!parsed.success) return { error: "Select valid cleanings and a cleaner (up to 1,000 jobs).", assigned: 0 };
   const ownerId = await resolveOwnerId();
   const supabase = await createServerSupabaseClient();
-  const { data: cleaner, error: cleanerError } = await supabase.from("users").select("id")
+  const { data: cleaner, error: cleanerError } = await supabase.from("cleaners").select("id")
     .eq("id", parsed.data.cleanerId).eq("owner_id", ownerId).eq("role", "cleaner").eq("active", true).maybeSingle();
   if (cleanerError || !cleaner) return { error: "Choose an active cleaner from your team.", assigned: 0 };
   const { data, error } = await supabase.rpc("assign_cleaning_batch_mode", {

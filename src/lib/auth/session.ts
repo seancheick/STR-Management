@@ -8,6 +8,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type UserProfile = {
   id: string;
+  cleanerId?: string | null;
   email: string;
   phone: string | null;
   full_name: string;
@@ -45,7 +46,9 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
     return null;
   }
 
-  return data as UserProfile;
+  const {data:payee,error:payeeError}=await supabase.from("cleaners").select("id").eq("user_id",user.id).eq("owner_id",data.owner_id).eq("active",true).eq("role","cleaner").maybeSingle();
+  if(data.role==="cleaner" && (payeeError||!payee))return null;
+  return {...data,cleanerId:payee?.id??null} as UserProfile;
 }
 
 export async function requireAuthenticatedUser(redirectTo?: string) {

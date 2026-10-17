@@ -33,7 +33,7 @@ export default async function CleanerHistoryPage({
     1,
     Math.min(10000, Number.parseInt(params.page ?? "1", 10) || 1),
   );
-  const records = await listCleanerHistoryAssignments(profile.id, page);
+  const records = await listCleanerHistoryAssignments(profile.cleanerId??profile.id, page);
   const hasNext = records.length > 25;
   const assignments = records.slice(0, 25);
   const groups = groupCleanerAssignmentsByDate(assignments, "desc");

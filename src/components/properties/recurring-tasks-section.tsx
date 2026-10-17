@@ -1,4 +1,5 @@
 "use client";
+import {cleanerChoiceLabel} from "@/lib/services/cleaner-access";
 
 import { Loader2, Repeat, Trash2 } from "lucide-react";
 import { useActionState, useTransition } from "react";
@@ -144,7 +145,7 @@ export function RecurringTasksSection({ propertyId, tasks, cleaners }: Props) {
             <option value="">Unassigned</option>
             {cleaners.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.full_name}
+                {cleanerChoiceLabel(c)}
               </option>
             ))}
           </select>

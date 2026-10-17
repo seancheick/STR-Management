@@ -9,7 +9,7 @@ import { getCleanerAssignmentBuckets } from "@/lib/services/cleaner-portal";
 
 export default async function CleanerJobsPage() {
   const profile = await requireRole(["cleaner", "owner", "admin", "supervisor"]);
-  const assignments = await listCleanerPortalAssignments(profile.id);
+  const assignments = await listCleanerPortalAssignments(profile.cleanerId??profile.id);
   const buckets = getCleanerAssignmentBuckets(assignments);
 
   return (

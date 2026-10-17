@@ -16,7 +16,7 @@ export default async function CleanerJobsLayout({
 
   return (
     <div className="min-h-screen pb-24">
-      <LiveJobUpdates ownerId={profile.owner_id} userId={profile.id} cleaner />
+      <LiveJobUpdates ownerId={profile.owner_id} userId={profile.id} cleanerId={profile.cleanerId??profile.id} cleaner />
       {profile.role === "cleaner" && <NotificationPrompt userId={profile.id} />}
       {children}
       <CleanerNav unreadCount={unread} />

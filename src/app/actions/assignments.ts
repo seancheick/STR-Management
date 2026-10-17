@@ -91,7 +91,7 @@ export async function getCleanerSuggestionsAction(
       .eq("id", assignmentId)
       .maybeSingle(),
     supabase
-      .from("users")
+      .from("cleaners")
       .select("id, full_name")
       .eq("role", "cleaner")
       .eq("active", true)

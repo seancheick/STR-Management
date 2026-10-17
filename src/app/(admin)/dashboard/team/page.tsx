@@ -1,3 +1,4 @@
+import {ContractorForm} from "@/components/team/contractor-form";
 import { requireRole } from "@/lib/auth/session";
 import { listAllTeamMembers } from "@/lib/queries/team";
 import { TeamMemberRow } from "@/components/team/team-member-row";
@@ -16,6 +17,8 @@ export default async function TeamPage() {
         <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Admin</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight">Team</h1>
       </div>
+
+      <details className="rounded-2xl border border-border bg-card p-5"><summary className="min-h-11 cursor-pointer content-center font-semibold">Add contractor · no app access</summary><ContractorForm /></details>
 
       {/* Invite form */}
       <section className="rounded-[1.5rem] border border-border/70 bg-card p-6 shadow-sm">

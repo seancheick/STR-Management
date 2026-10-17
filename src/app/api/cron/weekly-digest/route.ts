@@ -117,10 +117,12 @@ export async function GET(req: NextRequest) {
   // Cleaner digest — jobs on THEIR schedule this week.
   const cleanerResults = await Promise.allSettled(
     cleaners.map(async (c) => {
+      const {data:payee}=await supabase.from("cleaners").select("id").eq("user_id",c.id as string).eq("active",true).maybeSingle();
+      if(!payee)return {userId:c.id,skipped:true};
       const { data: jobs } = await supabase
         .from("assignments")
         .select("id, status, ack_status, due_at, checkout_at, properties:property_id ( name )")
-        .eq("cleaner_id", c.id as string)
+        .eq("cleaner_id", payee.id)
         .gte("due_at", now.toISOString())
         .lte("due_at", end.toISOString())
         .not("status", "in", '("cancelled")')

@@ -4,7 +4,9 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export type TeamMemberRecord = {
   id: string;
-  email: string;
+  email: string | null;
+  user_id?: string | null;
+  details?: string;
   full_name: string;
   role: string;
   phone: string | null;
@@ -17,8 +19,8 @@ export type TeamMemberRecord = {
 export async function listCleaners(): Promise<TeamMemberRecord[]> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
-    .from("users")
-    .select("id, email, full_name, role, phone, active, availability, is_1099_contractor, created_at")
+    .from("cleaners")
+    .select("id, user_id, details, email, full_name, role, phone, active, availability, is_1099_contractor, created_at")
     .eq("role", "cleaner")
     .order("full_name");
 
@@ -28,8 +30,8 @@ export async function listCleaners(): Promise<TeamMemberRecord[]> {
 export async function listActiveCleaners(): Promise<TeamMemberRecord[]> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
-    .from("users")
-    .select("id, email, full_name, role, phone, active, availability, is_1099_contractor, created_at")
+    .from("cleaners")
+    .select("id, user_id, details, email, full_name, role, phone, active, availability, is_1099_contractor, created_at")
     .eq("role", "cleaner")
     .eq("active", true)
     .order("full_name");
@@ -40,8 +42,8 @@ export async function listActiveCleaners(): Promise<TeamMemberRecord[]> {
 export async function listAllTeamMembers(): Promise<TeamMemberRecord[]> {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
-    .from("users")
-    .select("id, email, full_name, role, phone, active, availability, is_1099_contractor, created_at")
+    .from("cleaners")
+    .select("id, user_id, details, email, full_name, role, phone, active, availability, is_1099_contractor, created_at")
     .order("role")
     .order("full_name");
 

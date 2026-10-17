@@ -59,3 +59,30 @@ cleaner and explicit confirmation. `complete_cleaning_batch` delegates each job
 to the same owner completion function in one transaction; one invalid/future job
 rolls back the whole batch. Completed status labels are shared across host and
 cleaner cards, dashboard and calendar.
+
+## Optional cleaner access and contractor identity
+
+`cleaners.id` is the stable job/payee identity; `cleaners.user_id` is an optional
+unique link to the authenticated `users` profile. Existing IDs are preserved.
+No-login contractors have no auth account or synthetic email. Their jobs use
+host direct assignment/completion, the same rate/extras and financial summaries.
+Requests requiring cleaner acceptance are rejected until access exists.
+
+All cleaner FKs (including recurring-task assignee and report filters) target the
+payee table. Owner/author/recipient/device IDs remain authenticated profile IDs.
+`current_cleaner_id` maps the authenticated subject to an active same-tenant
+payee; cleaner routes and realtime filters use that identity. Notifications map
+back to an active real login and skip contractors without access.
+
+Team can add/edit contractors and explicitly invite them later. Invitation
+linking keeps the original payee ID and all work/history. It rejects cross-tenant
+or already-linked accounts and will not discard a generated payee with history.
+Contact/tax fields carry over before profile syncing. Failed new-account setup
+uses a server-only checked cleanup, rather than deleting a historical payee.
+
+Owner spending uses canonical running statement entries: incurred costs are
+charges/adjustments, cash paid is payments by recorded date. The dashboard shows
+month/YTD and current all-year remaining balances; the spending report adds year
+selection, monthly and payee totals, and CSV. Older annual payment exports now
+use the same statement and include account payments without counting job/report
+proof twice.

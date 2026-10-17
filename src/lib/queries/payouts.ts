@@ -1,12 +1,7 @@
 import "server-only";
 import { withListingConfiguration } from "@/lib/services/booking-configuration";
-import {
-  getCleanerLedger,
-  isReconciledJob,
-} from "@/lib/queries/cleaner-ledger";
-import { listCleanerFinancialSummaries } from "@/lib/queries/cleaner-finance";
+import { getCleanerFinancialSummary, listCleanerFinancialSummaries } from "@/lib/queries/cleaner-finance";
 
-import { DEFAULT_TIMEZONE, zonedTimeToUtc } from "@/lib/ical/timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { AssignmentExtraRecord, AssignmentListRecord } from "@/lib/queries/assignments";
 
@@ -59,7 +54,7 @@ export async function listPayoutBatches(): Promise<PayoutBatchRecord[]> {
   const { data, error } = await supabase
     .from("payout_batches")
     .select(
-      `*, payout_entries(cleaner_id,status), cleaner_filter_user:users!payout_batches_cleaner_filter_fkey(full_name)`,
+      `*, payout_entries(cleaner_id,status), cleaner_filter_user:cleaners!payout_batches_cleaner_filter_fkey(full_name)`,
     )
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -73,7 +68,7 @@ export async function getPayoutBatch(
   const { data, error } = await supabase
     .from("payout_batches")
     .select(
-      `*, payout_entries(cleaner_id,status), cleaner_filter_user:users!payout_batches_cleaner_filter_fkey(full_name)`,
+      `*, payout_entries(cleaner_id,status), cleaner_filter_user:cleaners!payout_batches_cleaner_filter_fkey(full_name)`,
     )
     .eq("id", batchId)
     .single();
@@ -91,7 +86,7 @@ export async function listPayoutEntries(
     .from("payout_entries")
     .select(
       `*,
-       cleaners:users!payout_entries_cleaner_id_fkey(full_name),
+       cleaners:cleaners!payout_entries_cleaner_id_fkey(full_name),
        properties:property_id(name, timezone),
        assignments(due_at, assignment_type, expected_duration_min, paid_at, assignment_extras(id, assignment_id, description, amount, kind, created_at))`,
     )
@@ -193,7 +188,7 @@ export async function listEligibleAssignments(
     .select(
       `id, property_id, cleaner_id, due_at, fixed_payout_amount, expected_duration_min,
        properties:property_id(name),
-       cleaners:users!assignments_cleaner_id_fkey(full_name)`,
+       cleaners:cleaners!assignments_cleaner_id_fkey(full_name)`,
     )
     .in("status", ["approved", "completed_pending_review"])
     .gte("due_at", periodStart)
@@ -266,119 +261,10 @@ export async function listCleanerPayoutsForYear(
   cleanerId: string,
   year: number,
 ): Promise<CleanerYearPayment[]> {
-  const supabase = await createServerSupabaseClient();
-  const start = zonedTimeToUtc(year, 1, 1, 0, 0, DEFAULT_TIMEZONE).getTime();
-  const end = zonedTimeToUtc(year + 1, 1, 1, 0, 0, DEFAULT_TIMEZONE).getTime();
-  const inYear = (iso: string | null | undefined): iso is string => {
-    if (!iso) return false;
-    const t = new Date(iso).getTime();
-    return t >= start && t < end;
-  };
-
-  const [entriesRes, directRes] = await Promise.all([
-    supabase
-      .from("payout_entries")
-      .select(
-        `id, amount, paid_at, assignment_id,
-         payout_batches:batch_id ( status, paid_at ),
-         properties:property_id(name),
-         assignments(due_at, assignment_type, paid_at)`,
-      )
-      .eq("cleaner_id", cleanerId)
-      .eq("status", "included"),
-    supabase
-      .from("assignments")
-      .select(
-        "id, due_at, assignment_type, fixed_payout_amount, paid_at, properties:property_id ( name )",
-      )
-      .eq("cleaner_id", cleanerId)
-      .gte("paid_at", new Date(start).toISOString())
-      .lt("paid_at", new Date(end).toISOString()),
-  ]);
-  if (entriesRes.error) throw new Error(entriesRes.error.message);
-  if (directRes.error) throw new Error(directRes.error.message);
-
-  type EntryRow = {
-    id: string;
-    amount: number;
-    paid_at: string | null;
-    assignment_id: string;
-    payout_batches: { status: string; paid_at: string | null } | null;
-    properties: { name: string } | null;
-    assignments: {
-      due_at: string;
-      assignment_type: string;
-      paid_at: string | null;
-    } | null;
-  };
-  type DirectRow = {
-    id: string;
-    due_at: string;
-    assignment_type: string;
-    fixed_payout_amount: number | null;
-    paid_at: string | null;
-    properties: { name: string } | null;
-  };
-
-  const ledger = await getCleanerLedger(cleanerId);
-  const accounts = ledger ? [ledger.account] : [];
-  const payments: CleanerYearPayment[] = ledger
-    ? ledger.entries
-        .filter(
-          (e) => e.kind === "payment" && e.entry_date.startsWith(`${year}-`),
-        )
-        .map((e) => ({
-          id: e.id,
-          paidAt: `${e.entry_date}T12:00:00Z`,
-          amount: -Number(e.amount),
-          propertyName: e.description,
-          assignmentType: null,
-          dueAt: null,
-        }))
-    : [];
-  const paidViaReport = new Set<string>();
-  for (const e of (entriesRes.data ?? []) as unknown as EntryRow[]) {
-    if (
-      e.payout_batches?.status === "cancelled" ||
-      (e.assignments &&
-        isReconciledJob(accounts, cleanerId, e.assignments.due_at))
-    )
-      continue;
-    const paidAt =
-      e.paid_at ??
-      (e.payout_batches?.status === "paid" ? e.payout_batches.paid_at : null) ??
-      e.assignments?.paid_at ??
-      null;
-    if (!paidAt) continue;
-    paidViaReport.add(e.assignment_id);
-    if (!inYear(paidAt)) continue;
-    payments.push({
-      id: e.id,
-      paidAt,
-      amount: Number(e.amount),
-      propertyName: e.properties?.name ?? "—",
-      assignmentType: e.assignments?.assignment_type ?? null,
-      dueAt: e.assignments?.due_at ?? null,
-    });
-  }
-  for (const a of (directRes.data ?? []) as unknown as DirectRow[]) {
-    if (
-      paidViaReport.has(a.id) ||
-      !inYear(a.paid_at) ||
-      isReconciledJob(accounts, cleanerId, a.due_at)
-    )
-      continue;
-    payments.push({
-      id: a.id,
-      paidAt: a.paid_at,
-      amount: Number(a.fixed_payout_amount ?? 0),
-      propertyName: a.properties?.name ?? "—",
-      assignmentType: a.assignment_type,
-      dueAt: a.due_at,
-    });
-  }
-
-  return payments.sort((a, b) => a.paidAt.localeCompare(b.paidAt));
+  const financial=await getCleanerFinancialSummary(cleanerId);
+  return financial.statementEntries.filter(entry=>entry.kind==="payment"&&entry.entry_date.startsWith(`${year}-`)).map(entry=>({
+    id:entry.id,paidAt:`${entry.entry_date}T12:00:00Z`,amount:-Number(entry.amount),propertyName:entry.description,assignmentType:null,dueAt:null,
+  })).sort((a,b)=>a.paidAt.localeCompare(b.paidAt));
 }
 
 export function groupEntriesByClean(

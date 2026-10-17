@@ -82,7 +82,7 @@ export default async function CleanerInboxPage() {
               n.assignment_id &&
               n.assignment?.status === "assigned" &&
               n.assignment?.ack_status === "pending" &&
-              n.assignment?.cleaner_id === profile.id;
+              n.assignment?.cleaner_id === (profile.cleanerId??profile.id);
             return (
               <li
                 className="flex flex-col gap-2 rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-sm"

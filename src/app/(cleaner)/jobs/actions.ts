@@ -29,7 +29,7 @@ export async function acceptJobAction(
       accepted_at: new Date().toISOString(),
     })
     .eq("id", assignmentId)
-    .eq("cleaner_id", profile.id)
+    .eq("cleaner_id", profile.cleanerId??profile.id)
     .eq("status", "assigned")
     .eq("ack_status", "pending")
     .select("id")
@@ -120,7 +120,7 @@ export async function startJobAction(
       started_at: new Date().toISOString(),
     })
     .eq("id", assignmentId)
-    .eq("cleaner_id", profile.id)
+    .eq("cleaner_id", profile.cleanerId??profile.id)
     .eq("status", "confirmed")
     .eq("ack_status", "accepted")
     .select("id")
@@ -231,7 +231,7 @@ export async function completeJobAction(
       approved_at: now,
     })
     .eq("id", assignmentId)
-    .eq("cleaner_id", profile.id)
+    .eq("cleaner_id", profile.cleanerId??profile.id)
     .eq("status", "in_progress")
     .eq("ack_status", "accepted")
     .select("id")
@@ -304,7 +304,7 @@ export async function addCleanerNoteAction(
     return { status: "error", message: "Job not found." };
   }
 
-  if (profile.role === "cleaner" && assignment.cleaner_id !== profile.id) {
+  if (profile.role === "cleaner" && assignment.cleaner_id !== (profile.cleanerId??profile.id)) {
     return { status: "error", message: "You can only add notes to your own jobs." };
   }
 
