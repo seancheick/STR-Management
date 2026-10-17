@@ -221,3 +221,14 @@ export async function recordCompletedCleaningsAction(ids:string[],cleanerId:stri
  revalidatePath("/dashboard","layout");revalidatePath("/jobs","layout");
  return {error:null,completed:Number(data??0)};
 }
+
+export async function restoreCancelledCleaningAction(assignmentId: string): Promise<{ error?: string }> {
+  await requireRole(["owner", "admin"]);
+  if (!z.string().uuid().safeParse(assignmentId).success) return { error: "Invalid cleaning." };
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.rpc("restore_cancelled_cleaning", { target_id: assignmentId });
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard", "layout");
+  revalidatePath("/jobs", "layout");
+  return {};
+}

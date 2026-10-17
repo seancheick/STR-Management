@@ -101,6 +101,7 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
 
       {canManage && <AssignmentPlanner assignments={planningJobs} cleaners={cleaners} now={new Date().toISOString()} />}
 
+      {showCancelled && <p className="text-sm text-muted-foreground">Accidentally cancelled a cleaning? Choose Restore cleaning to recover its date, price and extras, then select the cleaner. No duplicate job or charge is created.</p>}
       {unpaidOnly && <p className="text-sm text-muted-foreground">Completed work with an amount remaining after recorded payments and credits. Account payments cover older balances first. Reconciled history is included in each cleaner’s ledger, not charged again.</p>}
       {/* Filter chips — cancelled + approved hidden by default */}
       <div className="flex flex-wrap gap-1.5 text-xs">

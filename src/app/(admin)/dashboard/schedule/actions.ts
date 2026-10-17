@@ -178,7 +178,7 @@ export async function cancelAssignmentAction(
   revalidatePath("/dashboard/assignments");
   revalidatePath("/jobs");
   revalidatePath("/jobs/schedule");
-  return { status: "success", message: "Assignment deleted." };
+  return { status: "success", message: "Cleaning cancelled. Recover it in Assignments → Cancelled." };
 }
 
 // ─── Mark paid (Zelle / Venmo / Cash / …) ──────────────────────────────────────

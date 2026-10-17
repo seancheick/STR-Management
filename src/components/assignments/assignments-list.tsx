@@ -10,6 +10,7 @@ import {
   bulkAssignCleanerAction,
   recordCompletedCleaningsAction,
   deleteAssignmentsAction,
+  restoreCancelledCleaningAction,
 } from "@/app/(admin)/dashboard/assignments/actions";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
 import type { TeamMemberRecord } from "@/lib/queries/team";
@@ -308,6 +309,18 @@ export function AssignmentsList({ assignments, cleaners, canManage, remainingAmo
                       Paid
                       {a.payment_method ? ` · ${a.payment_method.charAt(0).toUpperCase()}${a.payment_method.slice(1)}` : ""}
                     </span>
+                  )}
+                  {canManage && a.status === "cancelled" && (
+                    <button type="button" disabled={isPending}
+                      className="inline-flex min-h-11 items-center rounded-full border border-border px-4 text-sm font-medium hover:bg-muted disabled:opacity-60"
+                      onClick={() => {
+                        if (!confirm("Restore this cleaning? Its date, price and extras stay saved. Choose the cleaner again, then record completed work if it is already done.")) return;
+                        startTransition(async () => {
+                          const result = await restoreCancelledCleaningAction(a.id);
+                          if (result.error) showToast(result.error, "error");
+                          else { showToast("Cleaning restored. Choose a cleaner to continue."); setSelectedId(a.id); }
+                        });
+                      }}>Restore cleaning</button>
                   )}
                   {canEdit && (
                     <button

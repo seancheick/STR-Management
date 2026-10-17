@@ -277,7 +277,7 @@ export function AssignmentEditForm({
               type="button"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Delete assignment
+              Cancel cleaning
             </button>
           ) : (
             <form
@@ -287,7 +287,7 @@ export function AssignmentEditForm({
               <input type="hidden" name="assignmentId" value={assignment.id} />
         <input type="hidden" name="originalPayoutAmount" value={assignment.fixed_payout_amount ?? ""} />
               <p className="text-xs text-red-800">
-                This removes the job from the schedule and the cleaner&apos;s app. Continue?
+                This hides the cleaning from the schedule and the cleaner&apos;s app. You can recover it in Assignments → Cancelled → Restore cleaning.
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -296,7 +296,7 @@ export function AssignmentEditForm({
                   type="submit"
                 >
                   {isCancelling && <Loader2 className="h-3 w-3 animate-spin" />}
-                  Yes, delete
+                  Yes, cancel cleaning
                 </button>
                 <button
                   className="inline-flex h-8 items-center justify-center rounded-full border border-border/70 bg-background px-3 text-xs font-medium transition hover:bg-muted"
