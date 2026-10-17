@@ -13,6 +13,12 @@ describe("report entry pagination",()=>{
   const result=await listPayoutEntries("report-id");
   expect(result).toHaveLength(1001);expect(result[1000].id).toBe("1000");expect(q.range).toHaveBeenCalledTimes(2);
  });
+ it("shows jobs chronologically even when insertion order differs",async()=>{
+  const rows=[{id:"later",assignments:{due_at:"2026-10-20T15:00:00Z"}},{id:"earlier",assignments:{due_at:"2026-10-01T15:00:00Z"}}];
+  const q={select:vi.fn(),eq:vi.fn(),order:vi.fn(),range:vi.fn(async()=>({data:rows,error:null}))};
+  q.select.mockReturnValue(q);q.eq.mockReturnValue(q);q.order.mockReturnValue(q);mocks.client.mockResolvedValue({from:()=>q});
+  expect((await listPayoutEntries("report-id")).map(entry=>entry.id)).toEqual(["earlier","later"]);
+ });
  it("surfaces an unreadable report instead of returning an empty list",async()=>{
   const q={select:vi.fn(),eq:vi.fn(),order:vi.fn(),range:vi.fn(async()=>({data:null,error:{message:"Read failed"}}))};
   q.select.mockReturnValue(q);q.eq.mockReturnValue(q);q.order.mockReturnValue(q);mocks.client.mockResolvedValue({from:()=>q});

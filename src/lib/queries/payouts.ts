@@ -101,7 +101,11 @@ export async function listPayoutEntries(
   entries.push(...((data??[]) as unknown as PayoutEntryRecord[]));
   if((data?.length??0)<1000)break;
   }
-  return entries;
+  return entries.sort((a, b) =>
+    (a.assignments?.due_at ?? a.created_at ?? "").localeCompare(
+      b.assignments?.due_at ?? b.created_at ?? "",
+    ),
+  );
 }
 
 /** Entries visible to a cleaner (RLS limits cleaners to approved/paid batches). */
