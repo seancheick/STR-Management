@@ -100,9 +100,9 @@ export function BulkMarkPaid({ jobs }: { jobs: AssignmentListRecord[] }) {
     <section className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-card p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-base font-semibold">Quick-pay · unpaid cleanings</h2>
+          <h2 className="text-base font-semibold">Record job payments</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Select a few jobs, pick how you paid, and mark them off the list.
+            Record payments for specific jobs. For a partial payment or older balance, use the cleaner’s account above.
             This is separate from the batch-payout CSV flow below.
           </p>
         </div>
@@ -205,7 +205,7 @@ export function BulkMarkPaid({ jobs }: { jobs: AssignmentListRecord[] }) {
           type="button"
         >
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
-          Mark {selected.size > 0 ? selected.size : ""} paid · ${selectedTotal.toFixed(2)}
+          Record {selected.size > 0 ? selected.size : ""} job payments · ${selectedTotal.toFixed(2)}
         </button>
       </div>
     </section>

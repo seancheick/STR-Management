@@ -15,3 +15,24 @@ Extras mutate via tenant-checked owner/admin RPCs that lock the job. Retries use
 The timing/details form preserves a concurrently changed total unless the host explicitly edited the amount; conflicting amount edits require reopening the job. Completion and payment remain separate actions.
 
 Verification covers disposable database tenant/role tests, direct/request/completion paths, completion validation, canonical $75+$10+$10=$95 itemization, retry deduplication, removal, first pay on unassigned jobs, stale forms and report/payment locks. Browser verification must use the user's existing signed-in session; never manufacture sessions for real accounts. Actual phone push delivery still requires an enabled device subscription.
+
+## Payments and running balances
+
+`cleaner_payments` is the canonical record for new money received. Account payments
+can be partial or leave a credit and do not transfer money. Job, entry and report
+payment actions use the same per-job identity, so paying a report cannot deduct
+an already-paid job again. Existing historical ledger entries remain unchanged.
+Legacy paid stamps are still honored, except when an active canonical payment
+already accounts for that job. Undo preserves a voided payment record.
+
+The shared financial summary now emits one running statement: historical ledger
+entries + newer completed-job base fees and extras − older paid-job proof − active
+recorded payments. The owner account, cleaner Pay, dashboard totals, report account
+balances and ledger CSV use that summary. Report subtotals describe earnings for
+the report period, distinct from the current account balance across all periods.
+
+Report forms accept blank/null optional notes and labels, validate real dates,
+and reject reversed ranges. Report detail/print/CSV include extras and the actual
+account balance. Archived reports remain references and are excluded from live
+financial totals. Amount snapshots cannot be edited after report generation;
+paid report cancellation and cleaner payment-field tampering are blocked.

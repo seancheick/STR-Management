@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { z } from "zod";
+import { createPayoutReportSchema } from "@/lib/validation/payout-report";
 
 import { requireRole } from "@/lib/auth/session";
 import {
@@ -14,14 +14,6 @@ import {
   excludeEntry,
 } from "@/lib/services/payout-service";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-
-const createBatchSchema = z.object({
-  label: z.string().min(1, "Label required"),
-  period_start: z.string().min(1, "Period start required"),
-  period_end: z.string().min(1, "Period end required"),
-  cleaner_filter: z.string().uuid().nullable().optional(),
-  notes: z.string().optional(),
-});
 
 export async function createPayoutBatchAction(
   _prev: { error: string | null },
@@ -37,7 +29,7 @@ export async function createPayoutBatchAction(
     notes: formData.get("notes") || null,
   };
 
-  const parsed = createBatchSchema.safeParse(raw);
+  const parsed = createPayoutReportSchema.safeParse(raw);
   if (!parsed.success) {
     return { error: parsed.error.errors[0].message };
   }
@@ -123,26 +115,18 @@ export async function toggleEntryPaidAction(
   entryId: string,
   paid: boolean,
 ): Promise<{ error: string | null }> {
-  const profile = await requireRole(["owner", "admin"]);
+  await requireRole(["owner", "admin"]);
   const supabase = await createServerSupabaseClient();
-
-  const { data, error } = await supabase
-    .from("payout_entries")
-    .update(
-      paid
-        ? { paid_at: new Date().toISOString(), paid_by_id: profile.id }
-        : { paid_at: null, paid_by_id: null },
-    )
-    .eq("id", entryId)
-    .select("batch_id")
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("set_payout_entry_paid", {
+    target_entry: entryId, is_paid: paid,
+  });
 
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard/payouts");
   revalidatePath("/jobs/pay");
-  if (data?.batch_id) {
-    revalidatePath(`/dashboard/payouts/${data.batch_id}`);
+  if (data) {
+    revalidatePath(`/dashboard/payouts/${data}`);
   }
   return { error: null };
 }

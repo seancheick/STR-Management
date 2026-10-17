@@ -31,7 +31,7 @@ function SubmitButton() {
       disabled={pending}
       type="submit"
     >
-      {pending ? "Saving…" : "Mark paid"}
+      {pending ? "Saving…" : "Record job payment"}
     </button>
   );
 }

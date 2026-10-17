@@ -138,11 +138,7 @@ export async function markBatchPaid(
   batchId: string,
 ): Promise<UpdateBatchStatusResult> {
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase
-    .from("payout_batches")
-    .update({ status: "paid", paid_at: new Date().toISOString() })
-    .eq("id", batchId)
-    .eq("status", "approved");
+  const { error } = await supabase.rpc("pay_payout_batch", { target_batch: batchId });
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
@@ -177,12 +173,18 @@ export async function updateEntryAmount(
   notes: string | null,
 ): Promise<UpdateBatchStatusResult> {
   const supabase = await createServerSupabaseClient();
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 100000 || Math.round(amount * 100) / 100 !== amount) {
+    return { success: false, error: "Enter a valid positive amount with up to two decimal places." };
+  }
   const { data: entry, error: fetchErr } = await supabase
     .from("payout_entries")
-    .select("batch_id")
+    .select("batch_id, amount, payout_batches:batch_id(status)")
     .eq("id", entryId)
     .single();
   if (fetchErr) return { success: false, error: fetchErr.message };
+  const batch = entry.payout_batches as unknown as { status: string } | null;
+  if (batch?.status !== "draft") return { success: false, error: "Only draft reports can be edited." };
+  if (Number(entry.amount) !== amount) return { success: false, error: "Edit job pay before generating a report. Report totals are saved snapshots." };
 
   const { error } = await supabase
     .from("payout_entries")
@@ -203,10 +205,12 @@ export async function excludeEntry(
   const supabase = await createServerSupabaseClient();
   const { data: entry, error: fetchErr } = await supabase
     .from("payout_entries")
-    .select("batch_id")
+    .select("batch_id, payout_batches:batch_id(status)")
     .eq("id", entryId)
     .single();
   if (fetchErr) return { success: false, error: fetchErr.message };
+  const batch = entry.payout_batches as unknown as { status: string } | null;
+  if (batch?.status !== "draft") return { success: false, error: "Only draft report lines can be excluded." };
 
   const { error } = await supabase
     .from("payout_entries")

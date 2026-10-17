@@ -151,21 +151,7 @@ export default async function PayoutsPage({ searchParams }: PayoutsPageProps) {
                     </span>
                   )}
                 </p>
-                {ledger ? (
-                  <Link
-                    className="mt-1 inline-flex min-h-9 items-center text-sm text-primary underline"
-                    href={`/dashboard/payouts/ledger/${cleaner.id}` as Route}
-                  >
-                    View ledger · through{" "}
-                    {formatDate(
-                      ledger.account.reconciled_through + "T12:00:00Z",
-                    )}
-                  </Link>
-                ) : (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Completed jobs awaiting payment
-                  </p>
-                )}
+                <Link className="mt-1 inline-flex min-h-11 items-center text-sm text-primary underline" href={`/dashboard/payouts/ledger/${cleaner.id}` as Route}>View ledger & record payment</Link>
               </div>
               <span className="font-semibold tabular-nums">
                 {Math.abs(balance).toLocaleString("en-US", {

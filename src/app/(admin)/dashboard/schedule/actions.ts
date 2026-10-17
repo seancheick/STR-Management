@@ -203,7 +203,7 @@ export async function markPaidAction(
   _prev: MarkPaidState,
   formData: FormData,
 ): Promise<MarkPaidState> {
-  const profile = await requireRole(["owner", "admin"]);
+  await requireRole(["owner", "admin"]);
 
   const parsed = markPaidSchema.safeParse({
     assignmentId: formData.get("assignmentId"),
@@ -217,17 +217,10 @@ export async function markPaidAction(
 
   const supabase = await createServerSupabaseClient();
 
-  // Only approved / completed jobs can be paid. Re-paying is a no-op update.
-  const { error } = await supabase
-    .from("assignments")
-    .update({
-      paid_at: new Date().toISOString(),
-      payment_method: parsed.data.paymentMethod,
-      payment_reference: parsed.data.paymentReference,
-      marked_paid_by_user_id: profile.id,
-    })
-    .eq("id", parsed.data.assignmentId)
-    .in("status", ["approved", "completed_pending_review"]);
+  const { error } = await supabase.rpc("set_cleaning_jobs_paid", {
+    job_ids: [parsed.data.assignmentId], is_paid: true,
+    paid_method: parsed.data.paymentMethod, payment_reference: parsed.data.paymentReference,
+  });
 
   if (error) {
     return { status: "error", message: error.message };
@@ -246,15 +239,9 @@ export async function markUnpaidAction(
   await requireRole(["owner", "admin"]);
 
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase
-    .from("assignments")
-    .update({
-      paid_at: null,
-      payment_method: null,
-      payment_reference: null,
-      marked_paid_by_user_id: null,
-    })
-    .eq("id", assignmentId);
+  const { error } = await supabase.rpc("set_cleaning_jobs_paid", {
+    job_ids: [assignmentId], is_paid: false,
+  });
 
   revalidatePath("/dashboard/schedule");
   revalidatePath("/dashboard");
@@ -281,7 +268,7 @@ export async function bulkMarkPaidAction(input: {
   paymentMethod: string;
   paymentReference?: string | null;
 }): Promise<{ ok: boolean; error?: string; count?: number }> {
-  const profile = await requireRole(["owner", "admin"]);
+  await requireRole(["owner", "admin"]);
 
   const parsed = bulkMarkPaidSchema.safeParse({
     assignmentIds: input.assignmentIds,
@@ -293,17 +280,10 @@ export async function bulkMarkPaidAction(input: {
   }
 
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from("assignments")
-    .update({
-      paid_at: new Date().toISOString(),
-      payment_method: parsed.data.paymentMethod,
-      payment_reference: parsed.data.paymentReference,
-      marked_paid_by_user_id: profile.id,
-    })
-    .in("id", parsed.data.assignmentIds)
-    .in("status", ["approved", "completed_pending_review"])
-    .select("id");
+  const { data, error } = await supabase.rpc("set_cleaning_jobs_paid", {
+    job_ids: parsed.data.assignmentIds, is_paid: true,
+    paid_method: parsed.data.paymentMethod, payment_reference: parsed.data.paymentReference,
+  });
 
   if (error) {
     return { ok: false, error: error.message };
@@ -312,7 +292,7 @@ export async function bulkMarkPaidAction(input: {
   revalidatePath("/dashboard/payouts");
   revalidatePath("/dashboard/assignments");
   revalidatePath("/dashboard/schedule");
-  return { ok: true, count: (data ?? []).length };
+  return { ok: true, count: Number(data ?? 0) };
 }
 
 // ─── Unassign cleaner ──────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { AssignmentExtraRecord, AssignmentListRecord } from "@/lib/queries/assignments";
 
 export type PayoutBatchRecord = {
+  payout_entries?: {cleaner_id:string;status:string}[];
   id: string;
   owner_id: string;
   label: string;
@@ -58,7 +59,7 @@ export async function listPayoutBatches(): Promise<PayoutBatchRecord[]> {
   const { data, error } = await supabase
     .from("payout_batches")
     .select(
-      `*, cleaner_filter_user:users!payout_batches_cleaner_filter_fkey(full_name)`,
+      `*, payout_entries(cleaner_id,status), cleaner_filter_user:users!payout_batches_cleaner_filter_fkey(full_name)`,
     )
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -72,7 +73,7 @@ export async function getPayoutBatch(
   const { data, error } = await supabase
     .from("payout_batches")
     .select(
-      `*, cleaner_filter_user:users!payout_batches_cleaner_filter_fkey(full_name)`,
+      `*, payout_entries(cleaner_id,status), cleaner_filter_user:users!payout_batches_cleaner_filter_fkey(full_name)`,
     )
     .eq("id", batchId)
     .single();
@@ -89,8 +90,8 @@ export async function listPayoutEntries(
     .select(
       `*,
        cleaners:users!payout_entries_cleaner_id_fkey(full_name),
-       properties:property_id(name),
-       assignments(due_at, assignment_type, expected_duration_min)`,
+       properties:property_id(name, timezone),
+       assignments(due_at, assignment_type, expected_duration_min, paid_at, assignment_extras(id, assignment_id, description, amount, kind, created_at))`,
     )
     .eq("batch_id", batchId)
     .order("created_at", { ascending: true });

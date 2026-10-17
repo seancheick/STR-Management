@@ -65,3 +65,41 @@ describe("paid batch payment proof", () => {
     expect(calculate([paid, entry("duplicate", "reported")], [job("reported")]).balance).toBe(2124);
   });
 });
+
+import type {CleanerPayment} from "@/lib/domain/payments";
+import {summarizeLedger,isHistoricalPayoutReport} from "@/lib/services/cleaner-ledger";
+const payment=(amount:number,assignment_id:string|null=null):CleanerPayment=>({id:"payment1",owner_id:"owner",cleaner_id:"cleaner",amount,payment_date:"2026-10-17",method:"zelle",reference:"ref1",note:null,assignment_id,source_key:assignment_id?`job:${assignment_id}`:null,created_at:"2026-10-17T12:00Z",created_by:"owner",voided_at:null});
+describe("canonical recorded payments and running ledger",()=>{
+ it("reduces the historical debt with an account payment",()=>{
+  const result=calculateCleanerFinancialSummary({entries:[],jobs:[],reconciledThrough:cutoff,ledgerEntries:ledger,payments:[payment(100)]});
+  expect(result.balance).toBe(2024);expect(result.recordedPaymentsTotal).toBe(100);expect(summarizeLedger(result.statementEntries).balance).toBe(result.balance);
+ });
+ it("does not deduct a recorded job payment again through job and report paid stamps",()=>{
+  const e={...entry("report","job1",95),paid_at:"2026-10-17T12:00Z"};
+  const result=calculateCleanerFinancialSummary({entries:[e],jobs:[{...job("job1",95),paid_at:"2026-10-17T12:00Z"}],reconciledThrough:cutoff,ledgerEntries:ledger,payments:[payment(95,"job1")]});
+  expect(result.balance).toBe(2124);expect(result.legacyPaidTotal).toBe(0);expect(result.recordedPaymentsTotal).toBe(95);expect(summarizeLedger(result.statementEntries).balance).toBe(result.balance);
+ });
+ it("restores the balance after a payment is undone",()=>{
+  const result=calculateCleanerFinancialSummary({entries:[],jobs:[job("work",95)],reconciledThrough:null,ledgerEntries:[],payments:[{...payment(50),voided_at:"2026-10-18T12:00Z"}]});
+  expect(result.balance).toBe(95);expect(result.recordedPaymentsTotal).toBe(0);expect(result.payments).toHaveLength(1);
+ });
+ it("supports partial payments and credit balances",()=>{
+  const input={entries:[],jobs:[job("work",95)],reconciledThrough:null,ledgerEntries:[]};
+  expect(calculateCleanerFinancialSummary({...input,payments:[payment(50)]}).balance).toBe(45);
+  expect(calculateCleanerFinancialSummary({...input,payments:[payment(100)]}).balance).toBe(-5);
+ });
+ it("itemizes extras without counting them twice in the running statement",()=>{
+  const work={...job("work",95),properties:{name:"Basement",timezone:"America/New_York"},assignment_extras:[{id:"trash",description:"Trash",amount:10},{id:"receipt",description:"Receipt",amount:10}]};
+  const result=calculateCleanerFinancialSummary({entries:[],jobs:[work],reconciledThrough:null,ledgerEntries:[],payments:[payment(50)]});
+  expect(result.statementEntries.map(e=>e.amount)).toEqual([75,10,10,-50]);expect(summarizeLedger(result.statementEntries).balance).toBe(45);
+ });
+ it("keeps a legacy payment and a separate account payment distinct",()=>{
+  const result=calculateCleanerFinancialSummary({entries:[],jobs:[{...job("legacy",95),paid_at:"2026-10-17T12:00Z"}],reconciledThrough:cutoff,ledgerEntries:ledger,payments:[payment(100)]});
+  expect(result.balance).toBe(2024);expect(result.legacyPaidTotal).toBe(95);expect(summarizeLedger(result.statementEntries).balance).toBe(result.balance);
+ });
+ it("archived all-cleaners reports require complete reconciliation coverage",()=>{
+  const report={cleaner_filter:null,period_end:"2026-09-30",entry_count:2,payout_entries:[{cleaner_id:"a",status:"included"},{cleaner_id:"b",status:"included"}]};
+  expect(isHistoricalPayoutReport(report,[{cleaner_id:"a",reconciled_through:cutoff},{cleaner_id:"b",reconciled_through:cutoff}])).toBe(true);
+  expect(isHistoricalPayoutReport(report,[{cleaner_id:"a",reconciled_through:cutoff}])).toBe(false);
+ });
+});

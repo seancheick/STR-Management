@@ -81,12 +81,11 @@ export function isReconciledJob(
 }
 
 export function isHistoricalPayoutReport(
-  report: { cleaner_filter: string | null; period_end: string },
+  report: { cleaner_filter: string | null; period_end: string; entry_count?:number; payout_entries?:{cleaner_id:string;status:string}[] },
   accounts: { cleaner_id: string; reconciled_through: string }[],
 ) {
-  return accounts.some(
-    (account) =>
-      account.cleaner_id === report.cleaner_filter &&
-      report.period_end <= account.reconciled_through,
-  );
+  if (report.cleaner_filter) return accounts.some(account=>account.cleaner_id===report.cleaner_filter && report.period_end<=account.reconciled_through);
+  const entries=report.payout_entries?.filter(entry=>entry.status==="included");
+  // A complete membership list is required to classify an all-cleaners report.
+  return !!entries?.length && entries.length === report.entry_count && entries.every(entry=>accounts.some(account=>account.cleaner_id===entry.cleaner_id && report.period_end<=account.reconciled_through));
 }

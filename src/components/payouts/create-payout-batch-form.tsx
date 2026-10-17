@@ -90,6 +90,7 @@ export function CreatePayoutBatchForm({ cleaners }: Props) {
       setPeriodEnd(ymd(endOfMonth(today)));
     } else {
       const ref = new Date(today);
+      ref.setDate(1);
       ref.setMonth(ref.getMonth() - 1);
       setPeriodStart(ymd(startOfMonth(ref)));
       setPeriodEnd(ymd(endOfMonth(ref)));
@@ -100,7 +101,7 @@ export function CreatePayoutBatchForm({ cleaners }: Props) {
     <form
       action={(formData) => {
         // Ensure label gets auto-generated if user left it blank
-        if (!formData.get("label")) formData.set("label", autoLabel);
+        if (!String(formData.get("label") ?? "").trim()) formData.set("label", autoLabel);
         return action(formData);
       }}
       className="flex flex-col gap-4"
@@ -154,6 +155,7 @@ export function CreatePayoutBatchForm({ cleaners }: Props) {
         <div className="grid gap-3 md:grid-cols-2">
           <input
             className="h-11 rounded-xl border border-input bg-background px-3 text-sm"
+            aria-label="Report start date"
             id="period_start"
             name="period_start"
             onChange={(e) => setPeriodStart(e.target.value)}
@@ -163,6 +165,8 @@ export function CreatePayoutBatchForm({ cleaners }: Props) {
           />
           <input
             className="h-11 rounded-xl border border-input bg-background px-3 text-sm"
+            aria-label="Report end date"
+            min={periodStart}
             id="period_end"
             name="period_end"
             onChange={(e) => setPeriodEnd(e.target.value)}

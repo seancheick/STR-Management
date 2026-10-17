@@ -29,14 +29,14 @@ export function EntryPaidToggle({ entryId, paidAt }: Props) {
       if (res.error) {
         showToast(res.error, "error");
       } else {
-        showToast(paid ? "Marked unpaid." : "Marked paid.");
+        showToast(paid ? "Job payment undone." : "Job payment recorded.");
       }
     });
   }
 
   return (
     <button
-      className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition disabled:opacity-60 ${
+      className={`inline-flex min-h-11 items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition disabled:opacity-60 ${
         paid
           ? "border-green-300 bg-green-50 text-green-800 hover:bg-green-100"
           : "border-border/70 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
@@ -50,7 +50,7 @@ export function EntryPaidToggle({ entryId, paidAt }: Props) {
       ) : paid ? (
         <Check className="h-3 w-3" aria-hidden="true" />
       ) : null}
-      {paid ? `Paid ${paidAt ? formatDate(paidAt) : ""}` : "Mark paid"}
+      {paid ? `Paid ${paidAt ? formatDate(paidAt) : ""}` : "Record job payment"}
     </button>
   );
 }

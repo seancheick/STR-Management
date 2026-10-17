@@ -37,6 +37,10 @@ export function LiveJobUpdates({ ownerId, userId, cleaner = false }: {
       }, refresh)
       .on("postgres_changes", {
         event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}`,
+      }, refresh)
+      .on("postgres_changes", {
+        event: "*", schema: "public", table: "cleaner_payments",
+        filter: cleaner ? `cleaner_id=eq.${userId}` : `owner_id=eq.${ownerId}`,
       }, refresh);
     // Browser cookie sessions must be loaded before Realtime joins. Otherwise
     // the channel can report SUBSCRIBED as anon and silently receive no rows.

@@ -1,3 +1,4 @@
+import { PaymentHistory } from "@/components/payouts/record-payment-form";
 import { JobPayBreakdown } from "@/components/shared/job-pay-breakdown";
 import type { AssignmentExtraRecord } from "@/lib/queries/assignments";
 import Link from "next/link";
@@ -44,7 +45,7 @@ const PAY_STATUS: Record<
     tone: "bg-muted text-foreground/70",
   },
   awaiting: {
-    label: "Awaiting payout",
+    label: "Completed work",
     icon: Clock3,
     tone: "bg-secondary/40 text-primary",
   },
@@ -128,6 +129,7 @@ export default async function CleanerPayPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Your pay</h1>
       </header>
 
+      <PaymentHistory payments={financial.payments} />
       <nav aria-label="Pay page" className="flex flex-wrap gap-3 text-sm">
         {ledger && (
           <a
@@ -165,9 +167,10 @@ export default async function CleanerPayPage() {
       </section>
       {ledger && (
         <div id="ledger">
-          <CleanerLedger account={ledger.account} entries={ledger.entries} />
+          <CleanerLedger account={ledger.account} entries={financial.statementEntries} current />
         </div>
       )}
+      <p className="text-xs leading-5 text-muted-foreground">Account payments reduce the total above. Individual job amounts show earnings; a payment can cover several jobs or an older balance.</p>
       {(!ledger || entries.length > 0 || jobsOutsideReports.length > 0) && (
         <>
           {/* Hero — completed work that isn't in a payout report or marked paid yet */}
@@ -210,7 +213,7 @@ export default async function CleanerPayPage() {
           {/* Awaiting payout */}
           <section className="space-y-2">
             <div className="flex items-center justify-between px-1">
-              <h2 className="text-base font-semibold">Awaiting payout</h2>
+              <h2 className="text-base font-semibold">Completed work</h2>
               <span className="rounded-full bg-secondary/40 px-2.5 py-0.5 text-xs font-semibold text-primary">
                 {awaiting.length}
               </span>

@@ -1,4 +1,5 @@
 import "server-only";
+import type { CleanerPayment } from "@/lib/domain/payments";
 import { cache } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveOwnerId } from "@/lib/queries/properties";
@@ -32,7 +33,14 @@ const loadFinance = cache(async () => {
   }
   const { data: accounts, error } = await supabase.from("cleaner_accounts").select("*").eq("owner_id", ownerId);
   if (error) throw new Error(error.message);
-  return { entries, jobs, accounts: (accounts ?? []) as CleanerAccount[] };
+  const payments: CleanerPayment[] = [];
+  for (let offset=0;;offset+=1000) {
+    const {data,error}=await supabase.from("cleaner_payments").select("*").eq("owner_id",ownerId).order("payment_date",{ascending:false}).order("id").range(offset,offset+999);
+    if(error) throw new Error(error.message);
+    payments.push(...((data??[]) as CleanerPayment[]));
+    if((data?.length??0)<1000) break;
+  }
+  return { payments, entries, jobs, accounts: (accounts ?? []) as CleanerAccount[] };
 });
 
 export const getCleanerFinancialSummary = cache(async (cleanerId: string) => {
@@ -41,6 +49,7 @@ export const getCleanerFinancialSummary = cache(async (cleanerId: string) => {
   const accounting = calculateCleanerFinancialSummary({
     reconciledThrough: ledger?.account.reconciled_through ?? null,
     ledgerEntries: ledger?.entries ?? [],
+    payments: data.payments.filter(payment=>payment.cleaner_id===cleanerId),
     entries: data.entries.filter((entry) => entry.cleaner_id === cleanerId),
     jobs: data.jobs.filter((job) => job.cleaner_id === cleanerId),
   });
@@ -49,6 +58,6 @@ export const getCleanerFinancialSummary = cache(async (cleanerId: string) => {
 
 export async function listCleanerFinancialSummaries(cleanerIds?: string[]) {
   const data = await loadFinance();
-  const ids = cleanerIds ?? [...new Set([...data.accounts.map((a) => a.cleaner_id), ...data.entries.map((e) => e.cleaner_id), ...data.jobs.flatMap((j) => j.cleaner_id ? [j.cleaner_id] : [])])];
+  const ids = cleanerIds ?? [...new Set([...data.accounts.map((a) => a.cleaner_id), ...data.payments.map(p=>p.cleaner_id), ...data.entries.map((e) => e.cleaner_id), ...data.jobs.flatMap((j) => j.cleaner_id ? [j.cleaner_id] : [])])];
   return Promise.all(ids.map(getCleanerFinancialSummary));
 }

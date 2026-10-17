@@ -1,3 +1,4 @@
+import { JobPayBreakdown } from "@/components/shared/job-pay-breakdown";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Route } from "next";
@@ -62,7 +63,7 @@ export default async function PayoutBatchDetailPage({
 
   if (!batch) notFound();
 
-  const finances = await listCleanerFinancialSummaries();
+  const finances = await listCleanerFinancialSummaries([...new Set([...entries.map((entry) => entry.cleaner_id), ...(batch.cleaner_filter ? [batch.cleaner_filter] : [])])]);
   const historical = isHistoricalPayoutReport(
     batch,
     finances.flatMap((item) => (item.ledger ? [item.ledger.account] : [])),
@@ -194,6 +195,10 @@ export default async function PayoutBatchDetailPage({
                 ${stmt.subtotal.toFixed(2)}
               </p>
             </div>
+            <p className="text-sm text-muted-foreground">
+              Report job pay: ${stmt.subtotal.toFixed(2)}. Current account balance: ${Number(finances.find((item) => item.cleanerId === stmt.cleaner_id)?.balance ?? 0).toFixed(2)}.
+              {" "}The current balance includes all recorded charges and payments, across report periods.
+            </p>
             <div className="overflow-x-auto rounded-2xl border border-border/70">
               <table className="w-full min-w-[40rem] text-sm">
                 <thead>
@@ -235,7 +240,7 @@ export default async function PayoutBatchDetailPage({
                           "—"}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
-                        ${Number(e.amount).toFixed(2)}
+                        <JobPayBreakdown total={Number(e.amount)} extras={e.assignments?.assignment_extras} label="Job pay" />
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span
@@ -245,15 +250,15 @@ export default async function PayoutBatchDetailPage({
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {canManage ? (
-                          <EntryPaidToggle entryId={e.id} paidAt={e.paid_at} />
-                        ) : e.paid_at ? (
+                        {canManage && batch.status === "approved" ? (
+                          <EntryPaidToggle entryId={e.id} paidAt={e.paid_at ?? e.assignments?.paid_at ?? null} />
+                        ) : (e.paid_at ?? e.assignments?.paid_at ?? (batch.status === "paid" ? batch.paid_at : null)) ? (
                           <span className="text-xs font-medium text-green-700">
-                            Paid
+                            {historical ? "Archived paid label" : "Marked paid"}
                           </span>
                         ) : (
                           <span className="text-xs text-muted-foreground">
-                            Unpaid
+                            {historical ? "Archived unpaid label" : "Not marked paid"}
                           </span>
                         )}
                       </td>

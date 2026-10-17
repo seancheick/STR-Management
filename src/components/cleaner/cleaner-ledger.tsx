@@ -15,9 +15,11 @@ const date = (d: string) =>
 export function CleanerLedger({
   account,
   entries,
+  current = false,
 }: {
   account: CleanerAccount;
   entries: LedgerEntry[];
+  current?: boolean;
 }) {
   const summary = summarizeLedger(entries);
   return (
@@ -25,7 +27,7 @@ export function CleanerLedger({
       <div className="rounded-2xl border border-border bg-card p-5">
         <h2 className="text-xl font-semibold">{account.label}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Reconciled through {date(account.reconciled_through)}
+          {account.reconciled_through === "1900-01-01" ? "Completed jobs and recorded payments." : <>{current ? "History reconciled through " : "Reconciled through "}{date(account.reconciled_through)}{current && ". Newer completed jobs and recorded payments are included below."}</>}
         </p>
         <dl className="mt-5 space-y-3 tabular-nums">
           <div className="flex justify-between gap-3">
@@ -38,7 +40,7 @@ export function CleanerLedger({
           </div>
           <div className="flex justify-between gap-3 border-t pt-3 text-xl font-semibold text-primary">
             <dt>
-              {summary.balance < 0 ? "Credit balance" : "Ledger balance"}
+              {summary.balance < 0 ? "Credit balance" : current ? "Amount remaining" : "Ledger balance"}
             </dt>
             <dd>{money(Math.abs(summary.balance))}</dd>
           </div>
