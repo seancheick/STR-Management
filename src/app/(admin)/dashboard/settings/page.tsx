@@ -1,3 +1,4 @@
+import { ChangePasswordForm } from "@/components/auth/change-password-form";
 import { headers } from "next/headers";
 import { Building2, CalendarDays, Settings as SettingsIcon } from "lucide-react";
 
@@ -25,6 +26,8 @@ export default async function SettingsPage() {
           Personalize how TurnFlow looks inside your workspace.
         </p>
       </header>
+
+      <ChangePasswordForm />
 
       <section className="rounded-2xl border border-border/70 bg-card p-6">
         <div className="mb-5 flex items-center gap-2">

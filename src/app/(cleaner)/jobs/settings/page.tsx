@@ -1,3 +1,4 @@
+import { ChangePasswordForm } from "@/components/auth/change-password-form";
 import { Bell, Settings } from "lucide-react";
 
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -13,6 +14,8 @@ export default async function CleanerSettingsPage() {
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
       </header>
+
+      <ChangePasswordForm />
 
       <section className="rounded-2xl border border-border/70 bg-card p-5">
         <div className="mb-5 flex items-center gap-2">
