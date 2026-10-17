@@ -85,6 +85,8 @@ export async function listPayoutEntries(
   batchId: string,
 ): Promise<PayoutEntryRecord[]> {
   const supabase = await createServerSupabaseClient();
+  const entries:PayoutEntryRecord[]=[];
+  for(let offset=0;;offset+=1000){
   const { data, error } = await supabase
     .from("payout_entries")
     .select(
@@ -94,9 +96,12 @@ export async function listPayoutEntries(
        assignments(due_at, assignment_type, expected_duration_min, paid_at, assignment_extras(id, assignment_id, description, amount, kind, created_at))`,
     )
     .eq("batch_id", batchId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true }).order("id").range(offset,offset+999);
   if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as PayoutEntryRecord[];
+  entries.push(...((data??[]) as unknown as PayoutEntryRecord[]));
+  if((data?.length??0)<1000)break;
+  }
+  return entries;
 }
 
 /** Entries visible to a cleaner (RLS limits cleaners to approved/paid batches). */

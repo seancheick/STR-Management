@@ -1,3 +1,4 @@
+import { formatReportDate } from "@/lib/services/report-dates";
 import type { Route } from "next";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
@@ -10,7 +11,6 @@ import { listPayoutBatches } from "@/lib/queries/payouts";
 import { listActiveCleaners, listCleaners } from "@/lib/queries/team";
 import { BulkMarkPaid } from "@/components/payouts/bulk-mark-paid";
 import { CreatePayoutBatchForm } from "@/components/payouts/create-payout-batch-form";
-import { formatInTimeZone } from "@/lib/ical/timezone";
 
 const statusColors: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700",
@@ -20,7 +20,7 @@ const statusColors: Record<string, string> = {
 };
 
 function formatDate(d: string) {
-  return formatInTimeZone(d, {
+  return formatReportDate(d, {
     month: "short",
     day: "numeric",
     year: "numeric",

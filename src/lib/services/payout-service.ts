@@ -1,4 +1,5 @@
 import "server-only";
+import {isJobInReportPeriod} from "@/lib/services/report-dates";
 import { listCleanerAccounts, isReconciledJob } from "@/lib/queries/cleaner-ledger";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -43,26 +44,20 @@ export async function generatePayoutBatch(
 
   if (batchErr) return { success: false, error: batchErr.message };
 
-  // 2. Find eligible assignments (approved / completed_pending_review in period)
-  let q = supabase
-    .from("assignments")
-    .select(
-      "id, property_id, listing_property_id, cleaner_id, fixed_payout_amount, owner_id, due_at",
-    )
-    .in("status", ["approved", "completed_pending_review"])
-    .gte("due_at", `${input.periodStart}T00:00:00Z`)
-    .lte("due_at", `${input.periodEnd}T23:59:59Z`)
-    .not("cleaner_id", "is", null);
-
-  if (input.cleanerFilter) {
-    q = q.eq("cleaner_id", input.cleanerFilter);
-  }
-
-  const { data: assignments, error: assignErr } = await q;
-  if (assignErr) {
-    // Clean up the empty batch
-    await supabase.from("payout_batches").delete().eq("id", batch.id);
-    return { success: false, error: assignErr.message };
+  // Fetch a timezone-safe envelope, then use each listing's actual local date.
+  type PayableJob={id:string;property_id:string;listing_property_id:string|null;cleaner_id:string|null;fixed_payout_amount:number|null;owner_id:string;due_at:string;properties:{timezone:string|null}|null;listing_properties:{timezone:string|null}|null};
+  const assignments:PayableJob[]=[];
+  const lower=new Date(`${input.periodStart}T00:00:00Z`);lower.setUTCDate(lower.getUTCDate()-1);
+  const upper=new Date(`${input.periodEnd}T00:00:00Z`);upper.setUTCDate(upper.getUTCDate()+2);
+  for(let offset=0;;offset+=1000){
+    let query=supabase.from("assignments").select("id,property_id,listing_property_id,cleaner_id,fixed_payout_amount,owner_id,due_at,properties:property_id(timezone),listing_properties:assignments_listing_property_fk(timezone)")
+      .eq("owner_id",input.ownerId).in("status",["approved","completed_pending_review"]).gte("due_at",lower.toISOString()).lt("due_at",upper.toISOString()).not("cleaner_id","is",null).order("id").range(offset,offset+999);
+    if(input.cleanerFilter)query=query.eq("cleaner_id",input.cleanerFilter);
+    const {data,error}=await query;
+    if(error){await supabase.from("payout_batches").delete().eq("id",batch.id);return {success:false,error:error.message};}
+    const rows=(data??[]) as unknown as PayableJob[];
+    assignments.push(...rows.filter(job=>isJobInReportPeriod(job.due_at,input.periodStart,input.periodEnd,job.listing_properties?.timezone??job.properties?.timezone)));
+    if(rows.length<1000)break;
   }
 
   if (!assignments || assignments.length === 0) {
@@ -72,15 +67,18 @@ export async function generatePayoutBatch(
 
   // 3. Exclude assignments already in another batch
   const assignmentIds = assignments.map((a) => a.id);
-  const { data: existing } = await supabase
-    .from("payout_entries")
-    .select("assignment_id")
-    .in("assignment_id", assignmentIds)
-    .eq("status", "included");
+  const alreadyBatched=new Set<string>();
+  for(let start=0;start<assignmentIds.length;start+=500){
+    for(let offset=0;;offset+=1000){
+      const {data:existing,error}=await supabase.from("payout_entries").select("assignment_id").eq("owner_id",input.ownerId).in("assignment_id",assignmentIds.slice(start,start+500)).eq("status","included").order("id").range(offset,offset+999);
+      if(error){await supabase.from("payout_batches").delete().eq("id",batch.id);return {success:false,error:error.message};}
+      for(const entry of existing??[])alreadyBatched.add(entry.assignment_id);
+      if((existing?.length??0)<1000)break;
+    }
+  }
 
-  const alreadyBatched = new Set((existing ?? []).map((e) => e.assignment_id));
   const accounts = await listCleanerAccounts();
-  const eligible = assignments.filter((a) => !alreadyBatched.has(a.id) && !isReconciledJob(accounts,a.cleaner_id,a.due_at));
+  const eligible = assignments.filter((a) => !alreadyBatched.has(a.id) && !isReconciledJob(accounts,a.cleaner_id,a.due_at,a.listing_properties?.timezone??a.properties?.timezone));
 
   if (eligible.length === 0) {
     return { success: true, batchId: batch.id, entryCount: 0 };

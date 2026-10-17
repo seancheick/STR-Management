@@ -1,3 +1,4 @@
+import { formatReportDate } from "@/lib/services/report-dates";
 import { listCleanerFinancialSummaries } from "@/lib/queries/cleaner-finance";
 import { isHistoricalPayoutReport } from "@/lib/services/cleaner-ledger";
 import { notFound } from "next/navigation";
@@ -12,7 +13,7 @@ import {
 import { formatInTimeZone } from "@/lib/ical/timezone";
 
 function formatDate(d: string) {
-  return formatInTimeZone(d, {
+  return formatReportDate(d, {
     month: "long",
     day: "numeric",
     year: "numeric",

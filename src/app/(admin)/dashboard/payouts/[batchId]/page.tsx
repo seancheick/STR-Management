@@ -1,3 +1,4 @@
+import { formatReportDate } from "@/lib/services/report-dates";
 import { JobPayBreakdown } from "@/components/shared/job-pay-breakdown";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -16,7 +17,7 @@ import { EntryPaidToggle } from "@/components/payouts/entry-paid-toggle";
 import { formatInTimeZone } from "@/lib/ical/timezone";
 
 function formatDate(d: string) {
-  return formatInTimeZone(d, {
+  return formatReportDate(d, {
     month: "short",
     day: "numeric",
     year: "numeric",
