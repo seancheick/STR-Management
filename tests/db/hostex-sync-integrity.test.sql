@@ -67,5 +67,16 @@ do $$ declare result jsonb; begin
  result:=public.create_hostex_cleaning(jsonb_build_object('owner_id','aa000000-0000-0000-0000-000000000001','property_id','aa000000-0000-0000-0000-000000000010','listing_property_id','aa000000-0000-0000-0000-000000000010','checkout_at','2035-02-01T16:00Z','due_at','2035-02-01T20:00Z','hostex_reservation_code','ROLLBACK','hostex_stay_code','ROLLBACK','booking_channel','airbnb'));
  if not (result->>'created')::boolean then raise exception 'FAIL checklist creation retry'; end if;
 end $$;
+-- A late same-day booking changes timing after checkout, without allowing cancellation.
+do $$
+declare jid uuid;
+begin
+ insert into public.assignments(owner_id,property_id,assignment_type,status,source_type,checkout_at,due_at,hostex_reservation_code,hostex_stay_code)
+ values('aa000000-0000-0000-0000-000000000001','aa000000-0000-0000-0000-000000000010','cleaning','confirmed','hostex',now()-interval '1 hour',now()+interval '3 hours','LATE','LATE') returning id into jid;
+ if not public.apply_hostex_job_change(jid,'aa000000-0000-0000-0000-000000000001','arrival',jsonb_build_object('next_checkin_at',now()+interval '3 hours','expected_code','LATE','expected_stay_code','LATE')) then raise exception 'FAIL late arrival context not updated'; end if;
+ if public.apply_hostex_job_change(jid,'aa000000-0000-0000-0000-000000000001','cancel','{}') then raise exception 'FAIL postcheckout cancellation permitted'; end if;
+ if (select status from public.assignments where id=jid)<>'confirmed' then raise exception 'FAIL late arrival changed job status'; end if;
+end $$;
+
 rollback;
 select 'Hostex sync integrity tests passed';

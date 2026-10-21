@@ -228,3 +228,10 @@ describe("Hostex API failure", () => {
     expect(mocks.from).not.toHaveBeenCalled();
   });
 });
+
+it("refreshes a late same-day arrival after checkout without permitting a cancellation", () => {
+ const current=job("current","2026-10-21",{status:"confirmed",hostexReservationCode:"OUT",hostexStayCode:"OUT",nextCheckinAt:null});
+ const result=plan({now:new Date("2026-10-21T17:00:00Z"),stays:[stay("OUT",101,"2026-10-19","2026-10-21"),stay("IN",101,"2026-10-21","2026-10-23")],jobs:[current]});
+ expect(result.arrivals).toEqual([{jobId:"current",ownerId:"owner",patch:{next_checkin_at:"2026-10-21T19:00:00.000Z"}}]);
+ expect(result.cancels).toEqual([]); expect(result.moves).toEqual([]);
+});

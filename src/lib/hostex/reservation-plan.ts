@@ -124,7 +124,7 @@ export function planHostexReconciliation(input: HostexPlanInput): HostexPlan {
     }
     if (target) {
       claimed.add(target.id);
-      if (mutable(target) && !plan.moves.some((m) => m.jobId === target.id) &&
+      if (automated(target) && !target.locked && (SYNC_MUTABLE_STATUSES as readonly string[]).includes(target.status) && !plan.moves.some((m) => m.jobId === target.id) &&
         (target.nextCheckinAt ?? null) !== nextCheckin(stay)) {
         plan.arrivals.push({ jobId: target.id, ownerId: stay.ownerId, patch: { next_checkin_at: nextCheckin(stay) } });
       }

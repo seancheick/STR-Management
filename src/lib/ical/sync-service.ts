@@ -480,6 +480,7 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
       .eq("owner_id", input.ownerId)
       .eq("property_id", input.propertyId)
       .eq("source_type", "ical")
+      .is("hostex_reservation_code", null)
       .in("status", [...SYNC_MUTABLE_STATUSES])
       .gt("due_at", new Date().toISOString());
     if (liveError) syncErrors.push(`Live turnover lookup failed: ${liveError.message}`);
@@ -489,6 +490,8 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
         .from("assignments")
         .update({ next_checkin_at: nextArrivalAfterCheckout(job.checkout_at, arrivalStarts) })
         .eq("id", job.id)
+        .eq("owner_id", input.ownerId)
+        .is("hostex_reservation_code", null)
         .in("status", [...SYNC_MUTABLE_STATUSES]);
       if (nextError) syncErrors.push(`Next arrival update failed: ${nextError.message}`);
     }
