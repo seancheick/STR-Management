@@ -1,14 +1,18 @@
 import "server-only";
 
+import { requireRole } from "@/lib/auth/session";
+import { isTightTurnover } from "@/lib/domain/assignments";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 export type HealthReport = {
+  checkedAt: string;
+  unavailableChecks: string[];
   calendarSources: Array<{
     id: string;
     property_name: string;
     platform: string;
     last_synced_at: string | null;
-    stale_hours: number | null;
+    check_error: boolean;
     sync_logs: {
       result: string;
       synced_at: string;
@@ -25,246 +29,99 @@ export type HealthReport = {
     last_weekly_digest_at: string | null;
   };
   pushSubscriptions: {
-    active: number;
-    inactive: number;
-    stale_30d: number;
+    active: number | null;
+    inactive: number | null;
+    stale_30d: number | null;
   };
   notifications: {
-    last_24h_sent: number;
-    last_24h_failed: number;
-    pending: number;
+    last_24h_sent: number | null;
+    last_24h_failed: number | null;
+    pending: number | null;
   };
   assignments: {
-    unassigned_next_7d: number;
-    tight_turnovers_next_7d: number;
-    stuck_pending_review: number;
+    unassigned_next_7d: number | null;
+    tight_turnovers_next_7d: number | null;
+    stuck_pending_review: number | null;
   };
   database: {
-    total_properties: number;
-    total_active_cleaners: number;
-    total_reservations: number;
-    total_assignments: number;
+    total_properties: number | null;
+    total_active_cleaners: number | null;
+    total_reservations: number | null;
+    total_assignments: number | null;
   };
 };
 
 export async function getHealthReport(): Promise<HealthReport> {
+  const profile = await requireRole(["owner", "admin"]);
   const supabase = createServiceSupabaseClient();
+  const ownerId = profile.owner_id;
   const now = Date.now();
-  const nowIso = new Date(now).toISOString();
-  const h24 = new Date(now - 24 * 60 * 60 * 1000).toISOString();
-  const h7d = new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const d30 = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
-
-  const [
-    sourcesRes,
-    syncLogsRes,
-    reminderLogsRes,
-    recurringLogsRes,
-    digestLogsRes,
-    activePushRes,
-    inactivePushRes,
-    stalePushRes,
-    sent24Res,
-    failed24Res,
-    pendingNotifRes,
-    unassignedRes,
-    pendingReviewRes,
-    propertiesRes,
-    cleanersRes,
-    reservationsRes,
-    assignmentsCountRes,
-    weekAssignmentsRes,
-  ] = await Promise.all([
-    supabase
-      .from("property_calendar_sources")
-      .select(
-        "id, platform, last_synced_at, properties:property_id (name)",
-      )
-      .eq("active", true),
-    supabase
-      .from("calendar_sync_logs")
-      .select(
-        "calendar_source_id, result, synced_at, events_found, assignments_created, conflict_count, error_message",
-      )
-      .order("synced_at", { ascending: false })
-      .limit(200),
-    // Reminder cron leaves no DB trace; infer from notifications of type reminder_*
-    supabase
-      .from("notifications")
-      .select("created_at")
-      .in("notification_type", ["reminder_24h", "reminder_2h"])
-      .order("created_at", { ascending: false })
-      .limit(1),
-    supabase
-      .from("notifications")
-      .select("created_at")
-      .eq("notification_type", "overdue")
-      .order("created_at", { ascending: false })
-      .limit(1),
-    supabase
-      .from("notifications")
-      .select("created_at")
-      .eq("notification_type", "weekly_digest")
-      .order("created_at", { ascending: false })
-      .limit(1),
-    supabase
-      .from("device_subscriptions")
-      .select("id", { count: "exact", head: true })
-      .eq("active", true),
-    supabase
-      .from("device_subscriptions")
-      .select("id", { count: "exact", head: true })
-      .eq("active", false),
-    supabase
-      .from("device_subscriptions")
-      .select("id", { count: "exact", head: true })
-      .eq("active", true)
-      .lt("created_at", d30),
-    supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "sent")
-      .gte("created_at", h24),
-    supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "failed")
-      .gte("created_at", h24),
-    supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending"),
-    supabase
-      .from("assignments")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "unassigned")
-      .gte("due_at", nowIso)
-      .lte("due_at", h7d),
-    supabase
-      .from("assignments")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "completed_pending_review")
-      .lt("due_at", h24),
-    supabase.from("properties").select("id", { count: "exact", head: true }),
-    supabase
-      .from("cleaners")
-      .select("id", { count: "exact", head: true })
-      .eq("role", "cleaner")
-      .eq("active", true),
-    supabase.from("reservations").select("id", { count: "exact", head: true }),
-    supabase.from("assignments").select("id", { count: "exact", head: true }),
-    // Cleaning windows in the next 7d for tight-turn detection
-    supabase
-      .from("assignments")
-      .select("checkout_at, next_checkin_at")
-      .gte("due_at", nowIso)
-      .lte("due_at", h7d)
-      .not("status", "in", '("cancelled")'),
+  const checkedAt = new Date(now).toISOString();
+  const h24 = new Date(now - 24 * 3_600_000).toISOString();
+  const h7d = new Date(now + 7 * 24 * 3_600_000).toISOString();
+  const d30 = new Date(now - 30 * 24 * 3_600_000).toISOString();
+  // Service access is needed for team devices; every query is tenant-scoped.
+  const count = (table: string) => supabase.from(table).select("id", { count: "exact", head: true }).eq("owner_id", ownerId);
+  const devices = () => supabase.from("device_subscriptions").select("id, users!inner(owner_id)", { count: "exact", head: true }).eq("users.owner_id", ownerId);
+  const [sourcesRes, reminderRes, digestRes, activeRes, inactiveRes, olderRes,
+    sentRes, failedRes, pendingRes, unassignedRes, reviewRes, propertiesRes,
+    cleanersRes, reservationsRes, assignmentsRes, windowsRes] = await Promise.all([
+    supabase.from("property_calendar_sources").select("id, platform, last_synced_at, properties:property_id(name)").eq("owner_id", ownerId).eq("active", true),
+    supabase.from("notifications").select("created_at").eq("owner_id", ownerId).in("notification_type", ["reminder_24h", "reminder_2h"]).order("created_at", { ascending: false }).limit(1),
+    supabase.from("notifications").select("created_at").eq("owner_id", ownerId).eq("notification_type", "weekly_digest").order("created_at", { ascending: false }).limit(1),
+    devices().eq("active", true), devices().eq("active", false), devices().eq("active", true).lt("created_at", d30),
+    count("notifications").eq("status", "sent").gte("sent_at", h24),
+    count("notifications").eq("status", "failed").gte("created_at", h24),
+    count("notifications").eq("status", "pending"),
+    count("assignments").eq("status", "unassigned").gte("due_at", checkedAt).lte("due_at", h7d),
+    count("assignments").eq("status", "completed_pending_review").lt("completed_at", h24),
+    count("properties"), count("cleaners").eq("role", "cleaner").eq("active", true),
+    count("reservations"), count("assignments"),
+    supabase.from("assignments").select("checkout_at, next_checkin_at").eq("owner_id", ownerId).gte("due_at", checkedAt).lte("due_at", h7d).not("status", "in", '("cancelled","approved","completed_pending_review")').limit(1000),
   ]);
-
-  // Stitch latest sync log per calendar source
-  const logsBySource = new Map<
-    string,
-    {
-      result: string;
-      synced_at: string;
-      events_found: number;
-      assignments_created: number;
-      conflict_count: number;
-      error_message: string | null;
-    }
-  >();
-  for (const row of (syncLogsRes.data as unknown as Array<{
-    calendar_source_id: string;
-    result: string;
-    synced_at: string;
-    events_found: number;
-    assignments_created: number;
-    conflict_count: number;
-    error_message: string | null;
-  }>) ?? []) {
-    if (!logsBySource.has(row.calendar_source_id)) {
-      logsBySource.set(row.calendar_source_id, {
-        result: row.result,
-        synced_at: row.synced_at,
-        events_found: row.events_found,
-        assignments_created: row.assignments_created,
-        conflict_count: row.conflict_count,
-        error_message: row.error_message,
-      });
-    }
-  }
-
-  const calendarSources = (
-    (sourcesRes.data as unknown as Array<{
-      id: string;
-      platform: string;
-      last_synced_at: string | null;
-      properties: { name: string } | null;
-    }>) ?? []
-  ).map((s) => ({
-    id: s.id,
-    property_name: s.properties?.name ?? "Unknown",
-    platform: s.platform,
-    last_synced_at: s.last_synced_at,
-    stale_hours: s.last_synced_at
-      ? Math.round((now - new Date(s.last_synced_at).getTime()) / 3_600_000)
-      : null,
-    sync_logs: logsBySource.get(s.id) ?? null,
+  const unavailableChecks: string[] = [];
+  const checked = <T extends { error: unknown }>(label: string, result: T): T => {
+    if (result.error) unavailableChecks.push(label);
+    return result;
+  };
+  const total = (label: string, result: { error: unknown; count: number | null }): number | null => {
+    checked(label, result);
+    return result.error ? null : result.count;
+  };
+  checked("Calendar sources", sourcesRes);
+  checked("Reminder activity", reminderRes);
+  checked("Weekly summary activity", digestRes);
+  checked("Tight cleaning windows", windowsRes);
+  const calendarSources = await Promise.all((sourcesRes.data ?? []).map(async (source) => {
+    // Fetch the latest result for each source; a global log limit can hide a
+    // quieter source behind a frequently synced source's history.
+    const logRes = await supabase.from("calendar_sync_logs")
+      .select("result, synced_at, events_found, assignments_created, conflict_count, error_message")
+      .eq("owner_id", ownerId).eq("calendar_source_id", source.id)
+      .order("synced_at", { ascending: false }).limit(1).maybeSingle();
+    checked("Calendar sync result", logRes);
+    const property = source.properties as unknown as { name: string } | null;
+    return { id: source.id, property_name: property?.name ?? "Unknown property", platform: source.platform,
+      last_synced_at: source.last_synced_at, check_error: !!logRes.error, sync_logs: logRes.data };
   }));
-
-  // Tight turn count
-  const tightWindows = (weekAssignmentsRes.data as unknown as Array<{
-    checkout_at: string | null;
-    next_checkin_at: string | null;
-  }>) ?? [];
-  const tightCount = tightWindows.filter((a) => {
-    if (!a.checkout_at || !a.next_checkin_at) return false;
-    const gap =
-      (new Date(a.next_checkin_at).getTime() - new Date(a.checkout_at).getTime()) /
-      60_000;
-    return gap > 0 && gap <= 360;
-  }).length;
-
+  // A saturated API page is not a reliable complete count.
+  if ((windowsRes.data?.length ?? 0) >= 1000) unavailableChecks.push("Tight cleaning windows");
+  const tightCount = windowsRes.error || (windowsRes.data?.length ?? 0) >= 1000 ? null
+    : (windowsRes.data ?? []).filter((job) => isTightTurnover(job.checkout_at, job.next_checkin_at)).length;
   return {
+    checkedAt, unavailableChecks,
     calendarSources,
     crons: {
-      last_sync_calendars_at:
-        calendarSources
-          .map((s) => s.last_synced_at)
-          .filter(Boolean)
-          .sort()
-          .reverse()[0] ?? null,
-      last_send_reminders_at:
-        (reminderLogsRes.data as unknown as Array<{ created_at: string }>)?.[0]
-          ?.created_at ?? null,
-      last_recurring_tasks_at:
-        (recurringLogsRes.data as unknown as Array<{ created_at: string }>)?.[0]
-          ?.created_at ?? null,
-      last_weekly_digest_at:
-        (digestLogsRes.data as unknown as Array<{ created_at: string }>)?.[0]
-          ?.created_at ?? null,
+      last_sync_calendars_at: calendarSources.map((source) => source.sync_logs?.synced_at ?? null).filter((iso): iso is string => !!iso).sort().at(-1) ?? null,
+      last_send_reminders_at: reminderRes.data?.[0]?.created_at ?? null,
+      // No persistent run log exists. Overdue notifications belong to the
+      // reminder job, so they cannot establish a recurring-task run.
+      last_recurring_tasks_at: null,
+      last_weekly_digest_at: digestRes.data?.[0]?.created_at ?? null,
     },
-    pushSubscriptions: {
-      active: activePushRes.count ?? 0,
-      inactive: inactivePushRes.count ?? 0,
-      stale_30d: stalePushRes.count ?? 0,
-    },
-    notifications: {
-      last_24h_sent: sent24Res.count ?? 0,
-      last_24h_failed: failed24Res.count ?? 0,
-      pending: pendingNotifRes.count ?? 0,
-    },
-    assignments: {
-      unassigned_next_7d: unassignedRes.count ?? 0,
-      tight_turnovers_next_7d: tightCount,
-      stuck_pending_review: pendingReviewRes.count ?? 0,
-    },
-    database: {
-      total_properties: propertiesRes.count ?? 0,
-      total_active_cleaners: cleanersRes.count ?? 0,
-      total_reservations: reservationsRes.count ?? 0,
-      total_assignments: assignmentsCountRes.count ?? 0,
-    },
+    pushSubscriptions: { active: total("Active push subscriptions", activeRes), inactive: total("Inactive push subscriptions", inactiveRes), stale_30d: total("Older push subscriptions", olderRes) },
+    notifications: { last_24h_sent: total("Sent notifications", sentRes), last_24h_failed: total("Failed notifications", failedRes), pending: total("Queued notifications", pendingRes) },
+    assignments: { unassigned_next_7d: total("Unassigned cleanings", unassignedRes), tight_turnovers_next_7d: tightCount, stuck_pending_review: total("Cleanings awaiting review", reviewRes) },
+    database: { total_properties: total("Properties", propertiesRes), total_active_cleaners: total("Active cleaners", cleanersRes), total_reservations: total("Reservations", reservationsRes), total_assignments: total("Assignments", assignmentsRes) },
   };
 }
