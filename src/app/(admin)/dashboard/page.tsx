@@ -1,3 +1,4 @@
+import { dateKeyInTimeZone } from "@/lib/ical/timezone";
 import { getCleaningSpending } from "@/lib/queries/cleaning-spending";
 import { CleaningSpendingCard } from "@/components/dashboard/cleaning-spending-card";
 import { calendarTimelineDays, calendarWindowContains } from "@/lib/services/calendar-display";
@@ -344,6 +345,7 @@ export default async function DashboardPage() {
 
             {/* Week calendar — first thing host sees */}
             <ScheduleTimeline
+              todayKey={dateKeyInTimeZone(today)}
               assignments={weekAssignments}
               cleaners={cleaners}
               days={weekDays}

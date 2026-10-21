@@ -35,6 +35,7 @@ function getMonthDays(monthOffset: number): Date[] {
 }
 
 export default async function SchedulePage({ searchParams }: SchedulePageProps) {
+  const todayKey = dateKeyInTimeZone(new Date());
   const profile = await requireRole(["owner", "admin", "supervisor"]);
   // Creating jobs is owner/admin-only (createAssignmentAction).
   const canManage = profile.role === "owner" || profile.role === "admin";
@@ -266,6 +267,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
 
       {view === "month" ? (
         <MonthView
+          todayKey={todayKey}
           properties={propFilteredProperties}
           assignments={assignments}
           cleaners={cleaners}
@@ -278,6 +280,7 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
         />
       ) : (
         <ScheduleTimeline
+          todayKey={todayKey}
           key={`${propertyFilter ?? "all"}:${cleanerFilter ?? "all"}:${weekOffset}`}
           properties={propFilteredProperties}
           assignments={assignments}

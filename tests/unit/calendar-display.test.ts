@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { calendarDate, calendarDayKey, calendarInstantKey, calendarRangeLabel, reservationColumns, calendarWindow, calendarWindowContains, calendarListingId, calendarEdgeDirection, calendarAdjacentDays, calendarScrollAnchor, calendarWindowChunks, calendarRefreshRows, calendarTimelineDays } from "@/lib/services/calendar-display";
 
 describe("calendar display", () => {
+  it("uses the same today cell in server and browser timezones after UTC midnight", () => {
+    const previousZone = process.env.TZ;
+    try {
+      process.env.TZ = "UTC";
+      const todayKey = calendarInstantKey("2026-10-21T03:45:00Z");
+      expect(todayKey).toBe("2026-10-20");
+      const serverCell = calendarDayKey(calendarDate(todayKey));
+      process.env.TZ = "America/New_York";
+      expect(calendarDayKey(calendarDate(todayKey))).toBe(serverCell);
+    } finally {
+      if (previousZone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousZone;
+    }
+  });
   it("formats same-month and cross-year ranges without incomplete Intl skeletons", () => {
     expect(calendarRangeLabel(calendarDate("2026-10-10"), calendarDate("2026-10-23"))).toBe("Oct 10 – 23, 2026");
     expect(calendarRangeLabel(calendarDate("2026-12-28"), calendarDate("2027-01-10"))).toBe("Dec 28, 2026 – Jan 10, 2027");

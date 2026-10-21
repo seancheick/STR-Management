@@ -17,6 +17,7 @@ import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawe
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type MonthViewProps = {
+  todayKey: string;
   assignments: AssignmentScheduleRecord[];
   properties: PropertyRecord[];
   cleaners: TeamMemberRecord[];
@@ -96,6 +97,7 @@ function priorityRank(a: AssignmentScheduleRecord): number {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function MonthView({
+  todayKey,
   assignments,
   properties,
   cleaners,
@@ -118,7 +120,7 @@ export function MonthView({
     return () => window.removeEventListener("keydown", handler);
   }, [selectedId]);
 
-  const today = useMemo(() => new Date(), []);
+  const today = useMemo(() => calendarDate(todayKey), [todayKey]);
   const monthStart = useMemo(() => calendarDate(monthDays[0]), [monthDays]);
   const monthLabel = monthStart.toLocaleDateString("en-US", {
     month: "long",

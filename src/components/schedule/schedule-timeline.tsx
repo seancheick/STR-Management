@@ -18,6 +18,7 @@ import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawe
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ScheduleTimelineProps = {
+  todayKey: string;
   assignments: AssignmentScheduleRecord[];
   properties: PropertyRecord[];
   reservations: ReservationRecord[];
@@ -75,6 +76,7 @@ function dayIndex(date: Date, windowStart: Date, windowLength: number): number |
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function ScheduleTimeline({
+  todayKey,
   assignments: initialAssignments,
   properties,
   reservations: initialReservations,
@@ -310,7 +312,7 @@ export function ScheduleTimeline({
     };
   }, [extendDays]);
 
-  const today = new Date();
+  const today = calendarDate(todayKey);
   const dayDates = useMemo(() => days.map(calendarDate), [days]);
 
   const visibleProperties = useMemo(() => {
