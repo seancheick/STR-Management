@@ -65,7 +65,7 @@ Imported statement IDs passed to `get_cleaning_scope` or `get_job_pay` return a 
 
 ## Bookability and channel calendars
 
-TurnFlow scans every Hostex channel calendar (each Airbnb listing and each Booking.com rate plan) once a day at 12:00 UTC, and on demand. Hostex remains the channel manager; TurnFlow reads, judges, and only writes owner-approved changes. Server env: `HOSTEX_API_TOKEN` (Hostex Open API v3, spec at https://hostex.io/open_api/v3/config.json).
+TurnFlow scans every Hostex channel calendar (each Airbnb listing and each Booking.com rate plan) once a day at 12:00 UTC, and on demand. Hostex remains the channel manager; TurnFlow reads, judges, and only writes owner-approved changes. Server env: `HOSTEX_API_TOKEN` (Hostex Open API v3, spec at https://hostex.io/open_api/v3/config.json) and, optionally, `PRICELABS_API_KEY` (PriceLabs Customer API, read-only use of `GET /v1/listings`).
 
 **Read tools**
 - `get_bookability_report`: open findings (severity-ordered, date ranges, probable cause, next step), every channel calendar with its `pricingAuthority`, `price_readonly`, Hostex ratio and plan name, and the scanner heartbeat (`stale: true` after 26 hours without a successful scan).
@@ -82,7 +82,7 @@ TurnFlow scans every Hostex channel calendar (each Airbnb listing and each Booki
 | Rule | Severity | Meaning |
 |---|---|---|
 | `missing_price` | critical | Open, sellable night with no price (or Hostex returned no calendar) |
-| `pricing_stale` | critical | The calendars' pricing authority (PriceLabs or TurnFlow) changed no price for 72 hours |
+| `pricing_stale` | critical | PriceLabs-owned calendars: with `PRICELABS_API_KEY`, a property PriceLabs hasn't pushed for 36 hours, has sync off, or doesn't list (a warning if the PriceLabs API can't be read). Without the key, and for TurnFlow-owned calendars: no price changed for 72 hours. Changing the authority starts a fresh grace period |
 | `scan_stale` | critical | The scan failed, or (on read) no successful scan in 26 hours |
 | `closed_while_available` | warning | Property open but this calendar has zero inventory, unless marked intentionally closed |
 | `ratio_drift` | warning | Price moved more than 2% from the plan's ratio to Airbnb (configured or observed) |
