@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { isAuthorizedCronRequest } from "@/lib/auth/cron";
 import { listCalendarSourcesForSync } from "@/lib/queries/calendar";
 import { syncCalendarSource } from "@/lib/ical/sync-service";
+import { syncHostexReservations } from "@/lib/hostex/reservation-sync";
 
 export const maxDuration = 300;
 
@@ -47,10 +48,14 @@ export async function GET(req: NextRequest) {
       results.push({ ...identity, ok: false, error: "Calendar sync failed. Check sync history." });
     }
   }
+  // Hostex reservations run after the feeds so they link the jobs feeds just
+  // created. A Hostex outage leaves the iCal result standing.
+  const hostex = await syncHostexReservations().catch(() => ({ ok: false, summary: null, error: "Hostex reservation sync failed." }));
   for (const path of ["/dashboard", "/dashboard/schedule", "/dashboard/calendar", "/dashboard/assignments"]) {
     revalidatePath(path);
   }
   const synced = results.filter(result => result.ok).length;
-  return NextResponse.json({ attempted: sources.length, synced, failed: sources.length - synced, results },
+  return NextResponse.json({ attempted: sources.length, synced, failed: sources.length - synced, results,
+    hostex: { ok: hostex.ok, summary: hostex.summary, ...(hostex.error ? { error: hostex.error } : {}) } },
     { status: synced === sources.length ? 200 : 502 });
 }

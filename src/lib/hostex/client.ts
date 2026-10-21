@@ -58,6 +58,36 @@ export async function getAvailabilities(propertyIds: number[], start: string, en
   return need((await hostex<{ properties?: HostexAvailability[] }>(`/availabilities?${q}`))?.properties, "/availabilities");
 }
 
+export type HostexReservationStatus = "wait_accept" | "wait_pay" | "accepted" | "cancelled" | "denied" | "timeout";
+/** The GET /reservations fields this app reads; Hostex returns many more. */
+export type HostexReservation = {
+  reservation_code: string; stay_code: string; channel_id: string; property_id: number;
+  channel_type: string; listing_id: string; check_in_date: string; check_out_date: string;
+  status: HostexReservationStatus; guest_name?: string | null; cancelled_at?: string | null;
+};
+
+const RESERVATION_PAGE = 100;
+const RESERVATION_WINDOW_DAYS = 180;
+
+/** Read-only. Every stay checking out in [start, end], in 180-day windows of 100-row pages. */
+export async function getReservations(start: string, end: string): Promise<HostexReservation[]> {
+  const day = 86_400_000;
+  const stays: HostexReservation[] = [];
+  for (let from = Date.parse(`${start}T00:00:00Z`); from <= Date.parse(`${end}T00:00:00Z`); from += RESERVATION_WINDOW_DAYS * day) {
+    const to = Math.min(from + (RESERVATION_WINDOW_DAYS - 1) * day, Date.parse(`${end}T00:00:00Z`));
+    for (let offset = 0; ; offset += RESERVATION_PAGE) {
+      const q = new URLSearchParams({
+        start_check_out_date: new Date(from).toISOString().slice(0, 10), end_check_out_date: new Date(to).toISOString().slice(0, 10),
+        order_by: "check_out_date", limit: String(RESERVATION_PAGE), offset: String(offset),
+      });
+      const page = need((await hostex<{ reservations?: HostexReservation[] }>(`/reservations?${q}`))?.reservations, "/reservations");
+      stays.push(...page);
+      if (page.length < RESERVATION_PAGE) break;
+    }
+  }
+  return stays;
+}
+
 export type HostexPricingRatio = { channel_type: string; listing_id: string; listing_title?: string; ratio: number; readonly: boolean };
 
 /** Per-listing ratio (%) to the property base price; readonly listings are priced by the channel. */

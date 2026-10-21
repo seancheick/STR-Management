@@ -1,5 +1,5 @@
 import "server-only";
-import { visibleCalendarReservations } from "@/lib/services/calendar-history";
+import { visibleCalendarReservations, withoutHostexMirrors } from "@/lib/services/calendar-history";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
@@ -129,7 +129,7 @@ export async function listReservationsForRange(
       .from("reservations")
       .select(`
         id, property_id, listing_property_id, platform, guest_name, start_at, end_at, summary,
-        calendar_source_id, source:calendar_source_id ( active, retired_at ),
+        source_type, calendar_source_id, source:calendar_source_id ( active, retired_at ),
         properties:property_id ( name )
       `)
       .lte("start_at", endISO)
@@ -140,7 +140,7 @@ export async function listReservationsForRange(
     rows.push(...((data ?? []) as unknown as SourceReservation[]));
     if ((data?.length ?? 0) < 1000) break;
   }
-  return visibleCalendarReservations(rows);
+  return visibleCalendarReservations(withoutHostexMirrors(rows));
 }
 
 export async function listRecentSyncLogs(limit = 20): Promise<SyncLogRecord[]> {
