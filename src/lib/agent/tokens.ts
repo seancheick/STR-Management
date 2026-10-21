@@ -4,6 +4,9 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { importJWK, SignJWT } from "jose";
+
+import { agentSessionUsers } from "@/lib/agent/session-user";
 import { getEnv } from "@/lib/env";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
@@ -51,54 +54,29 @@ export async function authenticateAgent(header: string | null): Promise<AgentAut
   return { tokenId: row.id, ownerId: row.owner_id, label: row.label, scope: row.scope as AgentScope };
 }
 
-// One signed-in client per owner per server instance, so RLS and the RPCs'
-// auth.uid() checks see the owner exactly as the web app does.
-const sessions = new Map<string, { client: SupabaseClient; expiresAt: number }>();
-
-/**
- * Returns a client signed in as the owner. The project signs sessions with an
- * asymmetric key we cannot mint with, so we issue a one-time sign-in link with
- * the service role (no email is sent) and redeem it immediately.
- */
-const pendingSessions = new Map<string, Promise<SupabaseClient>>();
-
+/** Create a short-lived owner credential without changing any email OTP or session. */
 export async function ownerSession(ownerId: string): Promise<SupabaseClient> {
-  const pending = pendingSessions.get(ownerId);
-  if (pending) return pending;
-  const request = createOwnerSession(ownerId);
-  pendingSessions.set(ownerId, request);
-  try {
-    return await request;
-  } finally {
-    pendingSessions.delete(ownerId);
-  }
-}
-
-async function createOwnerSession(ownerId: string): Promise<SupabaseClient> {
-  const cached = sessions.get(ownerId);
-  if (cached && cached.expiresAt - 60_000 > Date.now()) return cached.client;
-
-  if (cached) {
-    const { data, error } = await cached.client.auth.refreshSession();
-    if (!error && data.session?.expires_at) {
-      sessions.set(ownerId, { client: cached.client, expiresAt: data.session.expires_at * 1000 });
-      return cached.client;
-    }
-  }
-
+  const rawKey = process.env.AGENT_SIGNING_JWK;
+  if (!rawKey) throw new Error("Agent signing key is not configured.");
+  const jwk = JSON.parse(rawKey);
+  if (jwk.alg !== "ES256" || !jwk.kid || !jwk.d) throw new Error("Invalid agent signing key.");
   const service = createServiceSupabaseClient();
-  const { data: user, error: userError } = await service.auth.admin.getUserById(ownerId);
-  if (userError || !user.user?.email) throw new Error("Could not sign in as the token owner.");
-  const { data: link, error: linkError } = await service.auth.admin.generateLink({ type: "magiclink", email: user.user.email });
-  if (linkError || !link.properties?.hashed_token) throw new Error("Could not sign in as the token owner.");
-
+  const { data, error } = await service.auth.admin.getUserById(ownerId);
+  if (error || !data.user || "banned_until" in data.user && typeof data.user.banned_until === "string" && Date.parse(data.user.banned_until) > Date.now()) {
+    throw new Error("The token owner is unavailable.");
+  }
   const env = getEnv();
+  const key = await importJWK({ ...jwk, key_ops: ["sign"] }, "ES256");
+  const jwt = await new SignJWT({ role: "authenticated", email: data.user.email })
+    .setProtectedHeader({ alg: "ES256", kid: jwk.kid, typ: "JWT" })
+    .setSubject(ownerId).setAudience("authenticated")
+    .setIssuer(`${env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1`)
+    .setIssuedAt().setExpirationTime("60s").sign(key);
   const client = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+    accessToken: async () => jwt,
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data, error } = await client.auth.verifyOtp({ type: "magiclink", token_hash: link.properties.hashed_token });
-  if (error || data.user?.id !== ownerId || !data.session?.expires_at) throw new Error("Could not sign in as the token owner.");
-  sessions.set(ownerId, { client, expiresAt: data.session.expires_at * 1000 });
+  agentSessionUsers.set(client, data.user);
   return client;
 }
 

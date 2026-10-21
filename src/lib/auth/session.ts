@@ -3,6 +3,7 @@ import "server-only";
 import type { Route } from "next";
 import { redirect } from "next/navigation";
 
+import { agentSessionUsers } from "@/lib/agent/session-user";
 import { getRoleHomePath, isUserRole, type UserRole } from "@/lib/auth/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -21,6 +22,8 @@ type UserProfile = {
 
 export async function getSessionUser() {
   const supabase = await createServerSupabaseClient();
+  const agentUser = agentSessionUsers.get(supabase);
+  if (agentUser) return agentUser;
   const {
     data: { user },
   } = await supabase.auth.getUser();
