@@ -22,7 +22,7 @@ export function JobExtrasEditor({assignmentId}: {assignmentId:string}) {
     const key=JSON.stringify({...values,amount:Number(values.amount)});
     if(requestId.current?.key!==key)requestId.current={key,id:crypto.randomUUID()};
     const input={...values,id:requestId.current.id};
-    startTransition(async()=>{try{setMessage("");const result=await saveJobExtraAction(input);if(result.error){setMessage(result.error);return;}requestId.current=null;form.reset();await refresh();setMessage("Extra added to the job total.");}catch{setMessage("Could not confirm whether the extra was saved. Retry with the same details; it won’t be duplicated.");}});
+    startTransition(async()=>{try{setMessage("");const result=await saveJobExtraAction(input);if(result.error){setMessage(result.error);return;}await refresh();requestId.current=null;form.reset();setMessage("Extra added to the job total.");}catch{setMessage("Could not confirm whether the extra was saved. Retry with the same details; it won’t be duplicated.");}});
   }
   return <section className="mt-5 space-y-4 rounded-2xl border border-border/70 bg-background/60 p-4" aria-label="Job pay and extras">
     <h3 className="font-semibold">Pay & extras</h3>
