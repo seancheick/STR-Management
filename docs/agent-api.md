@@ -5,7 +5,7 @@ Production MCP endpoint: https://str-management-sean-cheicks-projects.vercel.app
 REST schema: https://str-management-sean-cheicks-projects.vercel.app/api/agent/v1/openapi.json
 
 Create a token under Settings → AI agents. Send `Authorization: Bearer <token>`.
-Read tokens expose eleven read tools; write tokens expose all 28 tools. Revoke a token in Settings to block subsequent requests.
+Read tokens expose sixteen read tools; write tokens expose all 35 tools. Revoke a token in Settings to block subsequent requests.
 
 ## Server credentials
 
@@ -62,3 +62,45 @@ All write-tool requests now require `approved: true` after the owner authorizes 
 - `get_reservation_history` accepts physical propertyId, cleaningDate and optional booked listingId. It returns matched, ambiguous or not_found with candidates. It checks the latest checkout within the cleaning day or prior two days, excludes cancelled/no-show reservations, and merges exact duplicate CSV/iCal references. A single anonymous iCal mirror with identical listing/check-in/checkout and a compatible channel is represented by the named import even when its feed UID differs; conflicting or competing stays remain ambiguous. A missing match is an evidence gap, never permission to invent a stay.
 
 Imported statement IDs passed to `get_cleaning_scope` or `get_job_pay` return a structured 422 response with `details.lockReason: "imported_history"` and `correctionPath: "post_cleaner_adjustment"`. Unexpected server failures remain 500. REST, MCP and OpenAPI use the same tool registry.
+
+## Bookability and channel calendars
+
+TurnFlow scans every Hostex channel calendar (each Airbnb listing and each Booking.com rate plan) once a day at 12:00 UTC, and on demand. Hostex remains the channel manager; TurnFlow reads, judges, and only writes owner-approved changes. Server env: `HOSTEX_API_TOKEN` (Hostex Open API v3, spec at https://hostex.io/open_api/v3/config.json).
+
+**Read tools**
+- `get_bookability_report`: open findings (severity-ordered, date ranges, probable cause, next step), every channel calendar with its `pricingAuthority`, `price_readonly`, Hostex ratio and plan name, and the scanner heartbeat (`stale: true` after 26 hours without a successful scan).
+- `run_bookability_scan`: re-reads Hostex now and refreshes findings. Never changes rates. A finding resolves only when a successful scan no longer produces it.
+- `preview_calendar_change`: dry run; returns all validation errors, large-change warnings and the current values that would be replaced.
+- `verify_calendar_change`: reads a submitted change back from the live calendar.
+- `list_calendar_changes`: recent changes with requested values, prior values (`before`) and status.
+
+**Write tools** (write token plus `approved: true` after the owner's explicit approval)
+- `update_channel_listing`: TurnFlow settings only: `pricingAuthority` (`pricelabs` | `turnflow` | `manual`), `intentionallyClosed`, `expectedRatio`. Changing the authority restarts the 72-hour pricing-staleness clock.
+- `apply_calendar_change`: sends one price or restriction change to Hostex.
+
+**Finding rules**
+| Rule | Severity | Meaning |
+|---|---|---|
+| `missing_price` | critical | Open, sellable night with no price (or Hostex returned no calendar) |
+| `pricing_stale` | critical | The calendars' pricing authority (PriceLabs or TurnFlow) changed no price for 72 hours |
+| `scan_stale` | critical | The scan failed, or (on read) no successful scan in 26 hours |
+| `closed_while_available` | warning | Property open but this calendar has zero inventory, unless marked intentionally closed |
+| `ratio_drift` | warning | Price moved more than 2% from the plan's ratio to Airbnb (configured or observed) |
+| `restriction_conflict` | warning | Closed to arrival/departure on an open night, or min stay above max stay |
+| `far_out_min_stay` | info | Minimum stay of 7+ nights |
+
+Booked and owner-blocked nights are never judged.
+
+**Fixing a problem safely**
+1. `get_bookability_report` (call `run_bookability_scan` first if it is stale).
+2. Check the listing's `price_readonly`. **Readonly rate plans (for example Booking.com non-refundable, weekly or monthly plans derived from the Standard Rate) are priced by the channel. Hostex accepts but cannot apply API price pushes to them.** A `missing_price` there is fixed in the channel extranet: set the plan's derivation from its parent rate, or deactivate the plan. Report this to the owner; do not call `apply_calendar_change`. Restriction changes on such plans are allowed.
+3. A calendar whose authority is `pricelabs` refuses manual prices, because PriceLabs would overwrite them. Ask the owner whether to switch it to `manual` with `update_channel_listing`. Never let two systems price one calendar.
+4. `preview_calendar_change` with `channelType`, `listingId`, `kind` (`price` or `restrictions`) and up to 50 non-overlapping `ranges` (`startDate`, `endDate` inclusive, YYYY-MM-DD). Prices are whole amounts in the listing currency (Hostex accepts integers only). Restriction fields: `minStayOnArrival`, `maxStayOnArrival`, `minStayThrough`, `maxStayThrough`, `closedOnArrival`, `closedOnDeparture`. Price and restriction changes are separate requests.
+5. Show the owner the preview, including every warning. Price changes affect what guests pay immediately.
+6. After explicit approval: `apply_calendar_change` with a new UUID `requestId` and identical details. Retrying with the same `requestId` and details returns the stored result and never sends twice; a reused `requestId` with different details is refused.
+7. Hostex applies changes asynchronously: `submitted` does not mean live. Call `verify_calendar_change` after a minute or two. `verified` means the channel calendar shows the requested values; `submitted` means not visible yet; `mismatch` means still different 15 minutes after submission. On a mismatch, check the task result in the Hostex price portal and tell the owner. Never resend blindly.
+8. `run_bookability_scan` to confirm the finding resolved.
+
+To reverse a change, read its `before` values from `list_calendar_changes`, then preview and apply them as a new change with a new `requestId`, after approval. Check `get_schedule` first: nights booked since the change are unaffected by a price reversal, but restriction reversals can change what is sellable.
+
+Not available through agents: Airbnb availability-window settings (how far ahead guests can book), inventory changes, and rate-plan derivation rules. These are changed in Hostex or the channel extranet by the owner.

@@ -2,6 +2,8 @@ import { Activity, AlertTriangle, CheckCircle2, CircleHelp } from "lucide-react"
 import Link from "next/link";
 import type { Route } from "next";
 
+import { BookabilitySection } from "@/components/dashboard/bookability-section";
+import { getBookabilityReport } from "@/lib/queries/bookability";
 import { getHealthReport } from "@/lib/queries/health";
 import { calendarSourceHealth, healthTimeAgo, type HealthState } from "@/lib/services/system-health";
 import { formatInTimeZone } from "@/lib/ical/timezone";
@@ -14,12 +16,15 @@ function Status({ state, children }: { state: HealthState; children: React.React
 
 export default async function HealthPage() {
   // The report itself authorizes the caller and scopes all data to this workspace.
-  const h = await getHealthReport();
+  const [h, bookability] = await Promise.all([getHealthReport(), getBookabilityReport()]);
   const now = Date.parse(h.checkedAt);
   const sources = h.calendarSources.map((source) => ({ ...source, health: calendarSourceHealth(source, now) }))
     .sort((a, b) => ({ attention: 0, unknown: 1, healthy: 2 })[a.health.state] - ({ attention: 0, unknown: 1, healthy: 2 })[b.health.state] || a.property_name.localeCompare(b.property_name));
   const calendarAttention = sources.filter((source) => source.health.state !== "healthy").length;
   const actions: Array<{ text: string; href: Route }> = [];
+  const bookabilityCritical = bookability.findings.filter((f) => f.severity === "critical").length;
+  if (bookabilityCritical) actions.push({ text: `${bookabilityCritical} critical bookability ${bookabilityCritical === 1 ? "problem" : "problems"} on channel calendars`, href: "/dashboard/health#bookability" as Route });
+  if (bookability.stale) actions.push({ text: "The bookability scan has not succeeded in over 26 hours", href: "/dashboard/health#bookability" as Route });
   if (calendarAttention) actions.push({ text: `${calendarAttention} calendar ${calendarAttention === 1 ? "source needs" : "sources need"} a check`, href: "/dashboard/calendar" });
   if ((h.notifications.last_24h_failed ?? 0) > 0) actions.push({ text: `${h.notifications.last_24h_failed} notifications created in the last 24 hours have failed`, href: "/dashboard/notifications" });
   if ((h.assignments.unassigned_next_7d ?? 0) > 0) actions.push({ text: `${h.assignments.unassigned_next_7d} upcoming cleanings still need a cleaner`, href: "/dashboard/assignments" });
@@ -52,9 +57,11 @@ export default async function HealthPage() {
 
       <section className="rounded-2xl border border-border/70 bg-card p-5">
         <h2 className="text-base font-semibold">Needs attention</h2>
-        {actions.length ? <ul className="mt-3 divide-y divide-border/60">{actions.map((action) => <li key={action.href} className="py-3"><Link href={action.href} className="text-sm font-medium text-primary underline underline-offset-4">{action.text} →</Link></li>)}</ul>
+        {actions.length ? <ul className="mt-3 divide-y divide-border/60">{actions.map((action) => <li key={action.text} className="py-3"><Link href={action.href} className="text-sm font-medium text-primary underline underline-offset-4">{action.text} →</Link></li>)}</ul>
           : <p className="mt-3 text-sm text-muted-foreground">{h.unavailableChecks.length ? "No issues found in the checks that completed. Review the unavailable checks above." : "No calendar, notification or cleaning issues found in the available checks."}</p>}
       </section>
+
+      <BookabilitySection report={bookability} now={now} />
 
       <section aria-label="Workspace totals" className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Tile label="Properties" value={h.database.total_properties} />
