@@ -1,7 +1,7 @@
 import "server-only";
 
 import { requireRole } from "@/lib/auth/session";
-import { isTightTurnover } from "@/lib/domain/assignments";
+import { cleaningDoneFilter, isTightTurnover } from "@/lib/domain/assignments";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 export type HealthReport = {
@@ -77,7 +77,7 @@ export async function getHealthReport(): Promise<HealthReport> {
     count("assignments").eq("status", "completed_pending_review").lt("completed_at", h24),
     count("properties"), count("cleaners").eq("role", "cleaner").eq("active", true),
     count("reservations"), count("assignments"),
-    supabase.from("assignments").select("checkout_at, next_checkin_at").eq("owner_id", ownerId).gte("due_at", checkedAt).lte("due_at", h7d).not("status", "in", '("cancelled","approved","completed_pending_review")').limit(1000),
+    supabase.from("assignments").select("checkout_at, next_checkin_at").eq("owner_id", ownerId).gte("due_at", checkedAt).lte("due_at", h7d).not("status", "in", cleaningDoneFilter).limit(1000),
   ]);
   const unavailableChecks: string[] = [];
   const checked = <T extends { error: unknown }>(label: string, result: T): T => {

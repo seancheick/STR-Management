@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AlertTriangle, ArrowRight, CheckSquare2, Clock, Sparkles } from "lucide-react";
 
 import type { AssignmentListRecord, AssignmentScheduleRecord } from "@/lib/queries/assignments";
+import { isCleaningOutstanding } from "@/lib/domain/assignments";
 import { getCleaningTiming } from "@/lib/services/cleaning-timing";
 import { dateKeyInTimeZone, formatInTimeZone } from "@/lib/ical/timezone";
 
@@ -77,7 +78,7 @@ export function RightNowHero({
 
   // 2. Tight turnover today
   const tightToday = todaysJobs.find((a) =>
-    getCleaningTiming(a).mode === "firm",
+    isCleaningOutstanding(a.status) && getCleaningTiming(a).mode === "firm",
   );
   if (tightToday) {
     return (
@@ -133,7 +134,7 @@ export function RightNowHero({
   const nextUp = [...weekAssignments]
     .filter(
       (a) =>
-        !["approved", "cancelled"].includes(a.status) &&
+        isCleaningOutstanding(a.status) &&
         new Date(a.due_at).getTime() >= nowMs,
     )
     .sort((a, b) => a.due_at.localeCompare(b.due_at))[0];

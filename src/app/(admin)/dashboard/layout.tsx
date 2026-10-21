@@ -1,6 +1,7 @@
 import { LiveJobUpdates } from "@/components/shared/live-job-updates";
 import Image from "next/image";
 import Link from "next/link";
+import { after } from "next/server";
 import { AlertTriangle } from "lucide-react";
 
 import { HeaderBell } from "@/components/dashboard/header-bell";
@@ -9,6 +10,7 @@ import { MobileNav, SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { requireRole } from "@/lib/auth/session";
 import { getDashboardStats } from "@/lib/queries/assignments";
 import { getBookabilityAlert } from "@/lib/queries/bookability";
+import { refreshBookabilityIfDue } from "@/lib/services/bookability-runner";
 import { getExceptionCounts } from "@/lib/queries/issues";
 import { getTenantBranding } from "@/lib/queries/tenant";
 
@@ -25,6 +27,8 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   const branding = await getTenantBranding(profile.owner_id);
   const canManage = profile.role === "owner" || profile.role === "admin";
   const bookability = canManage ? await getBookabilityAlert() : { critical: 0, stale: false };
+  // While the banner is up, re-verify in the background so a fixed problem clears on its own.
+  if (bookability.critical > 0 || bookability.stale) after(() => refreshBookabilityIfDue(profile.owner_id));
 
   const bellCounts = {
     unassigned: stats.unassigned,
