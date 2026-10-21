@@ -12,7 +12,7 @@ import { agentSessionUsers } from "@/lib/agent/session-user";
 beforeEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs(); });
 it("creates short-lived RLS credentials without generating email links or refresh sessions", async () => {
   const { privateKey, publicKey } = await generateKeyPair("ES256", { extractable: true });
-  vi.stubEnv("AGENT_SIGNING_JWK", JSON.stringify({ ...await exportJWK(privateKey), kid: "test-key", alg: "ES256" }));
+  vi.stubEnv("AGENT_SIGNING_JWK", JSON.stringify({ ...await exportJWK(privateKey), kid: "test-key", alg: "ES256", key_ops: ["sign", "verify"] }));
   const user = { id: "owner-id", email: "owner@example.com" };
   mocks.getUserById.mockResolvedValue({ data: { user }, error: null });
   const client = {};
