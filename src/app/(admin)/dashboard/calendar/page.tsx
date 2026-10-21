@@ -1,3 +1,7 @@
+import { SyncAllButton } from "../calendar/sync-all-button";
+
+export const maxDuration = 300;
+
 import { requireRole } from "@/lib/auth/session";
 import { listCalendarSources, listRecentSyncLogs } from "@/lib/queries/calendar";
 import { listProperties } from "@/lib/queries/properties";
@@ -59,13 +63,16 @@ export default async function CalendarPage({ searchParams }: CalendarPageProps) 
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-8 px-6 py-10">
-      <div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
         <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Automation</p>
         <h1 className="mt-2 text-4xl font-semibold tracking-tight">Calendar sync</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Sync Airbnb / VRBO iCal feeds — checkout dates auto-create unassigned cleaning
-          assignments. Runs every 6 hours.
+          assignments. Syncs automatically each day, or sync now.
         </p>
+        </div>
+        <SyncAllButton />
       </div>
 
       {/* Active sources */}

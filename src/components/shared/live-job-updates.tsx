@@ -19,14 +19,22 @@ export function LiveJobUpdates({ ownerId, userId, cleanerId = userId, cleaner = 
     let connected = false;
     let disposed = false;
     let previouslyConnected = false;
+    let refreshing = false;
+    let refreshQueued = false;
     const refresh = () => {
-      if (document.visibilityState !== "visible") return;
+      if (disposed || document.visibilityState !== "visible") return;
+      if (refreshing) { refreshQueued = true; return; }
       clearTimeout(timer);
       timer = setTimeout(() => {
+        refreshing = true;
         window.dispatchEvent(new Event(JOBS_CHANGED_EVENT));
         startTransition(async () => {
           try { await refreshJobViewsAction(); }
           catch { if (!disposed) routerRef.current.refresh(); }
+          finally {
+            refreshing = false;
+            if (refreshQueued && !disposed) { refreshQueued = false; refresh(); }
+          }
         });
       }, 200);
     };

@@ -158,5 +158,79 @@ export async function manualSyncAction(
   revalidatePath("/dashboard/calendar");
   revalidatePath("/dashboard/assignments");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/schedule");
   return { error: result.error ?? null, result };
+}
+
+export type SyncAllCalendarsResult = {
+  error: string | null;
+  attempted: number;
+  succeeded: number;
+  assignmentsCreated: number;
+  assignmentsRescheduled: number;
+  assignmentsCancelled: number;
+  conflictCount: number;
+  failures: { sourceId: string; sourceName: string; propertyName: string }[];
+};
+
+/** Sync serially: alternate listings can refer to the same physical unit. */
+export async function syncAllCalendarsAction(): Promise<SyncAllCalendarsResult> {
+  await requireRole(["owner", "admin", "supervisor"]);
+  const ownerId = await resolveOwnerId();
+  const supabase = await createServerSupabaseClient();
+  const summary: SyncAllCalendarsResult = {
+    error: null, attempted: 0, succeeded: 0,
+    assignmentsCreated: 0, assignmentsRescheduled: 0,
+    assignmentsCancelled: 0, conflictCount: 0, failures: [],
+  };
+  type Source = {
+    id: string; property_id: string; name: string;
+    properties: { name: string; primary_checklist_template_id: string | null };
+  };
+  const sources: Source[] = [];
+  // Load every page before making changes; a failed read must not silently sync a subset.
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase
+      .from("property_calendar_sources")
+      .select("id, property_id, name, properties:property_id!inner ( name, active, primary_checklist_template_id )")
+      .eq("owner_id", ownerId)
+      .eq("active", true)
+      .is("retired_at", null)
+      .eq("properties.active", true)
+      .order("id")
+      .range(offset, offset + 999);
+    if (error) return { ...summary, error: "Could not load calendar sources. Try again." };
+    sources.push(...((data ?? []) as unknown as Source[]));
+    if ((data?.length ?? 0) < 1000) break;
+  }
+  for (const source of sources) {
+    summary.attempted++;
+    let failed = false;
+    try {
+      const result = await syncCalendarSource({
+        calendarSourceId: source.id,
+        ownerId,
+        propertyId: source.property_id,
+        primaryChecklistTemplateId: source.properties.primary_checklist_template_id,
+      });
+      summary.assignmentsCreated += result.assignmentsCreated;
+      summary.assignmentsRescheduled += result.assignmentsRescheduled;
+      summary.assignmentsCancelled += result.assignmentsCancelled;
+      summary.conflictCount += result.conflictCount;
+      failed = Boolean(result.error);
+    } catch {
+      failed = true;
+    }
+    if (failed) {
+      // Provider errors may include private feed URLs. Link the user to the existing source instead.
+      summary.failures.push({ sourceId: source.id, sourceName: source.name, propertyName: source.properties.name });
+    } else {
+      summary.succeeded++;
+    }
+  }
+  revalidatePath("/dashboard", "layout");
+  revalidatePath("/dashboard/calendar");
+  revalidatePath("/dashboard/schedule");
+  revalidatePath("/dashboard/assignments");
+  return summary;
 }

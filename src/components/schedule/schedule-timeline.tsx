@@ -10,7 +10,7 @@ import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { ReservationRecord } from "@/lib/queries/calendar";
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
-import { calendarRefreshRows, calendarWindowChunks, calendarWindowContains, calendarAdjacentDays, calendarScrollAnchor, calendarDate, calendarDayKey, calendarEdgeDirection, calendarListingId, calendarInstantKey, calendarRangeLabel, reservationColumns } from "@/lib/services/calendar-display";
+import { calendarRefreshRows, calendarWindowChunks, calendarWindowContains, calendarAdjacentDays, calendarScrollAnchor, calendarDate, calendarDayKey, calendarEdgeDirection, calendarListingId, calendarInstantKey, calendarRangeLabel, reservationBarGeometry, reservationBarClip, calendarReservationLanes } from "@/lib/services/calendar-display";
 import { formatInTimeZone } from "@/lib/ical/timezone";
 import { CleaningCalendarEvent } from "./cleaning-calendar-event";
 import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
@@ -337,6 +337,9 @@ export function ScheduleTimeline({
     res: ReservationRecord;
     startCol: number;
     endCol: number;
+    startHalf: number;
+    endHalf: number;
+    lane: number;
     startsInWindow: boolean;
     endsInWindow: boolean;
   };
@@ -344,17 +347,18 @@ export function ScheduleTimeline({
   const reservationsByProperty = useMemo(() => {
     const map = new Map<string, ClippedReservation[]>();
     for (const res of reservations) {
-      const clip = reservationColumns(res.start_at, res.end_at, dayKeys, timezoneByProperty.get(calendarListingId(res)));
+      const clip = reservationBarGeometry(res.start_at, res.end_at, dayKeys, timezoneByProperty.get(calendarListingId(res)));
       if (!clip) continue;
       if (!map.has(calendarListingId(res))) map.set(calendarListingId(res), []);
       map.get(calendarListingId(res))!.push({
         res,
         ...clip,
+        lane: 0,
       });
     }
     // Sort each property's reservations chronologically
     for (const list of map.values()) {
-      list.sort((a, b) => a.res.start_at.localeCompare(b.res.start_at));
+      map.set(calendarListingId(list[0].res), calendarReservationLanes(list));
     }
     return map;
   }, [reservations, dayKeys, timezoneByProperty]);
@@ -552,6 +556,9 @@ function PropertyRow({
     res: ReservationRecord;
     startCol: number;
     endCol: number;
+    startHalf: number;
+    endHalf: number;
+    lane: number;
     startsInWindow: boolean;
     endsInWindow: boolean;
   }>;
@@ -603,12 +610,12 @@ function PropertyRow({
         })}
 
         {/* Reservation bars + cleaning chips layered inside */}
-        <div className="pointer-events-none relative col-span-full row-start-1 flex flex-col justify-center gap-1 px-1.5 py-2">
+        <div className="pointer-events-none relative col-span-full row-start-1 flex flex-col justify-center gap-2 py-2">
           {/* Top lane: reservation bars */}
           <div
             className="pointer-events-auto grid gap-y-1"
             style={{
-              gridTemplateColumns: `repeat(${dayDates.length}, minmax(0, 1fr))`,
+              gridTemplateColumns: `repeat(${dayDates.length * 2}, minmax(0, 1fr))`,
             }}
           >
             {reservations.map((clip, i) => {
@@ -622,7 +629,8 @@ function PropertyRow({
                   className="flex items-center justify-center truncate rounded-full border border-dashed border-muted-foreground/40 bg-[repeating-linear-gradient(45deg,transparent,transparent_6px,rgba(0,0,0,0.08)_6px,rgba(0,0,0,0.08)_12px)] px-3 text-[11px] font-semibold text-muted-foreground"
                   key={`res-${clip.res.id}-${i}`}
                   style={{
-                    gridColumn: `${clip.startCol + 1} / span ${clip.endCol - clip.startCol + 1}`,
+                    gridColumn: `${clip.startHalf + 1} / ${clip.endHalf + 1}`,
+                    gridRow: clip.lane + 1,
                     minHeight: "28px",
                   }}
                   title={clip.res.summary ?? "Blocked"}
@@ -641,8 +649,9 @@ function PropertyRow({
             })}
           </div>
 
-          {/* Bottom lane: cleaning chips + tight badges on specific days */}
+          {/* Bottom lane: cleaning chips stay independent of overlapping stays. */}
           <div
+            data-calendar-cleaning-lane="true"
             className="pointer-events-auto grid gap-y-1"
             style={{
               gridTemplateColumns: `repeat(${dayDates.length}, minmax(0, 1fr))`,
@@ -650,12 +659,12 @@ function PropertyRow({
           >
             {Array.from({ length: dayDates.length }, (_, col) => {
               const dayAssignments = assignmentsByDay.get(col) ?? [];
-              if (dayAssignments.length === 0) return <div key={col} />;
+              if (dayAssignments.length === 0) return <div key={col} style={{ gridColumn: col + 1, gridRow: 1 }} />;
               return (
                 <div
                   className="flex min-w-0 flex-col items-center justify-center gap-1 px-1 py-1"
                   key={col}
-                  style={{ gridColumn: `${col + 1} / span 1` }}
+                  style={{ gridColumn: `${col + 1} / span 1`, gridRow: 1 }}
                 >
                   {/* Every job that day (e.g. a re-clean plus a turnover), not just the first */}
                   {dayAssignments.map((a) => (
@@ -698,6 +707,9 @@ function BookingBar({
     res: ReservationRecord;
     startCol: number;
     endCol: number;
+    startHalf: number;
+    endHalf: number;
+    lane: number;
     startsInWindow: boolean;
     endsInWindow: boolean;
   };
@@ -737,17 +749,17 @@ function BookingBar({
   return (
     <div
       className="relative min-w-0"
+      data-stay-id={clip.res.id}
       ref={ref}
       style={{
-        gridColumn: `${clip.startCol + 1} / span ${clip.endCol - clip.startCol + 1}`,
+        gridColumn: `${clip.startHalf + 1} / ${clip.endHalf + 1}`,
+        gridRow: clip.lane + 1,
       }}
     >
       <button
-        className={`flex w-full items-center gap-1.5 truncate px-3 text-[11px] font-semibold text-white transition hover:opacity-90 ${style.barBg} ${
-          clip.startsInWindow ? "rounded-l-full" : ""
-        } ${clip.endsInWindow ? "rounded-r-full" : ""}`}
+        className={`flex w-full items-center gap-1.5 truncate px-3 text-[11px] font-semibold text-white transition hover:opacity-90 ${style.barBg}`}
         onClick={() => setOpen((v) => !v)}
-        style={{ minHeight: "28px" }}
+        style={{ minHeight: "28px", clipPath: reservationBarClip(clip.startsInWindow, clip.endsInWindow) }}
         title={`${style.label} · ${nights} night${nights === 1 ? "" : "s"} · ${dateFmt(start)} → ${dateFmt(end)}`}
         type="button"
       >

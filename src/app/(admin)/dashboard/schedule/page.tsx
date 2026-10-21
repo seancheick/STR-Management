@@ -1,3 +1,7 @@
+import { SyncAllButton } from "../calendar/sync-all-button";
+
+export const maxDuration = 300;
+
 import { AssignmentPlanner } from "@/components/assignments/assignment-planner";
 import { listUpcomingUnassignedCleanings } from "@/lib/queries/assignments";
 import { dateKeyInTimeZone } from "@/lib/ical/timezone";
@@ -136,12 +140,15 @@ export default async function SchedulePage({ searchParams }: SchedulePageProps) 
 
   return (
     <main className="mx-auto flex min-h-screen min-w-0 w-full max-w-[1400px] flex-col gap-6 px-6 py-10">
-      <div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
         <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Operations</p>
         <h1 className="mt-1.5 text-3xl font-semibold tracking-tight">Schedule</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Click any assignment to view details and assign a cleaner.
         </p>
+        </div>
+        <SyncAllButton />
       </div>
 
       {/* View + property selector + cleaner filter */}

@@ -113,3 +113,29 @@ export function calendarTimelineDays(weekOffset = 0, now = new Date()): string[]
     return calendarDayKey(day);
   });
 }
+
+/** Half-day boundaries describe occupancy, not the guest's clock-time arrival.
+ * Clipped continuations fill the edge cell; only real arrivals/departures taper. */
+export function reservationBarGeometry(startAt: string, endAt: string, days: string[], timezone?: string | null) {
+  const clip = reservationColumns(startAt, endAt, days, timezone);
+  if (!clip) return null;
+  const startHalf = clip.startCol * 2 + (clip.startsInWindow ? 1 : 0);
+  const endHalf = clip.endCol * 2 + (clip.endsInWindow ? 1 : 2);
+  return { ...clip, startHalf, endHalf: Math.max(startHalf + 1, endHalf) };
+}
+
+/** Matching diagonal cuts leave a small, clear seam at a same-day turnover. */
+export function reservationBarClip(starts: boolean, ends: boolean) {
+  return `polygon(${starts ? "8px" : "0"} 0, 100% 0, ${ends ? "calc(100% - 8px)" : "100%"} 100%, 0 100%)`;
+}
+
+/** Explicit rows prevent CSS auto-placement from moving later bars or tags. */
+export function calendarReservationLanes<T extends { startHalf: number; endHalf: number }>(bars: T[]): Array<T & { lane: number }> {
+  const ends: number[] = [];
+  return [...bars].sort((a, b) => a.startHalf - b.startHalf || b.endHalf - a.endHalf).map((bar) => {
+    let lane = ends.findIndex((end) => end <= bar.startHalf);
+    if (lane < 0) lane = ends.length;
+    ends[lane] = bar.endHalf;
+    return { ...bar, lane };
+  });
+}

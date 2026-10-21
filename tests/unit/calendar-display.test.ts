@@ -111,3 +111,33 @@ it("starts both owner calendars yesterday in the app timezone with fourteen civi
   expect(days[0]).toBe("2026-10-10");
   expect(days[13]).toBe("2026-10-23");
 });
+
+
+describe("half-day stay geometry", () => {
+  it("splits one-night and back-to-back stays at the shared day's midpoint", async () => {
+    const { reservationBarGeometry, calendarReservationLanes } = await import("@/lib/services/calendar-display");
+    const days = ["2026-10-10", "2026-10-11", "2026-10-12"];
+    const outgoing = reservationBarGeometry("2026-10-10T19:00:00Z", "2026-10-11T15:00:00Z", days, "America/New_York")!;
+    const incoming = reservationBarGeometry("2026-10-11T19:00:00Z", "2026-10-12T15:00:00Z", days, "America/New_York")!;
+    expect(outgoing).toMatchObject({ startHalf: 1, endHalf: 3 });
+    expect(incoming).toMatchObject({ startHalf: 3, endHalf: 5 });
+    expect(calendarReservationLanes([incoming, outgoing]).map((bar) => bar.lane)).toEqual([0, 0]);
+  });
+
+  it("fills clipped continuation cells and keeps genuine overlaps on separate lanes", async () => {
+    const { reservationBarGeometry, calendarReservationLanes } = await import("@/lib/services/calendar-display");
+    const days = ["2026-10-10", "2026-10-11", "2026-10-12"];
+    const continued = reservationBarGeometry("2026-10-09T19:00:00Z", "2026-10-13T15:00:00Z", days, "America/New_York")!;
+    const overlap = reservationBarGeometry("2026-10-10T19:00:00Z", "2026-10-11T15:00:00Z", days, "America/New_York")!;
+    expect(continued).toMatchObject({ startHalf: 0, endHalf: 6, startsInWindow: false, endsInWindow: false });
+    expect(calendarReservationLanes([continued, overlap]).map((bar) => bar.lane)).toEqual([0, 1]);
+  });
+
+  it("uses civil dates over both DST transitions, including a midnight checkout", async () => {
+    const { reservationBarGeometry, reservationBarClip } = await import("@/lib/services/calendar-display");
+    expect(reservationBarGeometry("2026-03-07T20:00:00Z", "2026-03-09T04:00:00Z", ["2026-03-07", "2026-03-08", "2026-03-09"], "America/New_York")).toMatchObject({ startHalf: 1, endHalf: 5 });
+    expect(reservationBarGeometry("2026-10-31T19:00:00Z", "2026-11-02T05:00:00Z", ["2026-10-31", "2026-11-01", "2026-11-02"], "America/New_York")).toMatchObject({ startHalf: 1, endHalf: 5 });
+    expect(reservationBarClip(false, false)).toBe("polygon(0 0, 100% 0, 100% 100%, 0 100%)");
+    expect(reservationBarClip(true, true)).toContain("calc(100% - 8px)");
+  });
+});

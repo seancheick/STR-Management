@@ -9,7 +9,7 @@ import type { AssignmentScheduleRecord } from "@/lib/queries/assignments";
 import type { ReservationRecord } from "@/lib/queries/calendar";
 import type { PropertyRecord } from "@/lib/queries/properties";
 import type { TeamMemberRecord } from "@/lib/queries/team";
-import { calendarDate, calendarDayKey, calendarListingId, calendarInstantKey, reservationColumns } from "@/lib/services/calendar-display";
+import { calendarDate, calendarDayKey, calendarListingId, calendarInstantKey, reservationBarGeometry, reservationBarClip } from "@/lib/services/calendar-display";
 import { CleaningCalendarEvent } from "./cleaning-calendar-event";
 import { isTightTurnover } from "@/lib/domain/assignments";
 import { AssignmentDrawerSheet } from "@/components/assignments/assignment-drawer-sheet";
@@ -188,6 +188,8 @@ export function MonthView({
       res: ReservationRecord;
       startCol: number;
       span: number;
+      startHalf: number;
+      endHalf: number;
       startsInWeek: boolean;
       endsInWeek: boolean;
     };
@@ -199,9 +201,9 @@ export function MonthView({
     weeks.forEach((week, weekIdx) => {
       const all: Stripe[] = [];
       for (const res of reservations) {
-        const clip = reservationColumns(res.start_at, res.end_at, week.map(calendarDayKey), timezoneByProperty.get(calendarListingId(res)));
+        const clip = reservationBarGeometry(res.start_at, res.end_at, week.map(calendarDayKey), timezoneByProperty.get(calendarListingId(res)));
         if (!clip) continue;
-        all.push({ res, startCol: clip.startCol, span: clip.endCol - clip.startCol + 1, startsInWeek: clip.startsInWindow, endsInWeek: clip.endsInWindow });
+        all.push({ res, startHalf: clip.startHalf, endHalf: clip.endHalf, startCol: clip.startCol, span: clip.endCol - clip.startCol + 1, startsInWeek: clip.startsInWindow, endsInWeek: clip.endsInWindow });
       }
 
       // Stable order: earlier start first, then longer spans
@@ -306,9 +308,7 @@ export function MonthView({
         ))}
       </div>
 
-      {/* Month grid — 6 fixed week rows, each with stripe layer + day cells.
-          max-h keeps the whole calendar inside the viewport so hosts don't
-          scroll to see the last row. */}
+      {/* Month weeks grow to fit booking stripes and cleaning tags. */}
       <div className="flex flex-col gap-[1px] overflow-hidden rounded-b-2xl border border-t-0 border-border/60 bg-border/60 min-h-[420px]">
         {weeks.map((week, weekIdx) => (
           <WeekRow
@@ -502,6 +502,8 @@ function WeekRow({
       res: ReservationRecord;
       startCol: number;
       span: number;
+      startHalf: number;
+      endHalf: number;
       startsInWeek: boolean;
       endsInWeek: boolean;
     }>;
@@ -533,15 +535,15 @@ function WeekRow({
               propertyNameById.get(calendarListingId(stripe.res)) ?? "Property";
             const propDot = propertyDotFor(calendarListingId(stripe.res));
             return (
-              <div className="grid grid-cols-7 gap-[1px]" key={`${stripe.res.id}-${i}`}>
+              <div className="grid" style={{ gridTemplateColumns: "repeat(14, minmax(0, 1fr))" }} key={`${stripe.res.id}-${i}`}>
                 <div
-                  className={`pointer-events-auto flex items-center gap-1.5 truncate px-2 text-[10px] font-semibold leading-none ${style.bar} ${
-                    stripe.startsInWeek ? "rounded-l-full" : ""
-                  } ${stripe.endsInWeek ? "rounded-r-full" : ""}`}
+                  className={`pointer-events-auto flex items-center gap-1.5 truncate px-2 text-[10px] font-semibold leading-none ${style.bar}`}
                   style={{
-                    gridColumn: `${stripe.startCol + 1} / span ${stripe.span}`,
+                    gridColumn: `${stripe.startHalf + 1} / ${stripe.endHalf + 1}`,
+                    clipPath: reservationBarClip(stripe.startsInWeek, stripe.endsInWeek),
                     height: `${STRIPE_HEIGHT}px`,
                   }}
+                  data-stay-id={stripe.res.id}
                   title={`${propertyName} · ${style.label}${
                     stripe.res.guest_name ? ` · ${stripe.res.guest_name}` : ""
                   }`}
