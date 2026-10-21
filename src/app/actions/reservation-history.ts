@@ -3,6 +3,7 @@ import { BusinessRuleError } from "@/lib/domain/business-error";
 import { requireRole } from "@/lib/auth/session";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { historyImportSchema, matchStay, parseReservationCsv } from "@/lib/reservations/history";
+import { withoutHostexMirrors } from "@/lib/services/calendar-history";
 
 export async function importReservationHistoryAction(input: unknown) {
   await requireRole(["owner", "admin"]);
@@ -42,10 +43,10 @@ export async function getReservationHistoryAction(input: { propertyId: string; c
   const from = new Date(`${earliest}T00:00:00Z`);
   const to = new Date(`${input.cleaningDate}T00:00:00Z`); to.setUTCDate(to.getUTCDate()+1);
   const bound = (d: Date) => zonedTimeToUtc(d.getUTCFullYear(), d.getUTCMonth()+1, d.getUTCDate(), 0, 0, zone).toISOString();
-  const { data: live, error: liveError } = await client.from("reservations").select("id,source_reference,listing_property_id,platform,guest_name,start_at,end_at")
+  const { data: live, error: liveError } = await client.from("reservations").select("id,property_id,source_type,source_reference,listing_property_id,platform,guest_name,start_at,end_at")
     .eq("owner_id", actor.owner_id).eq("property_id", input.propertyId).gte("end_at", bound(from)).lt("end_at", bound(to));
   if (liveError) throw new Error("Could not load current reservation reference data.");
   const stays = (data ?? []).map(r => ({ id: r.id, sourceReference: r.source_reference, listingId: r.listing_property_id, channel: r.channel, guestName: r.guest_name, checkIn: r.check_in, checkOut: r.check_out, status: r.status, source: "channel_history" }));
-  for (const r of live ?? []) stays.push({id:r.id, sourceReference:r.source_reference, listingId:r.listing_property_id ?? input.propertyId, channel:r.platform, guestName:r.guest_name, checkIn:dateKeyInTimeZone(new Date(r.start_at),zone),checkOut:dateKeyInTimeZone(new Date(r.end_at),zone),status:"confirmed",source:"ical"});
+  for (const r of withoutHostexMirrors(live ?? [])) stays.push({id:r.id, sourceReference:r.source_reference, listingId:r.listing_property_id ?? input.propertyId, channel:r.platform, guestName:r.guest_name, checkIn:dateKeyInTimeZone(new Date(r.start_at),zone),checkOut:dateKeyInTimeZone(new Date(r.end_at),zone),status:"confirmed",source:"ical"});
   return matchStay(stays, input.cleaningDate, input.listingId);
 }
