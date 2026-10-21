@@ -36,6 +36,20 @@ export type AssignmentAction = (typeof assignmentActions)[number];
 
 export const terminalAssignmentStatuses = ["approved", "cancelled"] as const;
 
+/** Statuses where no cleaning work remains: finished, cancelled, or done and awaiting review. */
+export const cleaningDoneStatuses = ["completed_pending_review", ...terminalAssignmentStatuses] as const;
+/** PostgREST `not.in` operand for the same set, so queries and UI cannot drift apart. */
+export const cleaningDoneFilter = `(${cleaningDoneStatuses.map((s) => `"${s}"`).join(",")})`;
+
+export function isTerminalStatus(status: string) {
+  return (terminalAssignmentStatuses as readonly string[]).includes(status);
+}
+
+/** True while someone still has to clean: urgency, at-risk and next-up views use this. */
+export function isCleaningOutstanding(status: string) {
+  return !(cleaningDoneStatuses as readonly string[]).includes(status);
+}
+
 /**
  * Tight turnover: the cleaning deadline is dangerously close to the guest checkout.
  * Default threshold 6 hours matches an aggressive same-day turn (11am checkout → 3pm check-in = 4h).

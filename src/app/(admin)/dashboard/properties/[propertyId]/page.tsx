@@ -9,6 +9,7 @@ import { getProperty } from "@/lib/queries/properties";
 import { listAssignmentsForAdmin } from "@/lib/queries/assignments";
 import { listCalendarSourcesForProperty } from "@/lib/queries/calendar";
 import { formatInTimeZone } from "@/lib/ical/timezone";
+import { isTerminalStatus } from "@/lib/domain/assignments";
 
 type PropertyPageProps = {
   params: Promise<{ propertyId: string }>;
@@ -73,14 +74,14 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
     .slice(0, 10);
 
   const activeAssignments = propertyAssignments.filter(
-    (a) => !["approved", "cancelled"].includes(a.status),
+    (a) => !isTerminalStatus(a.status),
   );
 
   // eslint-disable-next-line react-hooks/purity -- server component renders once per request
   const now = Date.now();
   const upcomingCount = propertyAssignments.filter(
     (a) =>
-      !["approved", "cancelled"].includes(a.status) &&
+      !isTerminalStatus(a.status) &&
       new Date(a.due_at).getTime() >= now,
   ).length;
   const lastSyncedAt = calendarSources

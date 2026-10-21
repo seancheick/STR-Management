@@ -19,7 +19,7 @@
 [![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com)
 
 [![MCP](https://img.shields.io/badge/MCP_server-36_tools-16423c?style=flat-square&logo=anthropic&logoColor=white)](#-ai-native-mcp--rest-for-your-agents)
-[![Tests](https://img.shields.io/badge/tests-479_unit_·_12_RLS_suites-2ea44f?style=flat-square&logo=vitest&logoColor=white)](#-quality-bar)
+[![Tests](https://img.shields.io/badge/tests-490_unit_·_12_RLS_suites-2ea44f?style=flat-square&logo=vitest&logoColor=white)](#-quality-bar)
 [![Migrations](https://img.shields.io/badge/migrations-59-3ecf8e?style=flat-square&logo=postgresql&logoColor=white)](./supabase/migrations)
 [![Row Level Security](https://img.shields.io/badge/RLS-every_table-b43f33?style=flat-square&logo=supabase&logoColor=white)](#-security-is-enforced-in-the-database)
 [![PWA](https://img.shields.io/badge/cleaner_app-installable_PWA-5a0fc8?style=flat-square&logo=pwa&logoColor=white)](#-built-for-three-kinds-of-people)
@@ -99,7 +99,7 @@ Your channel calendars can fail silently: a missing nightly price, a rate plan d
 | Rule | Severity | Catches |
 |---|:---:|---|
 | `missing_price` | 🔴 critical | Sellable nights with no price. It knows when Booking.com prices the plan itself, and points to the extranet fix instead of an API push. |
-| `pricing_stale` | 🔴 critical | The calendars' pricing authority (PriceLabs or TurnFlow) hasn't changed a single price in 72 hours |
+| `pricing_stale` | 🔴 critical | PriceLabs hasn't pushed a property in 36 hours (read from its own sync record), or TurnFlow-priced calendars haven't changed a price in 72 hours |
 | `scan_stale` | 🔴 critical | The scanner itself failed, or hasn't succeeded in 26 hours. The watchdog is watched too. |
 | `closed_while_available` | 🟠 warning | The property is open but this calendar has zero inventory |
 | `ratio_drift` | 🟠 warning | A rate plan departs more than 2% from its multiplier to Airbnb |
@@ -286,14 +286,14 @@ These aren't UI hints. The database and server code enforce them, so a crafted r
 
 <div align="center">
 
-| 479 | 12 | 59 | 36 | 5 |
+| 490 | 12 | 59 | 36 | 5 |
 |:---:|:---:|:---:|:---:|:---:|
 | unit tests | RLS and integrity suites | migrations | agent tools | scheduled jobs |
 
 </div>
 
 ```bash
-npm test             # 479 unit tests: state machine, validator, iCal, reconciliation, ledger, guardian, agent API
+npm test             # 490 unit tests: state machine, validator, iCal, reconciliation, ledger, guardian, agent API
 npm run test:db      # applies all 59 migrations to a throwaway Postgres, then tries the attacks
 npm run typecheck
 npm run build
@@ -328,6 +328,7 @@ VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=
 CRON_SECRET=                       # required in production; cron routes refuse every call without it
 HOSTEX_API_TOKEN=                  # optional: enables the Bookability Guardian and calendar changes
+PRICELABS_API_KEY=                 # optional: lets the Guardian confirm PriceLabs is still pushing prices
 AGENT_SIGNING_JWK=                 # optional: ES256 private JWK for agent sessions (see docs/agent-api.md)
 ```
 

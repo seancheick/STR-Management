@@ -2,7 +2,8 @@ import "server-only";
 
 import { getAvailabilities, getListingCalendars, getPricingRatios, getProperties } from "@/lib/hostex/client";
 import { sendNotification } from "@/lib/notifications/notification-service";
-import { scanBookability, type Finding, type ListingSettings } from "@/lib/services/bookability";
+import { getPriceLabsListings, priceLabsConfigured } from "@/lib/pricelabs/client";
+import { scanBookability, type Finding, type ListingSettings, type PriceLabsSync } from "@/lib/services/bookability";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 export const DEFAULT_HORIZON_DAYS = 180;
@@ -10,6 +11,25 @@ export const DEFAULT_HORIZON_DAYS = 180;
 export function localDate(timeZone: string, offsetDays = 0) {
   const d = new Date(Date.now() + offsetDays * 86_400_000);
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+
+export const AUTO_RECHECK_MINUTES = 30;
+
+/**
+ * Re-checks Hostex when an open critical finding (or a stale scan) is on screen, at most every
+ * AUTO_RECHECK_MINUTES, so a problem fixed in Hostex or the channel clears without waiting for
+ * the daily cron. Never throws: it runs after the response, outside any request's error handling.
+ */
+export async function refreshBookabilityIfDue(ownerId: string) {
+  try {
+    const { data, error } = await createServiceSupabaseClient().from("bookability_scans").select("started_at")
+      .eq("owner_id", ownerId).order("started_at", { ascending: false }).limit(1).maybeSingle();
+    if (error) throw error;
+    if (data && Date.now() - Date.parse(data.started_at as string) < AUTO_RECHECK_MINUTES * 60_000) return;
+    await runBookabilityScan(ownerId);
+  } catch (error) {
+    console.error("[bookability-recheck]", error);
+  }
 }
 
 /** Tenants whose properties are mapped to Hostex. The Hostex token is workspace-wide today. */
@@ -62,7 +82,8 @@ export async function runBookabilityScan(ownerId: string, horizonDays = DEFAULT_
       getAvailabilities(owned.map((p) => p.id), start, end),
     ]);
     const availability = new Map(availabilities.map((p) => [p.id, new Map(p.availabilities.map((a) => [a.date, a.available]))]));
-    const { findings, updates } = scanBookability({ listings, calendars, availability, now });
+    const pricelabs = listings.some((l) => l.pricing_authority === "pricelabs") ? await priceLabsSync() : undefined;
+    const { findings, updates } = scanBookability({ listings, calendars, availability, now, pricelabs });
 
     for (const u of updates) {
       const { error } = await db.from("channel_listings").update({ price_snapshot: u.price_snapshot, prices_changed_at: u.prices_changed_at, last_verified_at: now.toISOString() })
@@ -84,6 +105,20 @@ export async function runBookabilityScan(ownerId: string, horizonDays = DEFAULT_
   }
 }
 
+/** PriceLabs' push record for the staleness rule; a PriceLabs outage must not fail the Hostex scan. */
+async function priceLabsSync(): Promise<PriceLabsSync | undefined> {
+  if (!priceLabsConfigured()) return undefined;
+  try {
+    const listings = await getPriceLabsListings();
+    return { ok: true, listings: listings.filter((l) => l.pms === "hostex").map((l) => ({
+      name: l.name, push_enabled: Boolean(l.push_enabled), last_date_pushed: l.last_date_pushed ?? null,
+      channel_ids: (l.channel_listing_details ?? []).map((c) => String(c.channel_listing_id)),
+    })) };
+  } catch (error) {
+    return { ok: false, error: (error instanceof Error ? error.message : String(error)).slice(0, 300) };
+  }
+}
+
 const key = (f: { rule: string; channel_type: string | null; subject: string }) => `${f.rule}|${f.channel_type ?? ""}|${f.subject}`;
 
 async function reconcileFindings(ownerId: string, findings: Finding[], now: Date, scanSucceeded: boolean): Promise<Finding[]> {
@@ -96,10 +131,17 @@ async function reconcileFindings(ownerId: string, findings: Finding[], now: Date
   for (const f of findings) {
     const fields = { severity: f.severity, start_date: f.start_date, end_date: f.end_date, detail: f.detail, last_seen_at: at };
     const id = open.get(key(f));
-    const res = id ? await db.from("bookability_findings").update(fields).eq("id", id)
+    let res = id ? await db.from("bookability_findings").update(fields).eq("id", id)
       : await db.from("bookability_findings").insert({ owner_id: ownerId, rule: f.rule, channel_type: f.channel_type, subject: f.subject, first_seen_at: at, ...fields });
+    // A concurrent scan opened the same finding first: update it and leave the alert to that scan.
+    const raced = !id && res.error?.code === "23505";
+    if (raced) {
+      let match = db.from("bookability_findings").update(fields).eq("owner_id", ownerId).eq("rule", f.rule).eq("subject", f.subject).is("resolved_at", null);
+      match = f.channel_type === null ? match.is("channel_type", null) : match.eq("channel_type", f.channel_type);
+      res = await match;
+    }
     if (res.error) throw res.error;
-    if (!id && f.severity === "critical") opened.push(f);
+    if (!id && !raced && f.severity === "critical") opened.push(f);
     open.delete(key(f));
   }
   if (scanSucceeded && open.size) {
