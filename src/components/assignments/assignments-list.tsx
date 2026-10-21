@@ -1,7 +1,7 @@
 "use client";
 import {cleanerChoiceLabel} from "@/lib/services/cleaner-access";
 
-import {assignmentStatusLabel} from "@/lib/domain/assignments";
+import {assignmentStatusLabel, isTerminalStatus} from "@/lib/domain/assignments";
 import {suggestCleaningOperation} from "@/lib/services/cleaning-workflow";
 import { Loader2, Pencil, Trash2, Users } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
@@ -260,7 +260,7 @@ export function AssignmentsList({ assignments, cleaners, canManage, remainingAmo
 
       <section className="flex flex-col gap-3">
         {assignments.map((a) => {
-          const canEdit = !["approved", "cancelled"].includes(a.status);
+          const canEdit = !isTerminalStatus(a.status);
           const selectable =
             a.status === "unassigned" ||
             a.status === "cancelled" ||

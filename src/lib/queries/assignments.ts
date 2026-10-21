@@ -4,6 +4,7 @@ import { withListingConfiguration } from "@/lib/services/booking-configuration";
 
 import { zonedDayTime } from "@/lib/ical/timezone";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { cleaningDoneFilter } from "@/lib/domain/assignments";
 
 export type AssignmentExtraRecord = {
   id: string;
@@ -165,7 +166,7 @@ export async function listAtRiskAssignments(): Promise<AssignmentListRecord[]> {
     .from("assignments")
     .select(ASSIGNMENT_LIST_SELECT)
     .lt("due_at", now)
-    .not("status", "in", '("cancelled","approved","completed_pending_review")')
+    .not("status", "in", cleaningDoneFilter)
     .order("due_at", { ascending: true })
     .limit(20);
 

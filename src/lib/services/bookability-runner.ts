@@ -12,6 +12,25 @@ export function localDate(timeZone: string, offsetDays = 0) {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 }
 
+export const AUTO_RECHECK_MINUTES = 30;
+
+/**
+ * Re-checks Hostex when an open critical finding (or a stale scan) is on screen, at most every
+ * AUTO_RECHECK_MINUTES, so a problem fixed in Hostex or the channel clears without waiting for
+ * the daily cron. Never throws: it runs after the response, outside any request's error handling.
+ */
+export async function refreshBookabilityIfDue(ownerId: string) {
+  try {
+    const { data, error } = await createServiceSupabaseClient().from("bookability_scans").select("started_at")
+      .eq("owner_id", ownerId).order("started_at", { ascending: false }).limit(1).maybeSingle();
+    if (error) throw error;
+    if (data && Date.now() - Date.parse(data.started_at as string) < AUTO_RECHECK_MINUTES * 60_000) return;
+    await runBookabilityScan(ownerId);
+  } catch (error) {
+    console.error("[bookability-recheck]", error);
+  }
+}
+
 /** Tenants whose properties are mapped to Hostex. The Hostex token is workspace-wide today. */
 export async function listBookabilityOwners(): Promise<string[]> {
   const { data, error } = await createServiceSupabaseClient().from("properties").select("owner_id").not("hostex_property_id", "is", null);
@@ -96,10 +115,17 @@ async function reconcileFindings(ownerId: string, findings: Finding[], now: Date
   for (const f of findings) {
     const fields = { severity: f.severity, start_date: f.start_date, end_date: f.end_date, detail: f.detail, last_seen_at: at };
     const id = open.get(key(f));
-    const res = id ? await db.from("bookability_findings").update(fields).eq("id", id)
+    let res = id ? await db.from("bookability_findings").update(fields).eq("id", id)
       : await db.from("bookability_findings").insert({ owner_id: ownerId, rule: f.rule, channel_type: f.channel_type, subject: f.subject, first_seen_at: at, ...fields });
+    // A concurrent scan opened the same finding first: update it and leave the alert to that scan.
+    const raced = !id && res.error?.code === "23505";
+    if (raced) {
+      let match = db.from("bookability_findings").update(fields).eq("owner_id", ownerId).eq("rule", f.rule).eq("subject", f.subject).is("resolved_at", null);
+      match = f.channel_type === null ? match.is("channel_type", null) : match.eq("channel_type", f.channel_type);
+      res = await match;
+    }
     if (res.error) throw res.error;
-    if (!id && f.severity === "critical") opened.push(f);
+    if (!id && !raced && f.severity === "critical") opened.push(f);
     open.delete(key(f));
   }
   if (scanSucceeded && open.size) {
