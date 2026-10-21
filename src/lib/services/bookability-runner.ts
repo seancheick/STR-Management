@@ -93,7 +93,7 @@ async function priceLabsSync(): Promise<PriceLabsSync | undefined> {
     const listings = await getPriceLabsListings();
     return { ok: true, listings: listings.filter((l) => l.pms === "hostex").map((l) => ({
       name: l.name, push_enabled: Boolean(l.push_enabled), last_date_pushed: l.last_date_pushed ?? null,
-      airbnb_ids: (l.channel_listing_details ?? []).filter((c) => c.channel_name === "airbnb").map((c) => String(c.channel_listing_id)),
+      channel_ids: (l.channel_listing_details ?? []).map((c) => String(c.channel_listing_id)),
     })) };
   } catch (error) {
     return { ok: false, error: (error instanceof Error ? error.message : String(error)).slice(0, 300) };

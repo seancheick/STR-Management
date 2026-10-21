@@ -40,7 +40,7 @@ export const PRICELABS_PUSH_STALE_HOURS = 36;
 
 /** PriceLabs' own sync record, when a Customer API key is configured. */
 export type PriceLabsSync =
-  | { ok: true; listings: Array<{ name: string; push_enabled: boolean; last_date_pushed: string | null; airbnb_ids: string[] }> }
+  | { ok: true; listings: Array<{ name: string; push_enabled: boolean; last_date_pushed: string | null; channel_ids: string[] }> }
   | { ok: false; error: string };
 export const SCAN_STALE_HOURS = 26;
 
@@ -166,8 +166,9 @@ function priceLabsSyncFinding(owned: ListingSettings[], all: ListingSettings[], 
   if (!sync.ok) return { ...base, severity: "warning", detail: { problem: "Could not check PriceLabs sync status", cause: sync.error, action: "Check PRICELABS_API_KEY and PriceLabs API status; pricing staleness is unverified until this works" } };
   const problems: Array<{ property: string; issue: string; lastPushed: string | null }> = [];
   for (const propertyId of new Set(owned.map((l) => l.hostex_property_id))) {
-    const airbnb = all.filter((l) => l.hostex_property_id === propertyId && l.channel_type === "airbnb").map((l) => l.listing_id);
-    const match = sync.listings.find((p) => p.airbnb_ids.some((id) => airbnb.includes(id)));
+    // Match on any channel listing id PriceLabs reports, so a Booking.com-only property still resolves.
+    const ids = new Set(all.filter((l) => l.hostex_property_id === propertyId).map((l) => l.listing_id));
+    const match = sync.listings.find((p) => p.channel_ids.some((id) => ids.has(id)));
     const grace = Math.max(...owned.filter((l) => l.hostex_property_id === propertyId).map((l) => Date.parse(l.authority_changed_at)));
     const lastPushed = match?.last_date_pushed ?? null;
     const hours = (now.getTime() - Math.max(grace, Date.parse(lastPushed ?? "") || 0)) / 3_600_000;
