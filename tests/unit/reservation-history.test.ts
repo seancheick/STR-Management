@@ -26,6 +26,19 @@ describe("reservation reference history", () => {
   expect(matchStay([live,{...stay,checkIn:"2026-04-30"}],"2026-05-03").status).toBe("ambiguous");
   expect(matchStay([live,{...stay,status:"cancelled"}],"2026-05-03").status).toBe("not_found");
  });
+ it("prefers one named import over its anonymous iCal mirror with different references",()=>{
+  const imported={id:"csv",sourceReference:"CHANNEL-123",listingId:"l",channel:"airbnb",guestName:"Joe Tanzi",checkIn:"2026-05-01",checkOut:"2026-05-03",status:"completed",source:"channel_history"};
+  const anonymous={...imported,id:"ical",sourceReference:"ical:opaque-feed-uid",source:"ical",guestName:null,status:"confirmed"};
+  for(const stays of [[imported,anonymous],[anonymous,imported]]) {
+   const result=matchStay(stays,"2026-05-03");expect(result.status).toBe("matched");expect(result.stay?.id).toBe("csv");expect(result.candidates).toHaveLength(1);
+  }
+  expect(matchStay([imported,{...anonymous,channel:"hostex"}],"2026-05-03").stay?.id).toBe("csv");
+  expect(matchStay([imported,{...anonymous,guestName:"Different guest"}],"2026-05-03").status).toBe("ambiguous");
+  expect(matchStay([imported,{...anonymous,checkIn:"2026-04-30"}],"2026-05-03").status).toBe("ambiguous");
+  expect(matchStay([imported,{...anonymous,channel:"booking"}],"2026-05-03").status).toBe("ambiguous");
+  expect(matchStay([imported,{...imported,id:"another",sourceReference:"CHANNEL-456"},anonymous],"2026-05-03").status).toBe("ambiguous");
+  expect(matchStay([imported,{...anonymous,listingId:"other"}],"2026-05-03").status).toBe("ambiguous");
+ });
  it("keeps provider unknown unless channel evidence is explicit", () => {
   expect(reservationChannel("hostex","Reserved",null)).toBe("hostex");
   expect(reservationChannel("hostex",null,"Channel: Airbnb")).toBe("airbnb");

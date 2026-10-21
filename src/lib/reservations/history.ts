@@ -64,7 +64,22 @@ export function matchStay(stays: ReferenceStay[], cleaningDate: string, listingI
     const prior = unique.get(key);
     if (!prior || stay.source === "channel_history") unique.set(key, stay);
   }
-  const candidates = [...unique.values()].filter(s => (!listingId || s.listingId === listingId) && !["cancelled", "no_show"].includes(s.status) && s.checkOut <= cleaningDate && new Date(`${s.checkOut}T00:00:00Z`).getTime() >= start);
+  // Opaque feed UIDs often differ from channel confirmation numbers. Collapse
+  // only a one-to-one anonymous mirror with identical listing and stay dates.
+  // Named records, competing imports and conflicting channels stay ambiguous.
+  const groups = new Map<string, ReferenceStay[]>();
+  for (const stay of unique.values()) {
+    const key = JSON.stringify([stay.listingId, stay.checkIn, stay.checkOut]);
+    groups.set(key, [...(groups.get(key) ?? []), stay]);
+  }
+  const mirrors = new Set<ReferenceStay>();
+  for (const group of groups.values()) {
+    if (group.length !== 2) continue;
+    const imported = group.find(s => s.source === "channel_history" && s.guestName?.trim() && ["confirmed", "completed"].includes(s.status));
+    const anonymous = group.find(s => s.source === "ical" && !s.guestName?.trim());
+    if (imported && anonymous && (anonymous.channel === imported.channel || ["hostex", "other"].includes(anonymous.channel))) mirrors.add(anonymous);
+  }
+  const candidates = [...unique.values()].filter(s => !mirrors.has(s)).filter(s => (!listingId || s.listingId === listingId) && !["cancelled", "no_show"].includes(s.status) && s.checkOut <= cleaningDate && new Date(`${s.checkOut}T00:00:00Z`).getTime() >= start);
   const latest = candidates.map(s => s.checkOut).sort().at(-1);
   const matches = candidates.filter(s => s.checkOut === latest);
   return { status: matches.length === 1 ? "matched" : matches.length ? "ambiguous" : "not_found", stay: matches.length === 1 ? matches[0] : null, candidates: matches };
