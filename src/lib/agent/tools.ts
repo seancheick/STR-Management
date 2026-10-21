@@ -24,6 +24,10 @@ import { getJobPayAction, removeJobExtraAction, saveJobExtraAction } from "@/app
 import type { AgentScope } from "@/lib/agent/tokens";
 import { listUpcomingUnassignedCleanings } from "@/lib/queries/assignments";
 import { getCleanerFinancialSummary, listCleanerFinancialSummaries } from "@/lib/queries/cleaner-finance";
+import { runBookabilityScanAction, updateChannelListingSettings } from "@/app/(admin)/dashboard/health/actions";
+import { getBookabilityReport } from "@/lib/queries/bookability";
+import { applyCalendarChange, listCalendarChanges, previewCalendarChange, verifyCalendarChange } from "@/lib/services/calendar-changes";
+import type { ChangeRange } from "@/lib/services/calendar-change-rules";
 import { listProperties } from "@/lib/queries/properties";
 import { getScheduleRange } from "@/lib/queries/schedule";
 import { listActiveCleaners, listCleaners } from "@/lib/queries/team";
@@ -43,8 +47,9 @@ export type AgentTool = {
   run: (input: never) => Promise<unknown>;
 };
 
-/** Thrown for an expected refusal (validation, guard); shown to the agent as-is. */
-export class AgentToolError extends Error {}
+import { AgentToolError } from "@/lib/agent/errors";
+
+export { AgentToolError };
 
 const id = z.guid();
 const paymentMethod = z.enum(["zelle", "venmo", "cash", "check", "bank_transfer", "other"]);
@@ -88,6 +93,30 @@ async function currentCleaning(assignmentId: string) {
   if (error) throw new Error(error.message);
   if (!data) throw new AgentToolError("Cleaning not found.");
   return data;
+}
+
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("YYYY-MM-DD, inclusive");
+const calendarChangeInput = z.object({
+  channelType: z.string().describe("From get_bookability_report listings, e.g. booking.com or airbnb"),
+  listingId: z.string(),
+  kind: z.enum(["price", "restrictions"]),
+  ranges: z.array(z.object({
+    startDate: isoDay, endDate: isoDay,
+    price: z.number().int().positive().optional().describe("Whole amount in the listing currency (price changes only)"),
+    minStayOnArrival: z.number().int().min(0).optional(), maxStayOnArrival: z.number().int().min(0).optional(),
+    minStayThrough: z.number().int().min(0).optional(), maxStayThrough: z.number().int().min(0).optional(),
+    closedOnArrival: z.boolean().optional(), closedOnDeparture: z.boolean().optional(),
+  })).min(1).max(50),
+});
+
+function toChange(input: z.output<typeof calendarChangeInput>) {
+  const ranges = input.ranges.map((r) => Object.fromEntries(Object.entries({
+    start_date: r.startDate, end_date: r.endDate, price: r.price,
+    min_stay_on_arrival: r.minStayOnArrival, max_stay_on_arrival: r.maxStayOnArrival,
+    min_stay_through: r.minStayThrough, max_stay_through: r.maxStayThrough,
+    closed_on_arrival: r.closedOnArrival, closed_on_departure: r.closedOnDeparture,
+  }).filter(([, v]) => v !== undefined)) as ChangeRange);
+  return { channelType: input.channelType, listingId: input.listingId, kind: input.kind, ranges };
 }
 
 export const agentTools: AgentTool[] = [
@@ -157,6 +186,61 @@ export const agentTools: AgentTool[] = [
       if (result.error) throw new Error(result.error);
       return result.data;
     },
+  }),
+  tool({
+    name: "get_bookability_report",
+    description: "Open bookability findings for every Hostex channel calendar (missing prices, closed inventory, rate-plan ratio drift, restriction conflicts, 7+ night minimums, stale pricing) plus each calendar's pricing authority and the scanner heartbeat. Read-only; it never changes rates.",
+    scope: "read",
+    input: z.object({}),
+    run: async () => getBookabilityReport(),
+  }),
+  tool({
+    name: "run_bookability_scan",
+    description: "Re-read every Hostex channel calendar now and refresh bookability findings. Read-only toward Hostex (it never changes rates). Use after a pricing or restriction change, or when get_bookability_report says the scan is stale.",
+    scope: "read",
+    input: z.object({}),
+    run: async () => runBookabilityScanAction(),
+  }),
+  tool({
+    name: "update_channel_listing",
+    description: "Change one channel calendar's TurnFlow settings: pricingAuthority (pricelabs | turnflow | manual: the one system allowed to publish its rates), intentionallyClosed (silences closed-inventory alerts), expectedRatio (price relative to Airbnb, e.g. 0.77; null to use the observed ratio). Does not change anything in Hostex.",
+    scope: "write",
+    input: z.object({
+      channelType: z.string().describe("From get_bookability_report listings, e.g. booking.com or airbnb"),
+      listingId: z.string(),
+      pricingAuthority: z.enum(["pricelabs", "turnflow", "manual"]).optional(),
+      intentionallyClosed: z.boolean().optional(),
+      expectedRatio: z.number().positive().max(10).nullable().optional(),
+    }),
+    run: async (input) => updateChannelListingSettings(input),
+  }),
+  tool({
+    name: "preview_calendar_change",
+    description: "Dry run of a Hostex price or restriction change for one channel calendar. Returns every validation error, large-change warnings and the current values that would be replaced. Nothing is sent. Refuses channel-derived (readonly) rate plans, calendars owned by PriceLabs, past dates, overlaps and non-integer prices.",
+    scope: "read",
+    input: calendarChangeInput,
+    run: async (input) => previewCalendarChange(toChange(input)),
+  }),
+  tool({
+    name: "apply_calendar_change",
+    description: "Send an owner-approved price or restriction change to Hostex for one channel calendar. Always preview first and show the owner. requestId is an idempotency key: retry only with the identical requestId and details. Hostex applies changes asynchronously; call verify_calendar_change afterwards. The prior values are stored so a reversal can be previewed and applied as a new change.",
+    scope: "write",
+    input: calendarChangeInput.extend({ requestId: id.describe("New UUID per approved change; reuse only to retry the same change") }),
+    run: async (input) => applyCalendarChange({ ...toChange(input), requestId: input.requestId }),
+  }),
+  tool({
+    name: "verify_calendar_change",
+    description: "Read a submitted calendar change back from the live channel calendar. status: verified (live), submitted (not visible yet; check again shortly), mismatch (still different 15 minutes after submission; investigate, do not resend blindly) or failed.",
+    scope: "read",
+    input: z.object({ requestId: id }),
+    run: async (input) => verifyCalendarChange(input.requestId),
+  }),
+  tool({
+    name: "list_calendar_changes",
+    description: "Recent Hostex calendar changes with their status, requested values and the values they replaced (before). Use to audit or to prepare a reversal.",
+    scope: "read",
+    input: z.object({ limit: z.number().int().min(1).max(100).default(20) }),
+    run: async (input) => listCalendarChanges(input.limit),
   }),
   tool({
     name: "get_schedule",

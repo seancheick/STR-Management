@@ -1,11 +1,14 @@
 import { LiveJobUpdates } from "@/components/shared/live-job-updates";
 import Image from "next/image";
+import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 
 import { HeaderBell } from "@/components/dashboard/header-bell";
 import { KeyboardShortcuts } from "@/components/dashboard/keyboard-shortcuts";
 import { MobileNav, SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { requireRole } from "@/lib/auth/session";
 import { getDashboardStats } from "@/lib/queries/assignments";
+import { getBookabilityAlert } from "@/lib/queries/bookability";
 import { getExceptionCounts } from "@/lib/queries/issues";
 import { getTenantBranding } from "@/lib/queries/tenant";
 
@@ -21,6 +24,7 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
   ]);
   const branding = await getTenantBranding(profile.owner_id);
   const canManage = profile.role === "owner" || profile.role === "admin";
+  const bookability = canManage ? await getBookabilityAlert() : { critical: 0, stale: false };
 
   const bellCounts = {
     unassigned: stats.unassigned,
@@ -69,6 +73,14 @@ export default async function DashboardLayout({ children }: DashboardLayoutProps
 
       {/* Content — offset for desktop sidebar, padded for mobile top bar */}
       <div className="flex min-w-0 w-full flex-col pt-14 lg:pl-60 lg:pt-0">
+        {(bookability.critical > 0 || bookability.stale) && (
+          <Link href="/dashboard/health#bookability" role="alert" className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-800 lg:pr-24">
+            <AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0" />
+            {bookability.critical > 0
+              ? `${bookability.critical} critical bookability ${bookability.critical === 1 ? "problem" : "problems"}: guests may not be able to book. Review →`
+              : "Bookability scan has not succeeded in over 26 hours. Review →"}
+          </Link>
+        )}
         {children}
       </div>
     </div>

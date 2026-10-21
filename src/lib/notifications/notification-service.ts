@@ -12,7 +12,8 @@ export type NotificationType =
   | "overdue"
   | "sla_breach"
   | "assignment_rescheduled"
-  | "assignment_cancelled";
+  | "assignment_cancelled"
+  | "bookability_alert";
 
 type SendNotificationInput = {
   ownerId: string | null;
