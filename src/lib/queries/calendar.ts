@@ -73,24 +73,28 @@ export async function listCalendarSourcesForSync(): Promise<{
   // Cron/system context — no user session, so RLS would block this.
   // Service-role bypasses RLS; callers are gated by CRON_SECRET.
   const supabase = createServiceSupabaseClient();
-  const { data } = await supabase
-    .from("property_calendar_sources")
-    .select(`
-      id, owner_id, property_id, ical_url,
-      properties:property_id ( primary_checklist_template_id )
-    `)
-    .eq("active", true);
-
-  return ((data as unknown as {
-    id: string;
-    owner_id: string;
-    property_id: string;
-    ical_url: string;
+  type Source = {
+    id: string; owner_id: string; property_id: string; ical_url: string;
     properties: { primary_checklist_template_id: string | null } | null;
-  }[]) ?? []).map((row) => ({
-    id: row.id,
-    owner_id: row.owner_id,
-    property_id: row.property_id,
+  };
+  const rows: Source[] = [];
+  // Load every page before syncing; never treat a failed read as an empty list.
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase
+      .from("property_calendar_sources")
+      .select(`id, owner_id, property_id, ical_url,
+        properties:property_id!inner ( primary_checklist_template_id, active )`)
+      .eq("active", true)
+      .is("retired_at", null)
+      .eq("properties.active", true)
+      .order("id")
+      .range(offset, offset + 999);
+    if (error) throw new Error("Could not load calendar sources for sync.");
+    rows.push(...((data ?? []) as unknown as Source[]));
+    if ((data?.length ?? 0) < 1000) break;
+  }
+  return rows.map(row => ({
+    id: row.id, owner_id: row.owner_id, property_id: row.property_id,
     ical_url: row.ical_url,
     primary_checklist_template_id: row.properties?.primary_checklist_template_id ?? null,
   }));

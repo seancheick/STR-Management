@@ -50,6 +50,13 @@ export function LiveJobUpdates({ ownerId, userId, cleanerId = userId, cleaner = 
         event: "*", schema: "public", table: "cleaner_payments",
         filter: cleaner ? `cleaner_id=eq.${cleanerId}` : `owner_id=eq.${ownerId}`,
       }, refresh);
+    if (!cleaner) {
+      channel.on("postgres_changes", {
+        event: "*", schema: "public", table: "reservations", filter: `owner_id=eq.${ownerId}`,
+      }, refresh).on("postgres_changes", {
+        event: "*", schema: "public", table: "property_calendar_sources", filter: `owner_id=eq.${ownerId}`,
+      }, refresh);
+    }
     // Browser cookie sessions must be loaded before Realtime joins. Otherwise
     // the channel can report SUBSCRIBED as anon and silently receive no rows.
     void supabase.auth.getSession().then(async ({ data }) => {
@@ -66,6 +73,9 @@ export function LiveJobUpdates({ ownerId, userId, cleanerId = userId, cleaner = 
       if (session) void supabase.realtime.setAuth(session.access_token);
       else connected = false;
     });
+    // A subscribed channel does not guarantee every calendar table is published.
+    // Keep a slow refresh so completed background syncs reach open calendars too.
+    const calendarFallback = setInterval(refresh, 60000);
     const fallback = setInterval(() => { if (!connected) refresh(); }, 10000);
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", refresh);
@@ -74,6 +84,7 @@ export function LiveJobUpdates({ ownerId, userId, cleanerId = userId, cleaner = 
       authListener.subscription.unsubscribe();
       clearTimeout(timer);
       clearInterval(fallback);
+      clearInterval(calendarFallback);
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
       void supabase.removeChannel(channel);
