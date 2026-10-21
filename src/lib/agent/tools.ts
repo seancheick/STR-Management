@@ -32,6 +32,7 @@ import { listProperties } from "@/lib/queries/properties";
 import { getScheduleRange } from "@/lib/queries/schedule";
 import { listActiveCleaners, listCleaners } from "@/lib/queries/team";
 import { calendarWindow } from "@/lib/services/calendar-display";
+import { buildReconciliation } from "@/lib/services/cleaner-finance";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -316,6 +317,20 @@ export const agentTools: AgentTool[] = [
     run: async (input) => {
       const s = await getCleanerFinancialSummary(input.cleanerId,input.dateBasis);
       return { cleanerId: s.cleanerId, balance: s.balance, summary: s.summary, totals:s.statementTotals, dateBasis:input.dateBasis, statement: s.statementEntries, payments: s.payments };
+    },
+  }),
+  tool({
+    name: "export_reconciliation",
+    description: "Reconciliation export per cleaner (one cleanerId, or every cleaner when omitted): charges, payments with bank reference and verified flag, adjustments, balance and per-line source/editability. Built from the same statement as get_cleaner_statement, so totals and balance always match it. Read-only.",
+    scope: "read",
+    input: z.object({ cleanerId: id.optional(), dateBasis: z.enum(["cleanedOn", "checkout"]).default("cleanedOn") }),
+    run: async (input) => {
+      const [summaries, cleaners] = await Promise.all([
+        input.cleanerId ? Promise.all([getCleanerFinancialSummary(input.cleanerId, input.dateBasis)]) : listCleanerFinancialSummaries(undefined, input.dateBasis),
+        listCleaners(),
+      ]);
+      const names = new Map(cleaners.map((cleaner) => [cleaner.id, cleaner.full_name]));
+      return { dateBasis: input.dateBasis, cleaners: summaries.map((s) => ({ cleanerId: s.cleanerId, name: names.get(s.cleanerId) ?? null, ...buildReconciliation(s) })) };
     },
   }),
 

@@ -123,3 +123,33 @@ export function calculateCleanerFinancialSummary<E extends FinanceEntry, J exten
     summary: { inReportsTotal: inReportsCents / 100, paidTotal: paidCents / 100, awaitingTotal: awaitingCents / 100, projectedTotal: (projectedCents + adjustmentTotal) / 100 },
   };
 }
+
+type FinancialSummary = Pick<ReturnType<typeof calculateCleanerFinancialSummary>, "balance" | "statementTotals" | "statementEntries" | "payments">;
+const lineSource = (id: string) => id.startsWith("job:") ? "cleaning" : id.startsWith("extra:") ? "job_extra"
+  : id.startsWith("scope-adjustment:") ? "scope_adjustment" : id.startsWith("account-adjustment:") ? "account_adjustment"
+  : id.startsWith("legacy-payment:") ? "legacy_paid_mark" : id.startsWith("payment:") ? "recorded_payment" : "imported_ledger";
+
+/** Reconciliation export of a statement. It regroups the statement lines and never recomputes money. */
+export function buildReconciliation(summary: FinancialSummary) {
+  const payments = new Map(summary.payments.map(p => [p.id, p]));
+  const lines = summary.statementEntries.map(line => {
+    const payment = line.paymentId ? payments.get(line.paymentId) : undefined;
+    return {
+      id: line.id, date: line.entry_date, kind: line.kind, description: line.description, amount: Number(line.amount),
+      source: lineSource(line.id), sourceId: line.sourceId ?? line.id, assignmentId: line.assignmentId ?? null, paymentId: line.paymentId ?? null,
+      reference: payment?.reference || null, verified: payment ? payment.verified === true : null,
+      cleanedOn: line.cleanedOn ?? null, checkoutAt: line.checkoutAt ?? null, editability: line.editability ?? null,
+    };
+  });
+  const total = (rows: typeof lines) => rows.reduce((sum, row) => sum + Math.round(row.amount * 100), 0) / 100;
+  const paymentLines = lines.filter(l => l.kind === "payment");
+  return {
+    balance: summary.balance, totals: summary.statementTotals,
+    charges: lines.filter(l => l.kind === "cleaning" || l.kind === "adjustment"),
+    payments: paymentLines,
+    adjustments: lines.filter(l => l.kind === "charge_correction" || l.kind === "payment_correction"),
+    verifiedPaidTotal: -total(paymentLines.filter(l => l.verified === true)) || 0,
+    unverifiedPaymentIds: paymentLines.filter(l => l.verified === false).map(l => l.paymentId),
+    lineTotal: total(lines),
+  };
+}

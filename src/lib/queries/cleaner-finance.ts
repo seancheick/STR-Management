@@ -81,10 +81,10 @@ export const getCleanerFinancialSummary = cache(async (cleanerId: string, dateBa
   return { cleanerId, ledger, ...accounting };
 });
 
-export async function listCleanerFinancialSummaries(cleanerIds?: string[]) {
+export async function listCleanerFinancialSummaries(cleanerIds?: string[], dateBasis: "cleanedOn" | "checkout" = "cleanedOn") {
   const data = await loadFinance();
   const ids = cleanerIds ?? [...new Set([...data.accountAdjustments.map(a=>a.cleaner_id), ...data.accounts.map((a) => a.cleaner_id), ...data.payments.map(p=>p.cleaner_id), ...data.entries.map((e) => e.cleaner_id), ...data.jobs.flatMap((j) => j.cleaner_id ? [j.cleaner_id] : [])])];
-  return Promise.all(ids.map(id=>getCleanerFinancialSummary(id)));
+  return Promise.all(ids.map(id=>getCleanerFinancialSummary(id, dateBasis)));
 }
 
 /** Canonical completed-work balances shared by the assignment filter and payouts. */
