@@ -221,4 +221,31 @@ begin
 end $$;
 rollback;
 
-select 'tenant-security: 12 cases passed' as result;
+-- ── 13. Agent tokens and their write log are invisible to every signed-in user ──
+begin;
+insert into public.agent_tokens (id, owner_id, label, scope, token_hash, token_prefix)
+values ('c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'Claude', 'write', 'hash-a', 'tf_abcd');
+insert into public.agent_token_writes (token_id, tool, input)
+values ('c0000000-0000-0000-0000-000000000001', 'record_cleaner_payment', '{}');
+select pg_temp.act_as('a0000000-0000-0000-0000-000000000001');
+set local role authenticated;
+do $$
+declare leaked boolean := false;
+begin
+  begin
+    leaked := exists (select 1 from public.agent_tokens) or exists (select 1 from public.agent_token_writes);
+  exception when insufficient_privilege then leaked := false;
+  end;
+  if leaked then
+    raise exception 'FAIL 13: a signed-in user can read agent token hashes or the agent write log';
+  end if;
+  begin
+    insert into public.agent_tokens (owner_id, label, scope, token_hash, token_prefix)
+    values ('a0000000-0000-0000-0000-000000000001', 'x', 'write', 'forged', 'tf_x');
+    raise exception 'FAIL 13: a signed-in user can mint an agent token directly';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+rollback;
+
+select 'tenant-security: 13 cases passed' as result;

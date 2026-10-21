@@ -5,6 +5,8 @@ import { Building2, CalendarDays, Settings as SettingsIcon } from "lucide-react"
 import { requireRole } from "@/lib/auth/session";
 import { getOrCreateCalendarFeedToken, getTenantBranding } from "@/lib/queries/tenant";
 import { TenantBrandingForm } from "@/components/dashboard/tenant-branding-form";
+import { AgentTokensCard } from "@/components/dashboard/agent-tokens-card";
+import { listAgentTokens, type AgentTokenRecord } from "@/lib/agent/tokens";
 
 import { regenerateCalendarFeedTokenAction } from "./actions";
 
@@ -12,7 +14,15 @@ export default async function SettingsPage() {
   const profile = await requireRole(["owner", "admin", "supervisor"]);
   const branding = await getTenantBranding(profile.owner_id);
   const isOwner = profile.role === "owner";
-  const feedUrl = isOwner ? await calendarFeedUrl(profile.owner_id) : null;
+  const origin = await requestOrigin();
+  const feedUrl = isOwner ? await calendarFeedUrl(profile.owner_id, origin) : null;
+  // Settings must keep rendering even if the agent-token table is unavailable.
+  const agentTokens: AgentTokenRecord[] | null = isOwner
+    ? await listAgentTokens(profile.owner_id).catch((err) => {
+        console.error("[SettingsPage] agent tokens", err);
+        return null;
+      })
+    : null;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 py-10">
@@ -79,19 +89,31 @@ export default async function SettingsPage() {
           </form>
         </section>
       ) : null}
+
+      {agentTokens ? (
+        <AgentTokensCard
+          tokens={agentTokens}
+          mcpUrl={`${origin}/api/mcp`}
+          openApiUrl={`${origin}/api/agent/v1/openapi.json`}
+        />
+      ) : null}
     </main>
   );
 }
 
-async function calendarFeedUrl(ownerId: string): Promise<string | null> {
+async function requestOrigin() {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
+async function calendarFeedUrl(ownerId: string, origin: string): Promise<string | null> {
   // Settings must keep rendering even if the feed-token table is unavailable.
   const token = await getOrCreateCalendarFeedToken(ownerId).catch((err) => {
     console.error("[SettingsPage] calendar feed token", err);
     return null;
   });
   if (!token) return null;
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}/api/ical/owner/${token}`;
+  return `${origin}/api/ical/owner/${token}`;
 }

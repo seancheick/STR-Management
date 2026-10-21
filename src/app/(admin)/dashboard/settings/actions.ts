@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireRole } from "@/lib/auth/session";
+import { newAgentToken } from "@/lib/agent/tokens";
 import { newCalendarFeedToken } from "@/lib/queries/tenant";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
@@ -154,4 +155,35 @@ export async function regenerateCalendarFeedTokenAction(): Promise<void> {
     );
   if (error) throw new Error(error.message);
   revalidatePath("/dashboard/settings");
+}
+
+// ─── AI agent tokens ──────────────────────────────────────────────────────────
+export type AgentTokenActionState = { status: "idle" | "success" | "error"; message: string | null; token?: string };
+
+/** Creates a token and returns its plaintext once; only the hash is stored. */
+export async function createAgentTokenAction(_prev: AgentTokenActionState, formData: FormData): Promise<AgentTokenActionState> {
+  const profile = await requireRole(["owner"]);
+  const parsed = z.object({
+    label: z.string().trim().min(1, "Name the agent, e.g. Claude.").max(60, "Keep it under 60 characters."),
+    scope: z.enum(["read", "write"]),
+  }).safeParse({ label: formData.get("label"), scope: formData.get("scope") });
+  if (!parsed.success) return { status: "error", message: parsed.error.issues[0]?.message ?? "Check the token details." };
+  const { token, hash, prefix } = newAgentToken();
+  const { error } = await createServiceSupabaseClient().from("agent_tokens").insert({
+    owner_id: profile.owner_id, label: parsed.data.label, scope: parsed.data.scope, token_hash: hash, token_prefix: prefix,
+  });
+  if (error) return { status: "error", message: error.message };
+  revalidatePath("/dashboard/settings");
+  return { status: "success", message: "Copy this token now. It won't be shown again.", token };
+}
+
+export async function revokeAgentTokenAction(tokenId: string): Promise<{ error: string | null }> {
+  const profile = await requireRole(["owner"]);
+  const { error } = await createServiceSupabaseClient()
+    .from("agent_tokens")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", tokenId)
+    .eq("owner_id", profile.owner_id);
+  revalidatePath("/dashboard/settings");
+  return { error: error?.message ?? null };
 }
