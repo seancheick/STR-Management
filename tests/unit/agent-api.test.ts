@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   saveExtra: vi.fn(),
   removeExtra: vi.fn(),
   jobPay: vi.fn(),
-  adjustment:vi.fn(),dateCorrection:vi.fn(),verify:vi.fn(),history:vi.fn(),csvImport:vi.fn(),historyRead:vi.fn(),statement:vi.fn(),
+  adjustment:vi.fn(),dateCorrection:vi.fn(),verify:vi.fn(),history:vi.fn(),csvImport:vi.fn(),historyRead:vi.fn(),statement:vi.fn(),summaries:vi.fn(),cleaners:vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -28,10 +28,10 @@ vi.mock("@/app/actions/cleaning-date",()=>({correctCleaningDateAction:mocks.date
 vi.mock("@/app/actions/reservation-history",()=>({importReservationHistoryAction:mocks.history,importReservationCsvAction:mocks.csvImport,getReservationHistoryAction:mocks.historyRead}));
 vi.mock("@/app/actions/job-extras", () => ({ saveJobExtraAction: mocks.saveExtra, removeJobExtraAction: mocks.removeExtra, getJobPayAction: mocks.jobPay }));
 vi.mock("@/lib/queries/assignments", () => ({ listUpcomingUnassignedCleanings: vi.fn(async () => [{ id: "job" }]) }));
-vi.mock("@/lib/queries/cleaner-finance", () => ({ getCleanerFinancialSummary: mocks.statement, listCleanerFinancialSummaries: vi.fn() }));
+vi.mock("@/lib/queries/cleaner-finance", () => ({ getCleanerFinancialSummary: mocks.statement, listCleanerFinancialSummaries: mocks.summaries }));
 vi.mock("@/lib/queries/properties", () => ({ listProperties: vi.fn() }));
 vi.mock("@/lib/queries/schedule", () => ({ getScheduleRange: vi.fn() }));
-vi.mock("@/lib/queries/team", () => ({ listActiveCleaners: vi.fn(), listCleaners: vi.fn() }));
+vi.mock("@/lib/queries/team", () => ({ listActiveCleaners: vi.fn(), listCleaners: mocks.cleaners }));
 vi.mock("@/lib/supabase/server", () => ({
   runWithSupabaseClient: (client: unknown, fn: () => Promise<unknown>) => { mocks.inScope(client); return fn(); },
   createServerSupabaseClient: async () => ({
@@ -56,6 +56,8 @@ import { executeAgentTool } from "@/lib/agent/execute";
 import { bearerToken, hashAgentToken, newAgentToken } from "@/lib/agent/tokens";
 import { BusinessRuleError } from "@/lib/domain/business-error";
 import { agentTools, toolInputSchema } from "@/lib/agent/tools";
+import { calculateCleanerFinancialSummary } from "@/lib/services/cleaner-finance";
+import type { CleanerPayment } from "@/lib/domain/payments";
 
 const write = { tokenId: "t1", ownerId: "o1", label: "Claude", scope: "write" as const };
 const read = { ...write, tokenId: "t2", scope: "read" as const };
@@ -192,6 +194,37 @@ describe("reconciliation tools",()=>{
    mocks.statement.mockResolvedValue({cleanerId:cleaner,balance:644,summary:{},statementTotals:{chargedTotal:12984,paidTotal:12340,balance:644},statementEntries:[],payments:[]});
    expect(await executeAgentTool(read,"get_cleaner_statement",{cleanerId:cleaner,dateBasis:"checkout"})).toMatchObject({ok:true,result:{totals:{chargedTotal:12984,paidTotal:12340},dateBasis:"checkout"}});
    expect(mocks.statement).toHaveBeenCalledWith(cleaner,"checkout");
+ });
+ it("exports reconciliation with the same totals and balance as get_cleaner_statement for every cleaner fixture",async()=>{
+   const pay=(id:string,amount:number,verified:boolean,extra:Partial<CleanerPayment>={}):CleanerPayment=>({id,owner_id:"o1",cleaner_id:"c",amount,payment_date:"2026-10-17",method:"zelle",reference:`ZELLE-${id}`,note:null,assignment_id:null,source_key:null,created_at:"2026-10-17T12:00Z",created_by:"o1",voided_at:null,verified,...extra});
+   const history=[{id:"charges",entry_date:"2026-09-30",sequence:1,kind:"cleaning" as const,description:"Imported charges",amount:12924},{id:"paid",entry_date:"2026-09-30",sequence:2,kind:"payment" as const,description:"Imported payments",amount:-12340}];
+   const work=(id:string,amount:number,extra={})=>({id,fixed_payout_amount:amount,due_at:"2026-10-05T19:00:00Z",checkout_at:"2026-10-05T15:00:00Z",paid_at:null,...extra});
+   const fixtures=[
+     calculateCleanerFinancialSummary({reconciledThrough:"2026-09-30",ledgerEntries:history,entries:[],jobs:[],accountAdjustments:[{id:"may",cleaner_id:"c",amount:30,entry_date:"2026-05-03",reason:"Verified charge",kind:"charge_correction"},{id:"bank",cleaner_id:"c",amount:-25,entry_date:"2026-06-01",reason:"Missed Zelle",kind:"payment_correction"}]}),
+     calculateCleanerFinancialSummary({reconciledThrough:null,ledgerEntries:[],entries:[],jobs:[work("a",95,{assignment_extras:[{id:"x",description:"Laundry",amount:15}]}),work("b",120,{paid_at:"2026-10-06T12:00:00Z"})],payments:[pay("p1",50,true),pay("p2",20,false),pay("void",999,true,{voided_at:"2026-10-18T00:00Z"})]}),
+     calculateCleanerFinancialSummary({reconciledThrough:null,ledgerEntries:[],entries:[{id:"e",assignment_id:"r",amount:120,status:"included",paid_at:null,assignments:{due_at:"2026-10-05T19:00:00Z"},payout_batches:{status:"approved"}}],jobs:[work("r",90),work("s",120,{financial_base_amount:90,paid_at:"2026-10-14T12:00:00Z",cleaning_scope_total:120})],adjustments:[{id:"adj",assignment_id:"s",cleaner_id:"c",amount:30,entry_date:"2026-10-15",reason:"Three bedrooms used"}],payments:[pay("job-pay",90,true,{assignment_id:"r"})]}),
+     calculateCleanerFinancialSummary({reconciledThrough:null,ledgerEntries:[],entries:[],jobs:[],payments:[pay("credit",100,true)]}),
+   ].map((s,i)=>({cleanerId:`${cleaner.slice(0,-1)}${i}`,ledger:null,...s}));
+   mocks.cleaners.mockResolvedValue([]);
+   mocks.summaries.mockResolvedValue(fixtures);
+   const exported=await executeAgentTool(read,"export_reconciliation",{});
+   if(!exported.ok) throw new Error("export failed");
+   const rows=(exported.result as {cleaners:{cleanerId:string;balance:number;totals:unknown;lineTotal:number;verifiedPaidTotal:number;charges:{amount:number}[];payments:{amount:number;reference:string|null;verified:boolean|null}[];adjustments:{amount:number}[]}[]}).cleaners;
+   expect(rows).toHaveLength(fixtures.length);
+   for(const [i,fixture] of fixtures.entries()){
+     mocks.statement.mockResolvedValueOnce(fixture);
+     const statement=await executeAgentTool(read,"get_cleaner_statement",{cleanerId:fixture.cleanerId});
+     if(!statement.ok) throw new Error("statement failed");
+     const s=statement.result as {balance:number;totals:{balance:number}};
+     expect(rows[i]).toMatchObject({cleanerId:fixture.cleanerId,balance:s.balance,totals:s.totals,lineTotal:s.totals.balance});
+     const cents=(xs:{amount:number}[])=>xs.reduce((sum,x)=>sum+Math.round(x.amount*100),0);
+     expect(cents(rows[i].charges)+cents(rows[i].payments)+cents(rows[i].adjustments)).toBe(Math.round(s.totals.balance*100));
+   }
+   expect(rows[1].payments.map(p=>[p.reference,p.verified])).toEqual(expect.arrayContaining([["ZELLE-p1",true],["ZELLE-p2",false],[null,null]]));
+   expect(rows.map(r=>[r.charges.length,r.payments.length,r.adjustments.length])).toEqual([[1,1,2],[3,3,0],[2,2,1],[0,1,0]]);
+   expect(rows[1].verifiedPaidTotal).toBe(50);
+   expect(rows[1].payments.some(p=>p.reference==="ZELLE-void")).toBe(false);
+   expect(mocks.summaries).toHaveBeenCalledWith(undefined,"cleanedOn");
  });
 });
 

@@ -18,8 +18,8 @@
 [![Tailwind](https://img.shields.io/badge/Tailwind_v4-0f172a?style=for-the-badge&logo=tailwindcss&logoColor=38bdf8)](https://tailwindcss.com)
 [![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com)
 
-[![MCP](https://img.shields.io/badge/MCP_server-35_tools-16423c?style=flat-square&logo=anthropic&logoColor=white)](#-ai-native-mcp--rest-for-your-agents)
-[![Tests](https://img.shields.io/badge/tests-469_unit_·_12_RLS_suites-2ea44f?style=flat-square&logo=vitest&logoColor=white)](#-quality-bar)
+[![MCP](https://img.shields.io/badge/MCP_server-36_tools-16423c?style=flat-square&logo=anthropic&logoColor=white)](#-ai-native-mcp--rest-for-your-agents)
+[![Tests](https://img.shields.io/badge/tests-479_unit_·_12_RLS_suites-2ea44f?style=flat-square&logo=vitest&logoColor=white)](#-quality-bar)
 [![Migrations](https://img.shields.io/badge/migrations-59-3ecf8e?style=flat-square&logo=postgresql&logoColor=white)](./supabase/migrations)
 [![Row Level Security](https://img.shields.io/badge/RLS-every_table-b43f33?style=flat-square&logo=supabase&logoColor=white)](#-security-is-enforced-in-the-database)
 [![PWA](https://img.shields.io/badge/cleaner_app-installable_PWA-5a0fc8?style=flat-square&logo=pwa&logoColor=white)](#-built-for-three-kinds-of-people)
@@ -44,7 +44,7 @@
 | 📸 **The server demands proof** | A job can't close without its required checklist items and before/after photos. This is enforced on the server, not the UI. |
 | 💸 **Money reconciles itself** | Itemized extras, verified payments, audited corrections and running balances per cleaner. Payout statements and a 1099 view come straight from the ledger. |
 | 🛡️ **Revenue is guarded** | The **Bookability Guardian** reads all 25 channel calendars daily and flags any night that guests can't book. It found a Booking.com rate plan with 153 open nights and no price. |
-| 🤖 **Agents are first-class** | An MCP server and an OpenAPI REST API expose 35 tools. Writes need a write-scoped token, explicit owner approval, idempotency keys and an audit log. |
+| 🤖 **Agents are first-class** | An MCP server and an OpenAPI REST API expose 36 tools. Writes need a write-scoped token, explicit owner approval, idempotency keys and an audit log. |
 
 <br/>
 
@@ -130,7 +130,7 @@ TurnFlow is an [MCP](https://modelcontextprotocol.io) server. Any MCP-capable ag
 Agents that only speak HTTP can call the same tools through `POST /api/agent/v1/tools/{name}`. An OpenAPI schema is generated from the live tool registry at `/api/agent/v1/openapi.json`.
 
 <details>
-<summary><b>The 35 tools</b> (16 read · 19 write)</summary>
+<summary><b>The 36 tools</b> (17 read · 19 write)</summary>
 <br/>
 
 | Area | Tools |
@@ -138,7 +138,7 @@ Agents that only speak HTTP can call the same tools through `POST /api/agent/v1/
 | **Schedule & jobs** | `list_properties` · `get_schedule` · `list_unassigned_cleanings` · `get_cleaning` · `assign_cleaner` · `unassign_cleaner` · `reschedule_cleaning` · `cancel_cleaning` · `restore_cleaning` |
 | **Cleaners** | `list_cleaners` · `suggest_cleaners` |
 | **Scope & pay** | `get_cleaning_scope` · `correct_cleaning_scope` · `correct_cleaning_date` · `get_job_pay` · `add_job_extra` · `remove_job_extra` |
-| **Ledger & payments** | `get_cleaner_balances` · `get_cleaner_statement` · `record_cleaner_payment` · `verify_cleaner_payment` · `void_cleaner_payment` · `mark_cleanings_paid` · `mark_cleaning_unpaid` · `post_cleaner_adjustment` |
+| **Ledger & payments** | `get_cleaner_balances` · `get_cleaner_statement` · `record_cleaner_payment` · `verify_cleaner_payment` · `void_cleaner_payment` · `mark_cleanings_paid` · `mark_cleaning_unpaid` · `post_cleaner_adjustment` · `export_reconciliation` |
 | **Reservation history** | `get_reservation_history` · `import_reservation_history` · `import_reservation_csv` |
 | **Bookability & calendars** | `get_bookability_report` · `run_bookability_scan` · `update_channel_listing` · `preview_calendar_change` · `apply_calendar_change` · `verify_calendar_change` · `list_calendar_changes` |
 
@@ -286,14 +286,14 @@ These aren't UI hints. The database and server code enforce them, so a crafted r
 
 <div align="center">
 
-| 469 | 12 | 59 | 35 | 5 |
+| 479 | 12 | 59 | 36 | 5 |
 |:---:|:---:|:---:|:---:|:---:|
 | unit tests | RLS and integrity suites | migrations | agent tools | scheduled jobs |
 
 </div>
 
 ```bash
-npm test             # 469 unit tests: state machine, validator, iCal, reconciliation, ledger, guardian, agent API
+npm test             # 479 unit tests: state machine, validator, iCal, reconciliation, ledger, guardian, agent API
 npm run test:db      # applies all 59 migrations to a throwaway Postgres, then tries the attacks
 npm run typecheck
 npm run build

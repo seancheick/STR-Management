@@ -1,0 +1,14 @@
+{
+  "_status": "AWAITING OWNER: fill every OWNER_* value, then run once with import_reservation_history (approved: true). Placeholders fail validation, so this cannot be applied early.",
+  "_unit": "Longmont 1st Floor. listingId is the BOOKED configuration: 2BD 4f1bdf64-1d0b-4eb4-b4bb-a527aa37dd6a or 3BD 0d9f36d7-f530-48f8-b7c4-13f9c030b4d2. Split into two imports if the stays used different configurations.",
+  "_evidence": "Dates and statuses verified from owner screenshots of the Booking.com extranet. Reference only: creates no cleanings, charges or payments.",
+  "requestId": "e3cc2153-ef17-4ada-8146-7925affc3e41",
+  "listingId": "OWNER_BOOKED_CONFIGURATION_LISTING_ID",
+  "channel": "booking",
+  "stays": [
+    { "sourceReference": "OWNER_BOOKING_NUMBER_1", "guestName": "OWNER_GUEST_NAME_1", "checkIn": "2026-05-03", "checkOut": "2026-05-06", "status": "completed" },
+    { "sourceReference": "OWNER_BOOKING_NUMBER_2", "guestName": "OWNER_GUEST_NAME_2", "checkIn": "2026-05-25", "checkOut": "2026-05-30", "status": "completed" },
+    { "sourceReference": "OWNER_BOOKING_NUMBER_3", "guestName": "OWNER_GUEST_NAME_3", "checkIn": "2026-05-30", "checkOut": "2026-05-31", "status": "completed" },
+    { "sourceReference": "OWNER_BOOKING_NUMBER_4", "guestName": "OWNER_GUEST_NAME_4", "checkIn": "2026-05-31", "checkOut": "2026-06-05", "status": "completed" }
+  ]
+}

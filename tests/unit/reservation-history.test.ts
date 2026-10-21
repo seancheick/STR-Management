@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseCsv, parseReservationCsv, historyImportSchema, matchStay } from "@/lib/reservations/history";
 import { reservationChannel } from "@/lib/reservations/channel";
+import seedPayload from "../../supabase/data/booking-1st-floor-2026-05.json";
 describe("reservation reference history", () => {
  it("handles quoted commas, newlines and BOM", () => expect(parseCsv('\uFEFFname,note\r\n"Joe, Tanzi","one\ntwo"')).toEqual([["name","note"],["Joe, Tanzi","one\ntwo"]]));
  it("rejects malformed quotes and rows", () => { expect(() => parseCsv('a,b\n"oops')).toThrow(); expect(() => parseCsv('a,b\nx')).toThrow(); });
@@ -8,6 +9,23 @@ describe("reservation reference history", () => {
   const columns={sourceReference:"id",guestName:"guest",checkIn:"in",checkOut:"out",status:"status"};
   expect(parseReservationCsv('id,guest,in,out,status\nx,Joe,2026-05-01,2026-05-03,Past',columns,{Past:"completed"})[0].checkOut).toBe("2026-05-03");
   expect(() => parseReservationCsv('id,guest,in,out,status\nx,Joe,05/01/2026,2026-05-03,Past',columns,{Past:"completed"})).toThrow();
+ });
+ it("maps a Booking.com reservations export with an explicit column map and reservation numbers as references", () => {
+  // Header names are illustrative: Booking.com does not publish its extranet export schema, so callers map real headers explicitly.
+  const columns={sourceReference:"Book number",guestName:"Guest name(s)",checkIn:"Check-in",checkOut:"Check-out",status:"Status"};
+  const csv='Book number,Booked by,Guest name(s),Check-in,Check-out,Status\n5012345678,"Ruiz, Ana",Ana Ruiz,2026-05-03,2026-05-06,ok\n5012345679,Lee Park,Lee Park,2026-05-25,2026-05-30,cancelled_by_guest';
+  const stays=parseReservationCsv(csv,columns,{ok:"completed",cancelled_by_guest:"cancelled"});
+  expect(stays).toEqual([{sourceReference:"5012345678",guestName:"Ana Ruiz",checkIn:"2026-05-03",checkOut:"2026-05-06",status:"completed"},{sourceReference:"5012345679",guestName:"Lee Park",checkIn:"2026-05-25",checkOut:"2026-05-30",status:"cancelled"}]);
+  expect(parseReservationCsv(csv,columns,{ok:"completed",cancelled_by_guest:"cancelled"})).toEqual(stays);
+  expect(() => parseReservationCsv(csv,columns,{ok:"completed"})).toThrow(/row 3/);
+  expect(historyImportSchema.safeParse({requestId:"a8000000-0000-4000-8000-000000000030",listingId:"4f1bdf64-1d0b-4eb4-b4bb-a527aa37dd6a",channel:"booking",stays}).success).toBe(true);
+ });
+ it("keeps the 1st-floor Booking.com seed unrunnable until the owner fills it, and valid once filled", () => {
+  const {_status,_unit,_evidence,...seed}=seedPayload;void _status;void _unit;void _evidence;
+  expect(historyImportSchema.safeParse(seed).success).toBe(false);
+  const filled={...seed,listingId:"4f1bdf64-1d0b-4eb4-b4bb-a527aa37dd6a",stays:seed.stays.map((s,i)=>({...s,sourceReference:`50000000${i}`,guestName:`Guest ${i}`}))};
+  expect(historyImportSchema.safeParse(filled).success).toBe(true);
+  expect(seed.stays.map(s=>[s.checkIn,s.checkOut,s.status])).toEqual([["2026-05-03","2026-05-06","completed"],["2026-05-25","2026-05-30","completed"],["2026-05-30","2026-05-31","completed"],["2026-05-31","2026-06-05","completed"]]);
  });
  it("requires explicit listing and unique channel references", () => expect(historyImportSchema.safeParse({stays:[]}).success).toBe(false));
  it("matches latest checkout within two days and exposes ambiguity", () => {
