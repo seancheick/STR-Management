@@ -50,6 +50,9 @@ export default async function AssignmentsPage({ searchParams }: AssignmentsPageP
     );
   }
 
+  // Show the nearest cleaning dates first in every assignment filter.
+  assignments.sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at) || a.id.localeCompare(b.id));
+
   const cancelledCount = allAssignments.filter((a) => a.status === "cancelled").length;
   const approvedCount = allAssignments.filter((a) => a.status === "approved").length;
   const unpaidCount = allAssignments.filter(
