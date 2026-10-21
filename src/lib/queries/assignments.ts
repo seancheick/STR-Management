@@ -20,6 +20,9 @@ export type AssignmentListRecord = {
   owner_id: string;
   property_id: string;
   listing_property_id?: string | null;
+  cleaning_scope_property_id?: string | null;
+  cleaning_scope_total?: number | null;
+  financial_base_amount?: number | null;
   cleaner_id: string | null;
   assignment_type: string;
   status: string;
@@ -32,6 +35,8 @@ export type AssignmentListRecord = {
   fixed_payout_amount: number | null;
   access_code: string | null;
   source_type: string | null;
+  source_reference?: string | null;
+  calendar_source_id?: string | null;
   ledger_entry_id?: string | null;
   paid_at: string | null;
   payment_method: string | null;
@@ -97,12 +102,12 @@ export type AssignmentDetailIssueRecord = {
 };
 
 const ASSIGNMENT_LIST_SELECT = `
-  id, owner_id, property_id, listing_property_id, cleaner_id, assignment_type,
+  id, owner_id, source_reference, calendar_source_id, source_reference, calendar_source_id, property_id, listing_property_id, cleaning_scope_property_id, cleaning_scope_total, cleaner_id, assignment_type,
   status, ack_status, priority, checkout_at, due_at, next_checkin_at,
   expected_duration_min, fixed_payout_amount, access_code, source_type,
   paid_at, payment_method, payment_reference, ledger_entry_id, created_at,
   properties:property_id ( name, address_line_1, city, timezone ),
-  listing_properties:assignments_listing_property_fk ( name, address_line_1, city, timezone ),
+  listing_properties:assignments_listing_property_fk ( name, address_line_1, city, timezone ),cleaning_scope_properties:assignments_cleaning_scope_property_fk ( name, address_line_1, city, timezone ),
   assignment_extras ( id, assignment_id, description, amount, kind, created_at ),
   cleaners:cleaner_id ( full_name )
 `.trim();
@@ -313,6 +318,9 @@ export type AssignmentScheduleRecord = {
   id: string;
   property_id: string;
   listing_property_id?: string | null;
+  cleaning_scope_property_id?: string | null;
+  cleaning_scope_total?: number | null;
+  financial_base_amount?: number | null;
   cleaner_id: string | null;
   status: string;
   ack_status?: string;
@@ -323,6 +331,8 @@ export type AssignmentScheduleRecord = {
   fixed_payout_amount: number | null;
   access_code: string | null;
   source_type: string | null;
+  source_reference?: string | null;
+  calendar_source_id?: string | null;
   next_checkin_at: string | null;
   paid_at: string | null;
   payment_method: string | null;
@@ -337,12 +347,12 @@ export type AssignmentScheduleRecord = {
 };
 
 const SCHEDULE_SELECT = `
-  id, property_id, listing_property_id, cleaner_id, status, ack_status, priority,
+  id, source_reference, calendar_source_id, property_id, listing_property_id, cleaning_scope_property_id, cleaning_scope_total, cleaner_id, status, ack_status, priority,
   checkout_at, due_at, expected_duration_min, fixed_payout_amount,
   access_code, source_type, next_checkin_at,
   paid_at, payment_method, payment_reference,
   properties:property_id ( name, address_line_1, city, timezone ),
-  listing_properties:assignments_listing_property_fk ( name, address_line_1, city, timezone ),
+  listing_properties:assignments_listing_property_fk ( name, address_line_1, city, timezone ),cleaning_scope_properties:assignments_cleaning_scope_property_fk ( name, address_line_1, city, timezone ),
   assignment_extras ( id, assignment_id, description, amount, kind, created_at ),
   cleaners:cleaner_id ( full_name )
 `.trim();
@@ -405,7 +415,7 @@ export async function getPropertyTodayStatuses(): Promise<
     supabase
       .from("assignments")
       .select(
-        "property_id, listing_property_id, status, due_at, cleaners:cleaner_id ( full_name )",
+        "property_id, listing_property_id, cleaning_scope_property_id, status, due_at, cleaners:cleaner_id ( full_name )",
       )
       .gte("due_at", todayStart.toISOString())
       .lte("due_at", todayEnd.toISOString())
@@ -419,11 +429,14 @@ export async function getPropertyTodayStatuses(): Promise<
   for (const a of (assignmentsRes.data ?? []) as Array<{
     property_id: string;
     listing_property_id?: string | null;
+  cleaning_scope_property_id?: string | null;
+  cleaning_scope_total?: number | null;
+  financial_base_amount?: number | null;
     status: string;
     due_at: string;
     cleaners: { full_name: string } | { full_name: string }[] | null;
   }>) {
-    const existing = assignmentMap.get(a.listing_property_id ?? a.property_id);
+    const existing = assignmentMap.get(a.cleaning_scope_property_id ?? a.listing_property_id ?? a.property_id);
     // Priority order: in_progress > unassigned > assigned > pending_review > approved
     const priority: Record<string, number> = {
       in_progress: 5,
@@ -440,7 +453,7 @@ export async function getPropertyTodayStatuses(): Promise<
       const cleanerName = Array.isArray(a.cleaners)
         ? (a.cleaners[0]?.full_name ?? null)
         : ((a.cleaners as { full_name: string } | null)?.full_name ?? null);
-      assignmentMap.set(a.listing_property_id ?? a.property_id, {
+      assignmentMap.set(a.cleaning_scope_property_id ?? a.listing_property_id ?? a.property_id, {
         status: a.status,
         cleanerName,
         dueAt: a.due_at,

@@ -5,7 +5,7 @@ Production MCP endpoint: https://str-management-sean-cheicks-projects.vercel.app
 REST schema: https://str-management-sean-cheicks-projects.vercel.app/api/agent/v1/openapi.json
 
 Create a token under Settings → AI agents. Send `Authorization: Bearer <token>`.
-Read tokens expose eight read tools; write tokens expose all 17 tools. Revoke a token in Settings to block subsequent requests.
+Read tokens expose nine read tools; write tokens expose all 19 tools. Revoke a token in Settings to block subsequent requests.
 
 ## Server credentials
 
@@ -31,3 +31,15 @@ Production is reachable without Vercel SSO so external agents can authenticate w
 - Public sign-in, forgot-password, reset-password pages rendered; unauthenticated dashboard redirected to sign-in.
 
 Authenticated browser checks rendered Settings (including AI agents), Schedule, and Payouts with cleaner balances. Lint has one existing unused-component warning in schedule-grid.tsx.
+
+## Correct actual cleaning scope
+
+Use `get_schedule` to match the guest and checkout date, then `get_cleaning_scope` with the returned assignment ID. Its preview returns the original booked listing and stay, current scope/total, same-unit options, financial lock status and prior corrections. Never invent an assignment ID or repeatedly use rescheduling for an approved job.
+
+Call `correct_cleaning_scope` with a new `requestId`, `assignmentId`, target `scopePropertyId`, corrected `total`, `expectedCurrentTotal`, `expectedScopePropertyId` (preview's `currentScopeId`) and explicit `reason`. Reuse the exact request ID and payload when retrying. Read-only tokens cannot apply corrections. If the preview became stale, fetch it again and use a new request ID for the newly reviewed correction.
+
+The booked listing and reservation remain unchanged. Actual cleaning scope controls cleaning labels and calendar placement. Untouched open checklists can be rebuilt from the target template; started/completed evidence stays intact. Correction does not assert that new checklist work was completed.
+
+Uncommitted job pay is corrected in place with an immutable before/after receipt. Paid, reconciled or report-linked charges retain their base amounts and receive a linked signed pay adjustment. A historical report remains a historical report; the separate adjustment appears in statements, balances, spending and statement CSV exports. Existing payment records are preserved. Corrected scope/pay survives later calendar synchronization.
+
+Verify afterward using `get_cleaning_scope`, `get_cleaning` and `get_cleaner_statement`. Agent writes are logged under the token as well as the owner-authorized correction receipt. If Muse cached the OpenAPI schema, refresh its imported schema to discover the new tools.

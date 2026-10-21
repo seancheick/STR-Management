@@ -601,12 +601,23 @@ async function reconcileWithFeed(
   for (const transfer of plan.ownershipTransfers) {
     const { error: transferError } = await supabase
       .from("assignments")
-      .update({ calendar_source_id: transfer.calendarSourceId, source_reference: transfer.sourceReference, listing_property_id: transfer.listingPropertyId, fixed_payout_amount: transfer.fixedPayoutAmount })
+      .update({ calendar_source_id: transfer.calendarSourceId, source_reference: transfer.sourceReference })
       .eq("id", transfer.id)
       .eq("owner_id", input.ownerId)
       .eq("calendar_source_id", input.calendarSourceId)
       .in("status", [...SYNC_MUTABLE_STATUSES]);
     if (transferError) throw new Error(transferError.message);
+    // Source ownership may move between equivalent feeds, but an explicit
+    // host correction owns actual scope/pay. The predicate is checked by the
+    // database at update time, including a correction racing this sync.
+    const { error: priceError } = await supabase.from("assignments")
+      .update({ fixed_payout_amount: transfer.fixedPayoutAmount, listing_property_id: transfer.listingPropertyId })
+      .eq("id", transfer.id).eq("owner_id", input.ownerId)
+      .eq("calendar_source_id", transfer.calendarSourceId)
+      .is("cleaning_scope_property_id", null)
+      .in("status", [...SYNC_MUTABLE_STATUSES]);
+    if (priceError) throw new Error(priceError.message);
+
   }
 
   const when = (iso: string) =>

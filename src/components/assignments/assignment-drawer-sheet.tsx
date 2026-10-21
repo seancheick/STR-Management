@@ -1,4 +1,5 @@
 "use client";
+import { CleaningScopeEditor } from "@/components/assignments/cleaning-scope-editor";
 import { JobExtrasEditor } from "@/components/assignments/job-extras-editor";
 
 import { X } from "lucide-react";
@@ -82,6 +83,7 @@ export function AssignmentDrawerSheet({
             onDeleted={onClose}
             onSaved={onClose}
           />
+          <CleaningScopeEditor key={`scope:${assignment.id}`} assignmentId={assignment.id} onSaved={onClose} />
           <JobExtrasEditor key={assignment.id} assignmentId={assignment.id} />
         </div>
       </aside>

@@ -26,6 +26,7 @@ export type NotificationRecord = {
         checkout_at: string | null;
         properties: { name: string; timezone: string } | null;
         listing_properties?: { name: string; timezone: string } | null;
+        cleaning_scope_properties?: { name: string; timezone: string } | null;
       }
     | null;
 };
@@ -55,7 +56,7 @@ export async function listRecentNotifications(limit = 50): Promise<NotificationR
       id, recipient_id, assignment_id, channel, status,
       notification_type, title, body, sent_at, seen_at, error_message, created_at,
       recipient:recipient_id ( full_name ),
-      assignment:assignment_id ( status, ack_status, cleaner_id, due_at, checkout_at, properties:property_id ( name, timezone ), listing_properties:assignments_listing_property_fk ( name, timezone ) )
+      assignment:assignment_id ( status, ack_status, cleaner_id, due_at, checkout_at, properties:property_id ( name, timezone ), listing_properties:assignments_listing_property_fk ( name, timezone ),cleaning_scope_properties:assignments_cleaning_scope_property_fk ( name, timezone ) )
     `)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -75,7 +76,7 @@ export async function listNotificationsForCleaner(
       id, recipient_id, assignment_id, channel, status,
       notification_type, title, body, sent_at, seen_at, error_message, created_at,
       recipient:recipient_id ( full_name ),
-      assignment:assignment_id ( status, ack_status, cleaner_id, due_at, checkout_at, properties:property_id ( name, timezone ), listing_properties:assignments_listing_property_fk ( name, timezone ) )
+      assignment:assignment_id ( status, ack_status, cleaner_id, due_at, checkout_at, properties:property_id ( name, timezone ), listing_properties:assignments_listing_property_fk ( name, timezone ),cleaning_scope_properties:assignments_cleaning_scope_property_fk ( name, timezone ) )
     `)
     .eq("recipient_id", cleanerId)
     .order("created_at", { ascending: false })

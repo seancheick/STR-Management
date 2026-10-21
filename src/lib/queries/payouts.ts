@@ -123,11 +123,11 @@ export async function listMyPayoutEntries(
 }
 
 const CLEANER_PENDING_PAYOUT_ASSIGNMENT_SELECT = `
-  id, owner_id, property_id, listing_property_id, cleaner_id, assignment_type,
+  id, owner_id, property_id, listing_property_id, cleaning_scope_property_id, cleaning_scope_total, cleaner_id, assignment_type,
   status, ack_status, priority, checkout_at, due_at,
   expected_duration_min, fixed_payout_amount, paid_at, created_at,
   properties:property_id ( name, address_line_1, city, timezone ),
-  listing_properties:assignments_listing_property_fk ( name, address_line_1, city, timezone ),
+  listing_properties:assignments_listing_property_fk ( name, address_line_1, city, timezone ),cleaning_scope_properties:assignments_cleaning_scope_property_fk ( name, address_line_1, city, timezone ),
   cleaners:cleaner_id ( full_name )
 `.trim();
 

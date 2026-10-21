@@ -100,14 +100,14 @@ export default async function CleanerInboxPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <p className="truncate text-sm font-semibold">
-                        {n.assignment?.listing_properties?.name ?? n.assignment?.properties?.name ?? n.title}
+                        {n.assignment?.cleaning_scope_properties?.name ?? n.assignment?.listing_properties?.name ?? n.assignment?.properties?.name ?? n.title}
                       </p>
                       <span className="shrink-0 text-[11px] text-muted-foreground">
                         {formatWhen(n.created_at)}
                       </span>
                     </div>
                     <p className="mt-0.5 text-sm leading-5 text-muted-foreground">
-                      {n.assignment ? formatInTimeZone(n.assignment.checkout_at ?? n.assignment.due_at, { month: "short", day: "numeric" }, n.assignment.listing_properties?.timezone ?? n.assignment.properties?.timezone ?? "America/New_York") : n.body}
+                      {n.assignment ? formatInTimeZone(n.assignment.checkout_at ?? n.assignment.due_at, { month: "short", day: "numeric" }, n.assignment.cleaning_scope_properties?.timezone ?? n.assignment.listing_properties?.timezone ?? n.assignment.properties?.timezone ?? "America/New_York") : n.body}
                     </p>
                     {n.assignment && (
                       <p className="mt-1 text-xs font-medium text-primary">

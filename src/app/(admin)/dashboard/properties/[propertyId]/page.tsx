@@ -1,3 +1,4 @@
+import { calendarListingId } from "@/lib/services/calendar-display";
 import type { Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -65,8 +66,8 @@ export default async function PropertyDetailPage({ params }: PropertyPageProps) 
   if (!propertyResult.data) notFound();
 
   const property = propertyResult.data;
-  const propertyAssignments = allAssignments.filter((a) => a.property_id === propertyId);
-  // The admin list is sorted oldest-first; "recent" means newest-first.
+  const propertyAssignments = allAssignments.filter((a) => calendarListingId(a) === propertyId);
+  // Show the most recent jobs for this actual cleaning configuration.
   const assignments = [...propertyAssignments]
     .sort((a, b) => b.due_at.localeCompare(a.due_at))
     .slice(0, 10);

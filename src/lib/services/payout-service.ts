@@ -45,12 +45,12 @@ export async function generatePayoutBatch(
   if (batchErr) return { success: false, error: batchErr.message };
 
   // Fetch a timezone-safe envelope, then use each listing's actual local date.
-  type PayableJob={id:string;property_id:string;listing_property_id:string|null;cleaner_id:string|null;fixed_payout_amount:number|null;owner_id:string;due_at:string;properties:{timezone:string|null}|null;listing_properties:{timezone:string|null}|null};
+  type PayableJob={id:string;property_id:string;listing_property_id:string|null;cleaning_scope_property_id:string|null;cleaner_id:string|null;fixed_payout_amount:number|null;owner_id:string;due_at:string;properties:{timezone:string|null}|null;listing_properties:{timezone:string|null}|null};
   const assignments:PayableJob[]=[];
   const lower=new Date(`${input.periodStart}T00:00:00Z`);lower.setUTCDate(lower.getUTCDate()-1);
   const upper=new Date(`${input.periodEnd}T00:00:00Z`);upper.setUTCDate(upper.getUTCDate()+2);
   for(let offset=0;;offset+=1000){
-    let query=supabase.from("assignments").select("id,property_id,listing_property_id,cleaner_id,fixed_payout_amount,owner_id,due_at,properties:property_id(timezone),listing_properties:assignments_listing_property_fk(timezone)")
+    let query=supabase.from("assignments").select("id,property_id,listing_property_id,cleaning_scope_property_id,cleaner_id,fixed_payout_amount,owner_id,due_at,properties:property_id(timezone),listing_properties:assignments_listing_property_fk(timezone)")
       .eq("owner_id",input.ownerId).in("status",["approved","completed_pending_review"]).gte("due_at",lower.toISOString()).lt("due_at",upper.toISOString()).not("cleaner_id","is",null).order("id").range(offset,offset+999);
     if(input.cleanerFilter)query=query.eq("cleaner_id",input.cleanerFilter);
     const {data,error}=await query;
@@ -90,7 +90,7 @@ export async function generatePayoutBatch(
     owner_id: input.ownerId,
     cleaner_id: a.cleaner_id as string,
     assignment_id: a.id,
-    property_id: a.listing_property_id ?? a.property_id,
+    property_id: a.cleaning_scope_property_id ?? a.listing_property_id ?? a.property_id,
     amount: Number(a.fixed_payout_amount ?? 0),
     status: "included" as const,
   }));
@@ -242,11 +242,11 @@ export async function getOpsReport(
   const { data: assignments, error } = await supabase
     .from("assignments")
     .select(
-      `property_id, listing_property_id,
+      `property_id, listing_property_id, cleaning_scope_property_id,
        status,
        assignment_type,
        fixed_payout_amount,
-       properties:property_id(name), listing_properties:assignments_listing_property_fk(name)`,
+       properties:property_id(name), listing_properties:assignments_listing_property_fk(name), cleaning_scope_properties:assignments_cleaning_scope_property_fk(name)`,
     )
     .gte("due_at", `${periodStart}T00:00:00Z`)
     .lte("due_at", `${periodEnd}T23:59:59Z`);
@@ -255,12 +255,12 @@ export async function getOpsReport(
 
   const map = new Map<string, OpsReportRow>();
   for (const a of assignments ?? []) {
-    const displayId = a.listing_property_id ?? a.property_id;
+    const displayId = a.cleaning_scope_property_id ?? a.listing_property_id ?? a.property_id;
     if (!map.has(displayId)) {
       map.set(displayId, {
         property_id: displayId,
         property_name:
-          ((a.listing_properties ?? a.properties) as unknown as { name: string } | null)?.name ??
+          ((a.cleaning_scope_properties ?? a.listing_properties ?? a.properties) as unknown as { name: string } | null)?.name ??
           "Unknown",
         total_jobs: 0,
         completed_jobs: 0,

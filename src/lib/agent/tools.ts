@@ -14,6 +14,8 @@ import {
   unassignCleanerAction,
 } from "@/app/(admin)/dashboard/schedule/actions";
 import { fetchAssignmentDetail, getCleanerSuggestionsAction } from "@/app/actions/assignments";
+import { correctCleaningScopeAction, getCleaningScopeAction } from "@/app/actions/cleaning-scope";
+import { cleaningScopeCorrectionSchema } from "@/lib/validations/cleaning-scope";
 import { recordCleanerPaymentAction, voidCleanerPaymentAction } from "@/app/actions/cleaner-payments";
 import type { AgentScope } from "@/lib/agent/tokens";
 import { listUpcomingUnassignedCleanings } from "@/lib/queries/assignments";
@@ -72,6 +74,28 @@ async function currentCleaning(assignmentId: string) {
 }
 
 export const agentTools: AgentTool[] = [
+  tool({
+    name: "get_cleaning_scope",
+    description: "Preview one cleaning's booked listing, original guest stay, actual cleaning configuration, current total, same-unit scope options and correction history. Match the guest stay and checkout date using get_schedule, then read this preview before correcting scope. A booked two-bedroom stay can have three-bedroom actual cleaning without rewriting the booking.",
+    scope: "read",
+    input: z.object({ assignmentId: id }),
+    run: async (input) => {
+      const preview = await getCleaningScopeAction(input.assignmentId);
+      if (!preview) throw new AgentToolError("This job cannot have its cleaning scope corrected.");
+      return preview;
+    },
+  }),
+  tool({
+    name: "correct_cleaning_scope",
+    description: "Correct actual cleaning configuration and total pay for one stay, including approved historical work. Read get_cleaning_scope first, verify guest/checkout, choose an option from the same physical unit, pass expectedCurrentTotal and expectedScopePropertyId (currentScopeId) from that preview and an explicit reason. Preserves the booked listing, completion evidence and payment history; creates a separate financial adjustment when history is locked. requestId makes retries safe. Do not use reschedule_cleaning for this correction. Re-read scope and cleaner statement afterward to verify.",
+    scope: "write",
+    input: cleaningScopeCorrectionSchema,
+    run: async (input) => {
+      const result = check(await correctCleaningScopeAction(input));
+      return result.receipt;
+    },
+  }),
+
   tool({
     name: "list_properties",
     description: "List the owner's properties (listings) with ids, names, addresses and timezones.",
@@ -184,7 +208,7 @@ export const agentTools: AgentTool[] = [
   }),
   tool({
     name: "reschedule_cleaning",
-    description: "Change a cleaning's time, duration, priority, access code or total pay. Omitted fields keep their current value. Pay is locked once the job has payment history.",
+    description: "Edit timing or details of an unassigned, assigned, confirmed or needs-reclean job. Approved and started jobs cannot be rescheduled. To correct actual rooms used or historical pay, use get_cleaning_scope then correct_cleaning_scope. Omitted fields keep their current value.",
     scope: "write",
     input: z.object({
       assignmentId: id,

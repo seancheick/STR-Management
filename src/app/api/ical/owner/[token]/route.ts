@@ -1,3 +1,4 @@
+import { withListingConfiguration } from "@/lib/services/booking-configuration";
 import { NextResponse } from "next/server";
 
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
@@ -40,7 +41,7 @@ export async function GET(
   const { data: assignments } = await supabase
     .from("assignments")
     .select(
-      "id, due_at, checkout_at, expected_duration_min, status, properties:property_id ( name, address_line_1, city ), cleaners:cleaner_id ( full_name )",
+      "id, due_at, checkout_at, expected_duration_min, status, properties:property_id ( name, address_line_1, city ), listing_properties:assignments_listing_property_fk(name,address_line_1,city), cleaning_scope_properties:assignments_cleaning_scope_property_fk(name,address_line_1,city), cleaners:cleaner_id ( full_name )",
     )
     .eq("owner_id", owner.id)
     .not("status", "in", '("cancelled","approved")')
@@ -53,6 +54,8 @@ export async function GET(
     expected_duration_min: number | null;
     status: string;
     properties: { name: string; address_line_1: string | null; city: string | null } | null;
+    listing_properties?: { name: string; address_line_1: string | null; city: string | null } | null;
+    cleaning_scope_properties?: { name: string; address_line_1: string | null; city: string | null } | null;
     cleaners: { full_name: string } | null;
   }> | null) ?? [];
 
@@ -68,7 +71,7 @@ export async function GET(
     `X-WR-CALDESC:Upcoming cleaning turnovers for ${owner.full_name}`,
   ];
 
-  for (const a of rows) {
+  for (const a of rows.map(withListingConfiguration)) {
     const start = new Date(a.due_at);
     const durationMs = (a.expected_duration_min ?? 120) * 60_000;
     const end = new Date(start.getTime() + durationMs);

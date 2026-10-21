@@ -322,14 +322,14 @@ export function AssignmentsList({ assignments, cleaners, canManage, remainingAmo
                         });
                       }}>Restore cleaning</button>
                   )}
-                  {canEdit && (
+                  {(canEdit || (canManage && a.status === "approved")) && (
                     <button
                       className="inline-flex h-8 items-center gap-1 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
                       onClick={() => setSelectedId(a.id)}
                       type="button"
                     >
                       <Pencil className="h-3 w-3" />
-                      {suggestCleaningOperation(a,new Date()) === "complete" ? "Record completed work" : "Manage"}
+                      {a.status === "approved" ? "Correct scope" : suggestCleaningOperation(a,new Date()) === "complete" ? "Record completed work" : "Manage"}
                     </button>
                   )}
                 </div>

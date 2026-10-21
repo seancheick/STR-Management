@@ -57,8 +57,8 @@ export function calendarWindowContains(iso: string, start: string, end: string, 
 }
 
 /** Bookings keep their listing configuration while internal jobs share a floor. */
-export function calendarListingId(record: { property_id: string; listing_property_id?: string | null }): string {
-  return record.listing_property_id ?? record.property_id;
+export function calendarListingId(record: { property_id: string; listing_property_id?: string | null; cleaning_scope_property_id?: string | null }): string {
+  return record.cleaning_scope_property_id ?? record.listing_property_id ?? record.property_id;
 }
 
 /** Only outward horizontal gestures at an overflowing viewport edge page dates. */

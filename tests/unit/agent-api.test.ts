@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   writeLog: vi.fn(),
   job: {} as Record<string, unknown>,
   inScope: vi.fn(),
+  scopePreview: vi.fn(),
+  scopeCorrect: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -15,6 +17,7 @@ vi.mock("@/app/(admin)/dashboard/schedule/actions", () => ({
   rescheduleAssignmentAction: mocks.reschedule, unassignCleanerAction: vi.fn(),
 }));
 vi.mock("@/app/actions/assignments", () => ({ fetchAssignmentDetail: vi.fn(), getCleanerSuggestionsAction: vi.fn() }));
+vi.mock("@/app/actions/cleaning-scope", () => ({ getCleaningScopeAction: mocks.scopePreview, correctCleaningScopeAction: mocks.scopeCorrect }));
 vi.mock("@/app/actions/cleaner-payments", () => ({ recordCleanerPaymentAction: mocks.recordPayment, voidCleanerPaymentAction: vi.fn() }));
 vi.mock("@/lib/queries/assignments", () => ({ listUpcomingUnassignedCleanings: vi.fn(async () => [{ id: "job" }]) }));
 vi.mock("@/lib/queries/cleaner-finance", () => ({ getCleanerFinancialSummary: vi.fn(), listCleanerFinancialSummaries: vi.fn() }));
@@ -79,6 +82,17 @@ describe("agent tokens", () => {
 });
 
 describe("agent tool execution", () => {
+  it("previews and corrects scope through the same guarded actions as the UI", async () => {
+    mocks.scopePreview.mockResolvedValue({ currentTotal: 90, currentScopeId: job });
+    expect(await executeAgentTool(read, "get_cleaning_scope", { assignmentId: job })).toMatchObject({ ok: true, result: { currentTotal: 90 } });
+    const input = { requestId: job, assignmentId: job, scopePropertyId: cleaner, total: 120, expectedScopePropertyId: job, expectedCurrentTotal: 90, reason: "Guest used three bedrooms." };
+    mocks.scopeCorrect.mockResolvedValue({ error: null, receipt: { id: job, new_total: 120 } });
+    expect(await executeAgentTool(write, "correct_cleaning_scope", input)).toMatchObject({ ok: true, result: { new_total: 120 } });
+    expect(mocks.scopeCorrect).toHaveBeenCalledWith(input);
+    expect(mocks.writeLog).toHaveBeenCalledWith(expect.objectContaining({ tool: "correct_cleaning_scope", error: null }));
+    expect(await executeAgentTool(read, "correct_cleaning_scope", input)).toMatchObject({ ok: false, status: 403 });
+  });
+
   it("every tool has a unique name and a JSON schema", () => {
     expect(new Set(agentTools.map((t) => t.name)).size).toBe(agentTools.length);
     for (const t of agentTools) expect(toolInputSchema(t)).toMatchObject({ type: "object" });

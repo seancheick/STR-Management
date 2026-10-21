@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
           .not("status", "in", '("cancelled")'),
         supabase
           .from("assignments")
-          .select("fixed_payout_amount")
+          .select("fixed_payout_amount,cleaning_scope_total")
           .eq("owner_id", tenantId)
           .in("status", ["approved", "completed_pending_review"])
           .is("paid_at", null)
@@ -81,9 +81,9 @@ export async function GET(req: NextRequest) {
       const upcoming = jobs.length;
       const unassigned = jobs.filter((j) => !j.cleaner_id).length;
       const unpaidRows =
-        (unpaidRes.data as Array<{ fixed_payout_amount: number | null }> | null) ?? [];
+        (unpaidRes.data as Array<{ fixed_payout_amount: number | null; cleaning_scope_total: number | null }> | null) ?? [];
       const unpaidTotal = unpaidRows.reduce(
-        (s, r) => s + Number(r.fixed_payout_amount ?? 0),
+        (s, r) => s + Number(r.cleaning_scope_total ?? r.fixed_payout_amount ?? 0),
         0,
       );
 

@@ -110,7 +110,7 @@ export async function findUnacceptedDueSoon(withinHours: number): Promise<AtRisk
 
   const { data } = await supabase
     .from("assignments")
-    .select("id, owner_id, cleaner_id, due_at, status, ack_status, properties:property_id ( name ), listing_properties:assignments_listing_property_fk(name)")
+    .select("id, owner_id, cleaner_id, due_at, status, ack_status, properties:property_id ( name ), listing_properties:assignments_listing_property_fk(name), cleaning_scope_properties:assignments_cleaning_scope_property_fk(name)")
     .in("status", ["assigned", "confirmed"])
     .neq("ack_status", "accepted")
     .gte("due_at", now)
@@ -128,7 +128,7 @@ export async function findOverdueAssignments(): Promise<AtRiskAssignment[]> {
 
   const { data } = await supabase
     .from("assignments")
-    .select("id, owner_id, cleaner_id, due_at, status, ack_status, properties:property_id ( name ), listing_properties:assignments_listing_property_fk(name)")
+    .select("id, owner_id, cleaner_id, due_at, status, ack_status, properties:property_id ( name ), listing_properties:assignments_listing_property_fk(name), cleaning_scope_properties:assignments_cleaning_scope_property_fk(name)")
     .not("status", "in", '("completed_pending_review","approved","cancelled","needs_reclean")')
     .lt("due_at", now);
 
@@ -145,7 +145,7 @@ export async function findSLABreaches(): Promise<AtRiskAssignment[]> {
 
   const { data } = await supabase
     .from("assignments")
-    .select("id, owner_id, cleaner_id, due_at, status, ack_status, properties:property_id ( name ), listing_properties:assignments_listing_property_fk(name)")
+    .select("id, owner_id, cleaner_id, due_at, status, ack_status, properties:property_id ( name ), listing_properties:assignments_listing_property_fk(name), cleaning_scope_properties:assignments_cleaning_scope_property_fk(name)")
     .eq("status", "unassigned")
     .gte("due_at", now)
     .lte("due_at", slaWindow);

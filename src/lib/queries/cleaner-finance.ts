@@ -4,7 +4,7 @@ import { cache } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveOwnerId } from "@/lib/queries/properties";
 import { getCleanerLedger, type CleanerAccount } from "@/lib/queries/cleaner-ledger";
-import { calculateCleanerFinancialSummary } from "@/lib/services/cleaner-finance";
+import { type PayAdjustment, calculateCleanerFinancialSummary } from "@/lib/services/cleaner-finance";
 import { withListingConfiguration } from "@/lib/services/booking-configuration";
 import type { PayoutEntryRecord } from "@/lib/queries/payouts";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
@@ -25,7 +25,7 @@ const loadFinance = cache(async () => {
   }
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from("assignments")
-      .select("*,properties:property_id(name,address_line_1,city,timezone),listing_properties:assignments_listing_property_fk(name,address_line_1,city,timezone),cleaners:cleaner_id(full_name),assignment_extras(id,assignment_id,description,amount,kind,created_at)")
+      .select("*,properties:property_id(name,address_line_1,city,timezone),listing_properties:assignments_listing_property_fk(name,address_line_1,city,timezone),cleaning_scope_properties:assignments_cleaning_scope_property_fk (name,address_line_1,city,timezone),cleaners:cleaner_id(full_name),assignment_extras(id,assignment_id,description,amount,kind,created_at)")
       .eq("owner_id", ownerId).in("status", ["approved", "completed_pending_review"]).order("id").range(offset, offset + 999);
     if (error) throw new Error(error.message);
     jobs.push(...((data ?? []) as unknown as AssignmentListRecord[]).map(withListingConfiguration));
@@ -40,7 +40,14 @@ const loadFinance = cache(async () => {
     payments.push(...((data??[]) as CleanerPayment[]));
     if((data?.length??0)<1000) break;
   }
-  return { payments, entries, jobs, accounts: (accounts ?? []) as CleanerAccount[] };
+  const adjustments: PayAdjustment[] = [];
+  for (let offset=0;;offset+=1000) {
+    const {data,error}=await supabase.from("cleaning_pay_adjustments").select("id,assignment_id,cleaner_id,amount,entry_date,reason").eq("owner_id",ownerId).order("id").range(offset,offset+999);
+    if(error) throw new Error(error.message);
+    adjustments.push(...((data??[]) as PayAdjustment[]));
+    if((data?.length??0)<1000) break;
+  }
+  return { adjustments, payments, entries, jobs, accounts: (accounts ?? []) as CleanerAccount[] };
 });
 
 export const getCleanerFinancialSummary = cache(async (cleanerId: string) => {
@@ -49,6 +56,7 @@ export const getCleanerFinancialSummary = cache(async (cleanerId: string) => {
   const accounting = calculateCleanerFinancialSummary({
     reconciledThrough: ledger?.account.reconciled_through ?? null,
     ledgerEntries: ledger?.entries ?? [],
+    adjustments: data.adjustments.filter(a=>a.cleaner_id===cleanerId),
     payments: data.payments.filter(payment=>payment.cleaner_id===cleanerId),
     entries: data.entries.filter((entry) => entry.cleaner_id === cleanerId),
     jobs: data.jobs.filter((job) => job.cleaner_id === cleanerId),

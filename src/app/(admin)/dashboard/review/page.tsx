@@ -40,6 +40,8 @@ async function listPendingReviewJobs(): Promise<PendingReviewJob[]> {
     .select(
       `id, due_at,
        properties:property_id ( name ),
+       listing_properties:assignments_listing_property_fk(name),
+       cleaning_scope_properties:assignments_cleaning_scope_property_fk(name),
        cleaners:cleaner_id ( full_name ),
        assignment_checklist_items ( id, completed ),
        assignment_photos ( id ),
@@ -61,7 +63,7 @@ async function listPendingReviewJobs(): Promise<PendingReviewJob[]> {
     return {
       id: a.id,
       due_at: a.due_at,
-      properties: a.properties as unknown as { name: string } | null,
+      properties: (a.cleaning_scope_properties ?? a.listing_properties ?? a.properties) as unknown as { name: string } | null,
       cleaners: a.cleaners as unknown as { full_name: string } | null,
       checklist_total: items.length,
       checklist_done: items.filter((i) => i.completed).length,

@@ -128,3 +128,39 @@ describe("shared remaining job balances",()=>{
   expect(run([job("reported",90)],[payment(2244)],ledger,[entry("e","reported",120)]).jobRemainingAmounts).toEqual({});
  });
 });
+
+ describe("scope correction accounting",()=>{
+ const adjustment={id:"correction",assignment_id:"job",cleaner_id:"cleaner",amount:30,entry_date:"2026-10-13",reason:"Third bedroom used"};
+ it("keeps original paid amount and adds correction exactly once",()=>{
+ const result=calculateCleanerFinancialSummary({entries:[],jobs:[{...job("job",120),financial_base_amount:90,paid_at:"2026-10-14T12:00:00Z"}],ledgerEntries:[],reconciledThrough:null,adjustments:[adjustment,adjustment]});
+ expect(result.balance).toBe(30);expect(result.legacyPaidTotal).toBe(90);expect(result.jobRemainingAmounts.job).toBe(30);
+ expect(result.statementEntries.filter(e=>e.id.startsWith("scope-adjustment:"))).toHaveLength(1);
+ });
+ it("adds corrections to historical ledger-covered work",()=>{
+ const result=calculateCleanerFinancialSummary({entries:[],jobs:[job("job",90,"2026-09-01T12:00:00Z")],ledgerEntries:[],reconciledThrough:cutoff,adjustments:[adjustment]});
+ expect(result.balance).toBe(30);expect(result.jobRemainingAmounts.job).toBe(30);
+ });
+ it("unlocked scope totals have no extra adjustment",()=>{
+ const result=calculateCleanerFinancialSummary({entries:[],jobs:[job("job",120)],ledgerEntries:[],reconciledThrough:null});expect(result.balance).toBe(120);
+ });
+ });
+
+ describe("locked scope correction allocation",()=>{
+ const adj=(amount:number)=>({id:"scope",assignment_id:"corrected",cleaner_id:"c",amount,entry_date:"2026-10-13",reason:"scope"});
+ it("does not add the effective display amount twice for an unpaid draft-locked job",()=>{
+ const result=calculateCleanerFinancialSummary({entries:[{...entry("draft","corrected",90),payout_batches:{status:"draft"}}],jobs:[{...job("corrected",120),financial_base_amount:90}],ledgerEntries:[],reconciledThrough:null,adjustments:[adj(30)]});
+ expect(result.balance).toBe(120);expect(result.jobRemainingAmounts.corrected).toBe(120);
+ });
+ it("reduces unpaid original debt with a negative correction",()=>{
+ const result=calculateCleanerFinancialSummary({entries:[],jobs:[{...job("corrected",60),financial_base_amount:90}],ledgerEntries:[],reconciledThrough:null,adjustments:[adj(-30)]});
+ expect(result.balance).toBe(60);expect(result.jobRemainingAmounts.corrected).toBe(60);
+ });
+ it("uses negative historical corrections against ledger debt before other jobs",()=>{
+ const result=calculateCleanerFinancialSummary({entries:[],jobs:[job("other",90)],ledgerEntries:[{id:"old",entry_date:"2026-09-01",sequence:1,kind:"cleaning",description:"History",amount:100}],reconciledThrough:cutoff,adjustments:[adj(-30)]});
+ expect(result.balance).toBe(160);expect(result.jobRemainingAmounts.other).toBe(90);
+ });
+ it("uses excess historical correction credit after the ledger is covered",()=>{
+ const result=calculateCleanerFinancialSummary({entries:[],jobs:[job("other",90)],ledgerEntries:[{id:"old",entry_date:"2026-09-01",sequence:1,kind:"cleaning",description:"History",amount:10}],reconciledThrough:cutoff,adjustments:[adj(-30)]});
+ expect(result.balance).toBe(70);expect(result.jobRemainingAmounts.other).toBe(70);
+ });
+ });
