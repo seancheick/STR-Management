@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json(rpcError(null, -32700, "Parse error"), { status: 400 });
   }
-  if (Array.isArray(message) || typeof message !== "object" || message === null || typeof message.method !== "string") {
+  if (Array.isArray(message) || typeof message !== "object" || message === null || typeof message.method !== "string" || message.jsonrpc !== "2.0" || (message.id !== undefined && message.id !== null && typeof message.id !== "string" && typeof message.id !== "number")) {
     return NextResponse.json(rpcError(null, -32600, "Send one JSON-RPC request per POST."), { status: 400 });
   }
   // Notifications (no id) and responses need no reply.
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
           name: t.name,
           description: t.description,
           inputSchema: toolInputSchema(t),
-          annotations: { readOnlyHint: t.scope === "read", destructiveHint: false, openWorldHint: false },
+          annotations: { readOnlyHint: t.scope === "read", destructiveHint: t.scope === "write", openWorldHint: false },
         })),
       }));
     case "tools/call": {

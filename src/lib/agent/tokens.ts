@@ -60,7 +60,21 @@ const sessions = new Map<string, { client: SupabaseClient; expiresAt: number }>(
  * asymmetric key we cannot mint with, so we issue a one-time sign-in link with
  * the service role (no email is sent) and redeem it immediately.
  */
+const pendingSessions = new Map<string, Promise<SupabaseClient>>();
+
 export async function ownerSession(ownerId: string): Promise<SupabaseClient> {
+  const pending = pendingSessions.get(ownerId);
+  if (pending) return pending;
+  const request = createOwnerSession(ownerId);
+  pendingSessions.set(ownerId, request);
+  try {
+    return await request;
+  } finally {
+    pendingSessions.delete(ownerId);
+  }
+}
+
+async function createOwnerSession(ownerId: string): Promise<SupabaseClient> {
   const cached = sessions.get(ownerId);
   if (cached && cached.expiresAt - 60_000 > Date.now()) return cached.client;
 

@@ -132,6 +132,16 @@ describe("agent tool execution", () => {
 });
 
 describe("MCP endpoint", () => {
+  it("rejects invalid JSON-RPC versions and request ids", async () => {
+    expect((await rpc({ id: 1, method: "ping" })).status).toBe(400);
+    expect((await rpc({ jsonrpc: "2.0", id: {}, method: "ping" })).status).toBe(400);
+  });
+
+  it("marks write tools as potentially destructive", async () => {
+    const body = await (await rpc({ jsonrpc: "2.0", id: 1, method: "tools/list" })).json();
+    expect(body.result.tools.find((t: { name: string }) => t.name === "cancel_cleaning").annotations.destructiveHint).toBe(true);
+  });
+
   it("requires a token", async () => {
     const res = await rpc({ jsonrpc: "2.0", id: 1, method: "ping" }, "nope");
     expect(res.status).toBe(401);
