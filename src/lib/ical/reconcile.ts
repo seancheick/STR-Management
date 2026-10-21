@@ -62,6 +62,10 @@ export function planReconciliation(input: {
 
   for (const row of input.existing) {
     if (!row.source_reference || !mutable.has(row.status) || new Date(row.due_at).getTime() <= input.now.getTime()) continue;
+    // Providers prune a departed stay after checkout, before the cleaning's
+    // deadline. The turnover still needs its cleaner; feed absence is no longer
+    // evidence that the stay was cancelled once checkout has been reached.
+    if (new Date(row.checkout_at ?? row.due_at).getTime() <= input.now.getTime()) continue;
     const candidate = byRef.get(row.source_reference);
 
     if (candidate) {

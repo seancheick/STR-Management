@@ -674,10 +674,13 @@ async function reconcileWithFeed(
 
   let cancelled = 0;
   for (const job of plan.cancels) {
+    const cancelBeforeCheckout = new Date().toISOString();
     const { data: done, error: cancelError } = await supabase
       .from("assignments")
       .update({ status: "cancelled" })
       .eq("id", job.id)
+      .eq("owner_id", input.ownerId)
+      .or(`checkout_at.gt.${cancelBeforeCheckout},and(checkout_at.is.null,due_at.gt.${cancelBeforeCheckout})`)
       .in("status", [...SYNC_MUTABLE_STATUSES])
       .select("id");
     if (cancelError) throw new Error(cancelError.message);

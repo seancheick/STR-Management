@@ -73,6 +73,18 @@ describe("planReconciliation", () => {
     expect(plan.cancels).toEqual([{ id: "a1", cleanerId: "cleaner-1", dueAt: "2026-10-19T19:00:00+00:00" }]);
   });
 
+  it("preserves a checkout that already happened even while the cleaning deadline is still ahead", () => {
+    for (const status of ["unassigned", "assigned", "confirmed"]) {
+      const existing = row({status,checkout_at:"2026-10-21T15:00:00Z",due_at:"2026-10-21T19:00:00Z"});
+      const plan = planReconciliation({existing:[existing],candidates:[],calendarSourceId:SOURCE,now:new Date("2026-10-21T17:07:00Z")});
+      expect(plan.cancels).toEqual([]);
+      expect(plan.ownershipTransfers).toEqual([]);
+    }
+  });
+  it("does not reschedule a checkout already reached when a pruned or reused feed UID changes",()=>{
+    const plan=planReconciliation({existing:[row({checkout_at:"2026-10-21T15:00:00Z",due_at:"2026-10-21T19:00:00Z"})],candidates:[candidate("booking-1","2026-10-23T15:00:00Z","2026-10-23T19:00:00Z")],calendarSourceId:SOURCE,now:new Date("2026-10-21T15:00:00Z")});
+    expect(plan.updates).toEqual([]);expect(plan.cancels).toEqual([]);
+  });
   it("never cancels a job created by a different feed on the same property", () => {
     const plan = planReconciliation({
       existing: [row({ calendar_source_id: OTHER_SOURCE })],
