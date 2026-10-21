@@ -141,6 +141,10 @@ describe("bookability guardian", () => {
       expect(run({ ok: false, error: "PriceLabs /v1/listings failed: API_KEY_INVALID" })).toMatchObject([{ severity: "warning", subject: "pricelabs" }]);
     });
 
+    it.each([null, "invalid", "2030-01-01T00:00:00Z"])("marks invalid push timestamp %s unverified even in authority grace", (stamp) => {
+      expect(run(synced(stamp), { authority_changed_at: NOW.toISOString() })[0]).toMatchObject({severity:"warning",detail:{unverified:true}});
+    });
+
     it("without a PriceLabs key, unchanged prices only raise a warning to check PriceLabs", () => {
       const [f] = run(undefined);
       expect(f).toMatchObject({ severity: "warning", detail: { problem: "PriceLabs has not changed any price in 492 hours" } });

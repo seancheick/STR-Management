@@ -1,5 +1,8 @@
 import "server-only";
 
+import { hasConnection, getAccessToken } from "./oauth";
+import { getMcpListings } from "./mcp";
+
 /**
  * Read-only PriceLabs Customer API client
  * (https://developers.pricelabs.co/customer-api/api-reference/customer-api/listings/all-listings.md).
@@ -14,8 +17,15 @@ export type PriceLabsListing = {
   channel_listing_details: Array<{ channel_name: string; channel_listing_id: string }>;
 };
 
-export function priceLabsConfigured() {
-  return Boolean(process.env.PRICELABS_API_KEY);
+export function priceLabsConfigured(ownerId?: string) {
+  return Boolean(ownerId && process.env.PRICELABS_API_KEY && process.env.PRICELABS_API_OWNER_ID === ownerId);
+}
+
+/** A saved grant takes precedence; failed grants never silently fall back. */
+export async function getOwnerPriceLabsListings(ownerId: string): Promise<PriceLabsListing[] | undefined> {
+  if (await hasConnection(ownerId)) return getMcpListings(await getAccessToken(ownerId));
+  if (priceLabsConfigured(ownerId)) return getPriceLabsListings();
+  return undefined;
 }
 
 export async function getPriceLabsListings(): Promise<PriceLabsListing[]> {
@@ -25,6 +35,7 @@ export async function getPriceLabsListings(): Promise<PriceLabsListing[]> {
     headers: { "X-API-Key": key },
     signal: AbortSignal.timeout(20_000),
     cache: "no-store",
+    redirect: "error",
   });
   const body = await res.json().catch(() => null) as { listings?: PriceLabsListing[]; error?: { code?: string; message?: string } | string } | null;
   if (!res.ok || !Array.isArray(body?.listings)) {

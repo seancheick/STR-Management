@@ -159,7 +159,7 @@ export function scanBookability(input: {
     // prices for days, so without its push record this is a prompt to check, not an outage.
     if (hours > PRICING_STALE_HOURS) findings.push({ rule: "pricing_stale", severity: authority === "pricelabs" ? "warning" : "critical", subject: authority, channel_type: null, start_date: null, end_date: null,
       detail: authority === "pricelabs"
-        ? { problem: `PriceLabs has not changed any price in ${Math.floor(hours)} hours`, cause: "Possibly a quiet stretch; PriceLabs can push unchanged prices. Without PRICELABS_API_KEY its push record is unavailable here", action: "Confirm PriceLabs is still syncing: ask Claude with the PriceLabs connector for each listing's last_date_pushed, or check Sync status in PriceLabs", listings: owned.length, lastChange: new Date(latest).toISOString() }
+        ? { unverified: true, problem: `PriceLabs has not changed any price in ${Math.floor(hours)} hours`, cause: "Possibly a quiet stretch; PriceLabs can push unchanged prices. Without a connected PriceLabs account its push record is unavailable here", action: "Confirm PriceLabs is still syncing: use the PriceLabs connector for each listing's last_date_pushed, or check Sync status in PriceLabs", listings: owned.length, lastChange: new Date(latest).toISOString() }
         : { problem: `TurnFlow has not changed any price in ${Math.floor(hours)} hours`, cause: "Pricing engine stopped or disconnected", action: "Check the TurnFlow pricing job and its last run", listings: owned.length, lastChange: new Date(latest).toISOString() } });
   }
   return { findings, updates };
@@ -169,9 +169,10 @@ const normalizeChannel = (channel: string) => channel.toLowerCase().replace(/[^a
 
 function priceLabsSyncFinding(owned: ListingSettings[], all: ListingSettings[], sync: PriceLabsSync, now: Date): Finding | null {
   const base = { rule: "pricing_stale" as const, subject: "pricelabs", channel_type: null, start_date: null, end_date: null };
-  if (!sync.ok) return { ...base, severity: "warning", detail: { problem: "Could not check PriceLabs sync status", cause: sync.error, action: "Check PRICELABS_API_KEY and PriceLabs API status; pricing staleness is unverified until this works" } };
+  if (!sync.ok) return { ...base, severity: "warning", detail: { problem: "Could not check PriceLabs sync status", cause: sync.error, unverified: true, action: "Check the PriceLabs connection in Settings; pricing staleness is unverified until this works" } };
   const problems: Array<{ property: string; issue: string; lastPushed: string | null }> = [];
   const ambiguous: number[] = [];
+  const invalid: string[] = [];
   for (const propertyId of new Set(owned.map((l) => l.hostex_property_id))) {
     // Match on any channel listing id PriceLabs reports, so a Booking.com-only property still resolves.
     const ids = new Set(all.filter((l) => l.hostex_property_id === propertyId).map((l) => `${normalizeChannel(l.channel_type)}:${l.listing_id}`));
@@ -184,9 +185,10 @@ function priceLabsSyncFinding(owned: ListingSettings[], all: ListingSettings[], 
     const label = match?.name ?? `Hostex property ${propertyId}`;
     if (!match) problems.push({ property: label, issue: "not found in PriceLabs", lastPushed });
     else if (!match.push_enabled) problems.push({ property: label, issue: "sync turned off in PriceLabs", lastPushed });
+    else if (typeof match.push_enabled !== "boolean" || !lastPushed || !Number.isFinite(Date.parse(lastPushed)) || Date.parse(lastPushed) > now.getTime() + 300_000) invalid.push(label);
     else if (hours > PRICELABS_PUSH_STALE_HOURS) problems.push({ property: label, issue: `no push in ${Math.floor(hours)} hours`, lastPushed });
   }
-  if (!problems.length && ambiguous.length) return { ...base, severity: "warning", detail: { problem: "PriceLabs sync status is unverified", cause: `Multiple PriceLabs listings match Hostex properties: ${ambiguous.join(", ")}`, action: "Resolve duplicate channel mappings in PriceLabs, then scan again" } };
+  if (!problems.length && (ambiguous.length || invalid.length)) return { ...base, severity: "warning", detail: { problem: "PriceLabs sync status is unverified", unverified: true, cause: invalid.length ? `Missing or invalid PriceLabs push data: ${invalid.join(", ")}` : `Multiple PriceLabs listings match Hostex properties: ${ambiguous.join(", ")}`, action: "Resolve duplicate channel mappings in PriceLabs, then scan again" } };
   if (!problems.length) return null;
   return { ...base, severity: "critical", detail: {
     problem: `PriceLabs is not pushing prices for ${problems.length} ${problems.length === 1 ? "property" : "properties"}`,

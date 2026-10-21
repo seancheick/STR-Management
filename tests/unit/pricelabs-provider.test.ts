@@ -1,0 +1,10 @@
+import { beforeEach, expect, it, vi } from "vitest";
+const mocks = vi.hoisted(() => ({ hasConnection:vi.fn(), getAccessToken:vi.fn(), getMcpListings:vi.fn() }));
+vi.mock('server-only',()=>({}));
+vi.mock('@/lib/pricelabs/oauth',()=>mocks);
+vi.mock('@/lib/pricelabs/mcp',()=>mocks);
+import { getOwnerPriceLabsListings } from '@/lib/pricelabs/client';
+beforeEach(()=>{vi.resetAllMocks();vi.unstubAllEnvs();});
+it('selects the owner MCP grant',async()=>{mocks.hasConnection.mockResolvedValue(true);mocks.getAccessToken.mockResolvedValue('token');mocks.getMcpListings.mockResolvedValue([]);expect(await getOwnerPriceLabsListings('owner')).toEqual([]);expect(mocks.getAccessToken).toHaveBeenCalledWith('owner');});
+it('does not fall back after a connected grant fails',async()=>{vi.stubEnv('PRICELABS_API_KEY','key');vi.stubEnv('PRICELABS_API_OWNER_ID','owner');mocks.hasConnection.mockResolvedValue(true);mocks.getAccessToken.mockRejectedValue(new Error('Reconnect PriceLabs'));await expect(getOwnerPriceLabsListings('owner')).rejects.toThrow('Reconnect');});
+it('does not share global API configuration with another owner',async()=>{vi.stubEnv('PRICELABS_API_KEY','key');vi.stubEnv('PRICELABS_API_OWNER_ID','other');mocks.hasConnection.mockResolvedValue(false);expect(await getOwnerPriceLabsListings('owner')).toBeUndefined();});

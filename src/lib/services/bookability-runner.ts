@@ -2,7 +2,7 @@ import "server-only";
 
 import { getAvailabilities, getListingCalendars, getPricingRatios, getProperties } from "@/lib/hostex/client";
 import { sendNotification } from "@/lib/notifications/notification-service";
-import { getPriceLabsListings, priceLabsConfigured } from "@/lib/pricelabs/client";
+import { getOwnerPriceLabsListings } from "@/lib/pricelabs/client";
 import { assertBookabilityCoverage, scanBookability, type Finding, type ListingSettings, type PriceLabsSync } from "@/lib/services/bookability";
 import { datesIn } from "@/lib/services/calendar-change-rules";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
@@ -86,7 +86,7 @@ export async function runBookabilityScan(ownerId: string, horizonDays = DEFAULT_
     ]);
     const availability = new Map(availabilities.map((p) => [p.id, new Map(p.availabilities.map((a) => [a.date, a.available]))]));
     assertBookabilityCoverage(listings, calendars, availability, datesIn({ start_date: start, end_date: end }));
-    const pricelabs = listings.some((l) => l.pricing_authority === "pricelabs") ? await priceLabsSync() : undefined;
+    const pricelabs = listings.some((l) => l.pricing_authority === "pricelabs") ? await priceLabsSync(ownerId) : undefined;
     const { findings, updates } = scanBookability({ listings, calendars, availability, now, pricelabs });
 
     for (const u of updates) {
@@ -94,7 +94,7 @@ export async function runBookabilityScan(ownerId: string, horizonDays = DEFAULT_
         .eq("owner_id", ownerId).eq("channel_type", u.channel_type).eq("listing_id", u.listing_id);
       if (error) throw error;
     }
-    const opened = await reconcileFindings(ownerId, findings, now, true);
+    const opened = await reconcileFindings(ownerId, findings, now, true, listings.some((l) => l.pricing_authority === "pricelabs") && (!pricelabs || !pricelabs.ok));
     await db.from("bookability_scans").update({ finished_at: new Date().toISOString(), result: "success", listings_scanned: listings.length }).eq("id", scan.id);
     await notifyCritical(ownerId, opened);
     return { ok: true as const, listings: listings.length, findings: findings.length, newCritical: opened.length };
@@ -110,30 +110,32 @@ export async function runBookabilityScan(ownerId: string, horizonDays = DEFAULT_
 }
 
 /** PriceLabs' push record for the staleness rule; a PriceLabs outage must not fail the Hostex scan. */
-async function priceLabsSync(): Promise<PriceLabsSync | undefined> {
-  if (!priceLabsConfigured()) return undefined;
+async function priceLabsSync(ownerId: string): Promise<PriceLabsSync | undefined> {
   try {
-    const listings = await getPriceLabsListings();
+    const listings = await getOwnerPriceLabsListings(ownerId);
+    if (!listings) return undefined;
     return { ok: true, listings: listings.filter((l) => l.pms === "hostex").map((l) => ({
-      name: l.name, push_enabled: Boolean(l.push_enabled), last_date_pushed: l.last_date_pushed ?? null,
+      name: l.name, push_enabled: l.push_enabled, last_date_pushed: l.last_date_pushed ?? null,
       channels: (l.channel_listing_details ?? []).map((c) => ({ channel_type: c.channel_name, listing_id: String(c.channel_listing_id) })),
     })) };
-  } catch (error) {
-    return { ok: false, error: (error instanceof Error ? error.message : String(error)).slice(0, 300) };
+  } catch {
+    return { ok: false, error: "PriceLabs sync status could not be verified. Check the connection in Settings and reconnect if needed." };
   }
 }
 
 const key = (f: { rule: string; channel_type: string | null; subject: string }) => `${f.rule}|${f.channel_type ?? ""}|${f.subject}`;
 
-async function reconcileFindings(ownerId: string, findings: Finding[], now: Date, scanSucceeded: boolean): Promise<Finding[]> {
+async function reconcileFindings(ownerId: string, findings: Finding[], now: Date, scanSucceeded: boolean, preservePriceLabs = false): Promise<Finding[]> {
   const db = createServiceSupabaseClient();
   const at = now.toISOString();
-  const { data: openRows, error } = await db.from("bookability_findings").select("id, rule, channel_type, subject").eq("owner_id", ownerId).is("resolved_at", null);
+  const { data: openRows, error } = await db.from("bookability_findings").select("id, rule, channel_type, subject, severity, detail").eq("owner_id", ownerId).is("resolved_at", null);
   if (error) throw error;
   const open = new Map((openRows ?? []).map((r) => [key(r), r.id as string]));
   const opened: Finding[] = [];
   for (const f of findings) {
-    const fields = { severity: f.severity, start_date: f.start_date, end_date: f.end_date, detail: f.detail, last_seen_at: at };
+    const previous = (openRows ?? []).find((r) => r.id === open.get(key(f)));
+    const retainCritical = f.rule === "pricing_stale" && f.subject === "pricelabs" && (f.detail.unverified === true || preservePriceLabs) && previous?.severity === "critical";
+    const fields = { severity: retainCritical ? "critical" : f.severity, start_date: f.start_date, end_date: f.end_date, detail: retainCritical ? { ...f.detail, unverified: true, previousCriticalEvidence: previous.detail?.previousCriticalEvidence ?? previous.detail } : f.detail, last_seen_at: at };
     const id = open.get(key(f));
     let res = id ? await db.from("bookability_findings").update(fields).eq("id", id)
       : await db.from("bookability_findings").insert({ owner_id: ownerId, rule: f.rule, channel_type: f.channel_type, subject: f.subject, first_seen_at: at, ...fields });
@@ -147,6 +149,9 @@ async function reconcileFindings(ownerId: string, findings: Finding[], now: Date
     if (res.error) throw res.error;
     if (!id && !raced && f.severity === "critical") opened.push(f);
     open.delete(key(f));
+  }
+  if (preservePriceLabs) {
+    for (const row of openRows ?? []) if (row.rule === "pricing_stale" && row.subject === "pricelabs" && row.severity === "critical") open.delete(key(row));
   }
   if (scanSucceeded && open.size) {
     const res = await db.from("bookability_findings").update({ resolved_at: at }).in("id", [...open.values()]);
