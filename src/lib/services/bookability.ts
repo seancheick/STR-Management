@@ -155,8 +155,12 @@ export function scanBookability(input: {
     }
     const latest = Math.max(...owned.map((l) => Math.max(Date.parse(l.authority_changed_at), Date.parse(changedAt.get(`${l.channel_type}:${l.listing_id}`) ?? "") || 0)));
     const hours = (input.now.getTime() - latest) / 3_600_000;
-    if (hours > PRICING_STALE_HOURS) findings.push({ rule: "pricing_stale", severity: "critical", subject: authority, channel_type: null, start_date: null, end_date: null,
-      detail: { problem: `${authority === "pricelabs" ? "PriceLabs" : "TurnFlow"} has not changed any price in ${Math.floor(hours)} hours`, cause: "Pricing provider stopped, unpaid or disconnected", action: "Check the provider's sync status and billing", listings: owned.length, lastChange: new Date(latest).toISOString() } });
+    // Unchanged prices only prove TurnFlow's own engine stopped. PriceLabs can push identical
+    // prices for days, so without its push record this is a prompt to check, not an outage.
+    if (hours > PRICING_STALE_HOURS) findings.push({ rule: "pricing_stale", severity: authority === "pricelabs" ? "warning" : "critical", subject: authority, channel_type: null, start_date: null, end_date: null,
+      detail: authority === "pricelabs"
+        ? { problem: `PriceLabs has not changed any price in ${Math.floor(hours)} hours`, cause: "Possibly a quiet stretch; PriceLabs can push unchanged prices. Without PRICELABS_API_KEY its push record is unavailable here", action: "Confirm PriceLabs is still syncing: ask Claude with the PriceLabs connector for each listing's last_date_pushed, or check Sync status in PriceLabs", listings: owned.length, lastChange: new Date(latest).toISOString() }
+        : { problem: `TurnFlow has not changed any price in ${Math.floor(hours)} hours`, cause: "Pricing engine stopped or disconnected", action: "Check the TurnFlow pricing job and its last run", listings: owned.length, lastChange: new Date(latest).toISOString() } });
   }
   return { findings, updates };
 }

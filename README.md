@@ -99,7 +99,7 @@ Your channel calendars can fail silently: a missing nightly price, a rate plan d
 | Rule | Severity | Catches |
 |---|:---:|---|
 | `missing_price` | 🔴 critical | Sellable nights with no price. It knows when Booking.com prices the plan itself, and points to the extranet fix instead of an API push. |
-| `pricing_stale` | 🔴 critical | PriceLabs hasn't pushed a property in 36 hours (read from its own sync record), or TurnFlow-priced calendars haven't changed a price in 72 hours |
+| `pricing_stale` | 🔴 / 🟠 | PriceLabs hasn't pushed a property in 36 hours (with its API), or hasn't changed a price in 72 hours (warning, check via the PriceLabs connector); TurnFlow-priced calendars that stop changing are critical |
 | `scan_stale` | 🔴 critical | The scanner itself failed, or hasn't succeeded in 26 hours. The watchdog is watched too. |
 | `closed_while_available` | 🟠 warning | The property is open but this calendar has zero inventory |
 | `ratio_drift` | 🟠 warning | A rate plan departs more than 2% from its multiplier to Airbnb |
