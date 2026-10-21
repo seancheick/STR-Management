@@ -62,6 +62,14 @@ function check<T extends { status?: string; message?: string | null; error?: str
   return result;
 }
 
+async function agentJobPay(assignmentId: string) {
+  try { return await getJobPayAction(assignmentId); }
+  catch (error) {
+    if (error instanceof Error && error.message === "Cleaning not found.") throw new AgentToolError(error.message);
+    throw error;
+  }
+}
+
 async function currentCleaning(assignmentId: string) {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
@@ -315,21 +323,21 @@ export const agentTools: AgentTool[] = [
   }),
   tool({
     name: "get_job_pay",
-    description: "One cleaning's total pay and its itemized extras (with ids, needed to remove one).",
+    description: "Preview one cleaning's total, itemized extras and whether new extras can be edited (canEditExtras / editRestriction). Use those extra ids to remove an item.",
     scope: "read",
     input: z.object({ assignmentId: id }),
-    run: (input) => getJobPayAction(input.assignmentId),
+    run: (input) => agentJobPay(input.assignmentId),
   }),
   tool({
     name: "add_job_extra",
-    description: "Add an itemized extra to one cleaning's pay: 'service' for extra work (e.g. laundry, deep clean) or 'reimbursement' for supplies the cleaner bought. Works on completed jobs until they are paid or reconciled. Not for rooms actually used; use correct_cleaning_scope for that. requestId makes retries safe: a new UUID per extra, reused only to retry.",
+    description: "Add an itemized extra to one cleaning's pay: 'service' for extra work (e.g. laundry, deep clean) or 'reimbursement' for supplies the cleaner bought. Works on completed jobs while their pay is editable. Read get_job_pay first: paid, reconciled, report-linked and scope-corrected jobs reject new extras. Not for rooms actually used; use correct_cleaning_scope for that. requestId makes retries safe: a new UUID per extra, reused only to retry. A replay after that extra was removed returns extraState removed and never recreates the charge.",
     scope: "write",
     input: z.object({
       requestId: id.describe("A new random UUID per extra; reuse it only to retry"),
       assignmentId: id,
       description: z.string().trim().min(1).max(200),
       amount: z.number().positive().max(100000)
-        .refine((n) => Math.abs(Math.round(n * 100) - n * 100) < 1e-6, "Use at most two decimal places.")
+        .refine((n) => Number(n.toFixed(2)) === n, "Use at most two decimal places.")
         .describe("Dollars, up to two decimals"),
       kind: z.enum(["service", "reimbursement"]),
     }),
@@ -338,17 +346,18 @@ export const agentTools: AgentTool[] = [
         assignmentId: input.assignmentId, id: input.requestId, description: input.description,
         amount: input.amount.toFixed(2), kind: input.kind,
       }));
-      return { extraId: input.requestId, ...(await getJobPayAction(input.assignmentId)) };
+      const pay = await agentJobPay(input.assignmentId);
+      return { extraId: input.requestId, extraState: pay.extras.some(extra => extra.id === input.requestId) ? "present" : "removed", ...pay };
     },
   }),
   tool({
     name: "remove_job_extra",
-    description: "Remove an itemized extra (by its id from get_job_pay) from a cleaning that is not yet paid or reconciled.",
+    description: "Remove an itemized extra by its id from get_job_pay while pay is editable. Paid, reconciled, report-linked and scope-corrected jobs reject new removals. Repeating an already completed removal is safe.",
     scope: "write",
     input: z.object({ assignmentId: id, extraId: id }),
     run: async (input) => {
       check(await removeJobExtraAction(input.assignmentId, input.extraId));
-      return getJobPayAction(input.assignmentId);
+      return agentJobPay(input.assignmentId);
     },
   }),
 ];

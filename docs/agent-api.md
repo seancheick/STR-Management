@@ -43,3 +43,9 @@ The booked listing and reservation remain unchanged. Actual cleaning scope contr
 Uncommitted job pay is corrected in place with an immutable before/after receipt. Paid, reconciled or report-linked charges retain their base amounts and receive a linked signed pay adjustment. A historical report remains a historical report; the separate adjustment appears in statements, balances, spending and statement CSV exports. Existing payment records are preserved. Corrected scope/pay survives later calendar synchronization.
 
 Verify afterward using `get_cleaning_scope`, `get_cleaning` and `get_cleaner_statement`. Agent writes are logged under the token as well as the owner-authorized correction receipt. If Muse cached the OpenAPI schema, refresh its imported schema to discover the new tools.
+
+## Itemized extras
+
+Read `get_job_pay` before changing extras. It returns `canEditExtras` and `editRestriction` along with the effective total and itemized extras. Completed jobs remain editable only until their pay is locked. Corrected-scope jobs use the scope-correction flow for total changes.
+
+`add_job_extra` requires a new request UUID per extra. Repeat exactly the same UUID/payload only to retry. Durable receipts preserve the result even if the job later becomes paid. A delayed retry after removal returns `extraState: "removed"` and does not recreate the charge. Changed payload with a reused ID is refused. `remove_job_extra` is safe to repeat once removal succeeded. New additions/removals respect paid, report, reconciled and scope-correction locks. Amounts must have at most two decimal places; no rounding is performed.

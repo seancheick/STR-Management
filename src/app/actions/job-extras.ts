@@ -8,9 +8,16 @@ import type { AssignmentExtraRecord } from "@/lib/queries/assignments";
 export async function getJobPayAction(assignmentId: string) {
   const actor = await requireRole(["owner", "admin"]);
   const client = await createServerSupabaseClient();
-  const { data, error } = await client.from("assignments").select("fixed_payout_amount,cleaning_scope_total,assignment_extras(id,assignment_id,description,amount,kind,created_at)").eq("id", z.string().uuid().parse(assignmentId)).eq("owner_id", actor.owner_id).single();
+  const { data, error } = await client.from("assignments").select("status,cleaner_id,fixed_payout_amount,cleaning_scope_total,assignment_extras(id,assignment_id,description,amount,kind,created_at)").eq("id", z.string().uuid().parse(assignmentId)).eq("owner_id", actor.owner_id).maybeSingle();
   if (error) throw new Error("Could not load job pay. Refresh and try again.");
-  return { scopeCorrected: data.cleaning_scope_total != null, total: data.cleaning_scope_total != null ? Number(data.cleaning_scope_total) : data.fixed_payout_amount === null ? null : Number(data.fixed_payout_amount), extras: data.assignment_extras as AssignmentExtraRecord[] };
+  if (!data) throw new Error("Cleaning not found.");
+  const lock = await client.rpc("cleaning_scope_financial_locked", { target_assignment: assignmentId });
+  if (lock.error) throw new Error("Could not verify whether this cleaning's pay is editable.");
+  const editRestriction = data.cleaning_scope_total != null ? "This cleaning has a scope correction. Use correct_cleaning_scope to change its total."
+    : data.status === "cancelled" ? "Cancelled cleanings cannot have extras changed."
+    : data.cleaner_id === null || data.fixed_payout_amount === null ? "Choose a cleaner and set the cleaning total before adding extras."
+    : lock.data === true ? "Paid, reconciled or report-linked cleaning pay is locked." : null;
+  return { canEditExtras: editRestriction === null, editRestriction, scopeCorrected: data.cleaning_scope_total != null, total: data.cleaning_scope_total != null ? Number(data.cleaning_scope_total) : data.fixed_payout_amount === null ? null : Number(data.fixed_payout_amount), extras: data.assignment_extras as AssignmentExtraRecord[] };
 }
 
 export async function saveJobExtraAction(input: {assignmentId: string; id: string; description: string; amount: string; kind: string}) {

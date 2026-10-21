@@ -38,6 +38,12 @@ select public.remove_assignment_extra('e0000000-0000-0000-0000-000000000020','e0
 do $$ begin
  if (select fixed_payout_amount from public.assignments where id='e0000000-0000-0000-0000-000000000020')<>85 then raise exception 'FAIL removing extra changed base fee'; end if;
 end $$;
+-- A delayed retry after removal must never resurrect a charge.
+select public.add_assignment_extra('e0000000-0000-0000-0000-000000000020','e0000000-0000-0000-0000-000000000030','Trash removal',10,'service');
+do $$ begin
+ if exists(select 1 from public.assignment_extras where id='e0000000-0000-0000-0000-000000000030') then raise exception 'FAIL removed extra resurrected'; end if;
+ begin perform public.add_assignment_extra('e0000000-0000-0000-0000-000000000020','e0000000-0000-0000-0000-000000000030','Different',10,'service'); raise exception 'FAIL conflicting receipt accepted'; exception when others then if sqlerrm like 'FAIL%' then raise; end if; end;
+end $$;
 -- A stale timing form must not overwrite a newly added extra.
 select public.owner_manage_cleaning('e0000000-0000-0000-0000-000000000020','edit',null,
  '{"due_at":"2030-01-01T20:00Z","checkout_at":"2030-01-01T16:00Z","cleaner_id":"e0000000-0000-0000-0000-000000000002","priority":"normal","expected_duration_min":120,"fixed_payout_amount":75,"original_fixed_payout_amount":75}');
@@ -57,7 +63,15 @@ do $$ begin
  begin perform public.owner_manage_cleaning('e0000000-0000-0000-0000-000000000021','edit',null,
  '{"due_at":"2030-02-02T20:00Z","checkout_at":"2030-02-02T16:00Z","cleaner_id":"e0000000-0000-0000-0000-000000000002","priority":"normal","expected_duration_min":120,"fixed_payout_amount":75,"original_fixed_payout_amount":75}'); raise exception 'FAIL moved reported job date'; exception when others then if sqlerrm like 'FAIL%' then raise; end if; end;
 end $$;
+-- A corrected scope must never have its canonical total bypassed by extras.
+select public.correct_cleaning_scope(gen_random_uuid(),'e0000000-0000-0000-0000-000000000020','e0000000-0000-0000-0000-000000000010',85,'Regression scope correction');
+do $$ begin
+ begin perform public.add_assignment_extra('e0000000-0000-0000-0000-000000000020',gen_random_uuid(),'Scope bypass',5,'service'); raise exception 'FAIL extras bypassed corrected scope'; exception when others then if sqlerrm like 'FAIL%' then raise; end if; end;
+ begin perform public.remove_assignment_extra('e0000000-0000-0000-0000-000000000020','e0000000-0000-0000-0000-000000000031'); raise exception 'FAIL removal bypassed corrected scope'; exception when others then if sqlerrm like 'FAIL%' then raise; end if; end;
+end $$;
 update public.assignments set paid_at=now() where id='e0000000-0000-0000-0000-000000000020';
+select public.add_assignment_extra('e0000000-0000-0000-0000-000000000020','e0000000-0000-0000-0000-000000000031','Supplies receipt',10,'reimbursement');
+select public.remove_assignment_extra('e0000000-0000-0000-0000-000000000020','e0000000-0000-0000-0000-000000000030');
 do $$ begin
  begin perform public.add_assignment_extra('e0000000-0000-0000-0000-000000000020',gen_random_uuid(),'After payment',10,'service'); raise exception 'FAIL modified paid job'; exception when others then if sqlerrm like 'FAIL%' then raise; end if; end;
 end $$;

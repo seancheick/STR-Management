@@ -150,12 +150,16 @@ describe("agent tool execution", () => {
 });
 
 describe("job extra tools", () => {
+  it("reports a missing cleaning as a tool refusal instead of a server failure", async () => {
+    mocks.jobPay.mockRejectedValueOnce(new Error("Cleaning not found."));
+    expect(await executeAgentTool(read, "get_job_pay", { assignmentId: job })).toMatchObject({ ok: false, status: 422, error: "Cleaning not found." });
+  });
   it("adds an extra through the existing action with requestId as its id and returns the new pay", async () => {
     mocks.saveExtra.mockResolvedValue({ error: null });
     mocks.jobPay.mockResolvedValue({ total: 120, extras: [{ id: job, amount: 30 }] });
     const out = await executeAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "Extra bedroom", amount: 30, kind: "service" });
     expect(mocks.saveExtra).toHaveBeenCalledWith({ assignmentId: cleaner, id: job, description: "Extra bedroom", amount: "30.00", kind: "service" });
-    expect(out).toEqual({ ok: true, result: { extraId: job, total: 120, extras: [{ id: job, amount: 30 }] } });
+    expect(out).toEqual({ ok: true, result: { extraId: job, extraState: "present", total: 120, extras: [{ id: job, amount: 30 }] } });
   });
 
   it("rejects rounded amounts, read tokens, and surfaces the paid-job lock", async () => {
@@ -163,7 +167,13 @@ describe("job extra tools", () => {
     expect(await executeAgentTool(read, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "x", amount: 1, kind: "service" })).toMatchObject({ ok: false, status: 403 });
     mocks.removeExtra.mockResolvedValue({ error: "Paid or reconciled job pay is locked." });
     expect(await executeAgentTool(write, "remove_job_extra", { assignmentId: cleaner, extraId: job })).toEqual({ ok: false, status: 422, error: "Paid or reconciled job pay is locked." });
+    expect(await executeAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "Supplies", amount: 1.000000001, kind: "reimbursement" })).toMatchObject({ ok: false, status: 400 });
     expect(mocks.saveExtra).not.toHaveBeenCalled();
+  });
+  it("reports a removed extra accurately when an old successful add request is replayed", async () => {
+    mocks.saveExtra.mockResolvedValue({ error: null });
+    mocks.jobPay.mockResolvedValue({ total: 90, extras: [] });
+    expect(await executeAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "Supplies", amount: 30, kind: "reimbursement" })).toMatchObject({ ok: true, result: { extraId: job, extraState: "removed", total: 90 } });
   });
 });
 
