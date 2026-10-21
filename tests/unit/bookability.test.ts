@@ -105,8 +105,8 @@ describe("bookability guardian", () => {
     const owned = (over: Partial<ListingSettings> = {}) => listing("air", "airbnb", { pricing_authority: "pricelabs", price_snapshot: snapshot, prices_changed_at: "2026-10-01T00:00:00Z", ...over });
     const run = (pricelabs: PriceLabsSync | undefined, over: Partial<ListingSettings> = {}) =>
       scanBookability({ listings: [owned(over)], calendars: [AIRBNB], availability: allOpen, now: NOW, pricelabs }).findings.filter((f) => f.rule === "pricing_stale");
-    const synced = (lastPushed: string | null, push_enabled = true, airbnb_ids = ["air"]): PriceLabsSync =>
-      ({ ok: true, listings: [{ name: "1st FL 2BD", push_enabled, last_date_pushed: lastPushed, airbnb_ids }] });
+    const synced = (lastPushed: string | null, push_enabled = true, channel_ids = ["air"]): PriceLabsSync =>
+      ({ ok: true, listings: [{ name: "1st FL 2BD", push_enabled, last_date_pushed: lastPushed, channel_ids }] });
 
     it("trusts a recent push even when no price changed", () => {
       expect(run(synced("2026-10-21T02:00:00Z"))).toEqual([]);
@@ -121,6 +121,14 @@ describe("bookability guardian", () => {
     it("flags sync turned off and properties missing from PriceLabs", () => {
       expect(run(synced("2026-10-21T02:00:00Z", false))[0]!.detail.cause).toBe("1st FL 2BD: sync turned off in PriceLabs");
       expect(run(synced("2026-10-21T02:00:00Z", true, ["other"]))[0]!.detail.cause).toBe("Hostex property 1: not found in PriceLabs");
+    });
+
+    it("matches a property that only has a Booking.com calendar", () => {
+      const booking = listing("673162101-19469074", "booking.com", { pricing_authority: "pricelabs", price_snapshot: snapshot, prices_changed_at: "2026-10-01T00:00:00Z" });
+      const sync = (ids: string[]): PriceLabsSync => ({ ok: true, listings: [{ name: "Booking-only", push_enabled: true, last_date_pushed: "2026-10-21T02:00:00Z", channel_ids: ids }] });
+      const run1 = (s: PriceLabsSync) => scanBookability({ listings: [booking], calendars: [{ channel_type: "booking.com", listing_id: "673162101-19469074", calendar: days([110, 110, 220, 110]) }], availability: allOpen, now: NOW, pricelabs: s }).findings.filter((f) => f.rule === "pricing_stale");
+      expect(run1(sync(["673162101-19469074"]))).toEqual([]);
+      expect(run1(sync(["other"]))[0]!.detail.cause).toBe("Hostex property 1: not found in PriceLabs");
     });
 
     it("gives a newly assigned authority 36 hours before alerting", () => {
