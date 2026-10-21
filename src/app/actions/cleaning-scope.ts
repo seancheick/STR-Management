@@ -16,13 +16,13 @@ export async function getCleaningScopeAction(assignmentId: string) {
     .eq("owner_id", actor.owner_id).eq("id", assignmentId).maybeSingle();
   if (error || !job) throw new Error(error?.message ?? "Cleaning not found.");
   if (job.assignment_type !== "cleaning" || job.status === "cancelled") return null;
-  const [options, reports, receipts] = await Promise.all([
+  const [options, lock, receipts] = await Promise.all([
     client.from("properties").select("id,name,bedrooms,default_clean_price,primary_checklist_template_id")
       .eq("owner_id", actor.owner_id).eq("active", true).or(`id.eq.${job.property_id},physical_unit_id.eq.${job.property_id}`).order("bedrooms"),
-    client.from("payout_entries").select("id", { count: "exact", head: true }).eq("owner_id", actor.owner_id).eq("assignment_id", assignmentId),
+    client.rpc("cleaning_scope_financial_locked", { target_assignment: assignmentId }),
     client.from("cleaning_scope_corrections").select("id,reason,before_record,after_record,created_at").eq("owner_id", actor.owner_id).eq("assignment_id", assignmentId).order("created_at", { ascending: false }),
   ]);
-  if (options.error || reports.error || receipts.error) throw new Error("Could not load the correction preview. Refresh and try again.");
+  if (options.error || lock.error || receipts.error) throw new Error("Could not load the correction preview. Refresh and try again.");
   let reservation: { guest_name: string | null; start_at: string; end_at: string } | null = null;
   if (job.calendar_source_id && job.source_reference) {
     const result = await client.from("reservations").select("guest_name,start_at,end_at").eq("owner_id", actor.owner_id)
@@ -35,7 +35,7 @@ export async function getCleaningScopeAction(assignmentId: string) {
     bookedListing: job.booked as unknown as { name: string; bedrooms: number | null } | null,
     reservation, currentScopeId: job.cleaning_scope_property_id ?? job.listing_property_id ?? job.property_id,
     currentTotal: Number(job.cleaning_scope_total ?? job.fixed_payout_amount ?? 0),
-    financialHistoryLocked: !!job.paid_at || !!job.ledger_entry_id || (reports.count ?? 0) > 0,
+    financialHistoryLocked: lock.data === true,
     checklistMode: ["unassigned", "assigned", "confirmed"].includes(job.status) ? "Existing evidence is preserved; untouched checklist items can follow the corrected scope." : "Completion evidence and checklist history are preserved; the correction does not certify extra work was checked off.",
     options: options.data ?? [], corrections: receipts.data ?? [],
   };

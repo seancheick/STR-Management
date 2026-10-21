@@ -93,5 +93,17 @@ update public.assignments set fixed_payout_amount=90,listing_property_id=propert
 do $$ begin
  if not exists(select 1 from public.assignments where id='c0000000-0000-0000-0000-000000000021' and source_reference='refreshed-source' and cleaning_scope_property_id='c0000000-0000-0000-0000-000000000011' and fixed_payout_amount=120 and listing_property_id is null) then raise exception 'FAIL sync overwrote correction'; end if;
 end $$;
+reset role;
+insert into public.cleaner_accounts(cleaner_id,owner_id,label,reconciled_through,source_note) values('c0000000-0000-0000-0000-000000000099','c0000000-0000-0000-0000-000000000001','Reconciled fixture','2030-01-05','Test opening history');
+insert into public.assignments(id,owner_id,property_id,cleaner_id,due_at,status,fixed_payout_amount) values('c0000000-0000-0000-0000-000000000022','c0000000-0000-0000-0000-000000000001','c0000000-0000-0000-0000-000000000010','c0000000-0000-0000-0000-000000000099','2030-01-03T20:00Z','approved',90);
+set local role authenticated;
+do $$ begin
+ if not public.cleaning_scope_financial_locked('c0000000-0000-0000-0000-000000000022') then raise exception 'FAIL cutoff-only preview unlocked'; end if;
+end $$;
+select public.correct_cleaning_scope('c0000000-0000-0000-0000-000000000034','c0000000-0000-0000-0000-000000000022','c0000000-0000-0000-0000-000000000011',120,'Reconciled scope correction');
+do $$ begin
+ if (select fixed_payout_amount from public.assignments where id='c0000000-0000-0000-0000-000000000022')<>90 then raise exception 'FAIL cutoff-only base changed'; end if;
+ if (select amount from public.cleaning_pay_adjustments where assignment_id='c0000000-0000-0000-0000-000000000022')<>30 then raise exception 'FAIL cutoff-only adjustment missing'; end if;
+end $$;
 select 'Cleaning scope correction tests passed';
 rollback;
