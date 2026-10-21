@@ -72,11 +72,12 @@ export function matchStay(stays: ReferenceStay[], cleaningDate: string, listingI
     const key = JSON.stringify([stay.listingId, stay.checkIn, stay.checkOut]);
     groups.set(key, [...(groups.get(key) ?? []), stay]);
   }
+  const anonymousName = (name:string|null) => !name?.trim() || /^(reserved|booked|booking|guest booking)$/i.test(name.trim());
   const mirrors = new Set<ReferenceStay>();
   for (const group of groups.values()) {
     if (group.length !== 2) continue;
-    const imported = group.find(s => s.source === "channel_history" && s.guestName?.trim() && ["confirmed", "completed"].includes(s.status));
-    const anonymous = group.find(s => s.source === "ical" && !s.guestName?.trim());
+    const imported = group.find(s => s.source === "channel_history" && !anonymousName(s.guestName) && ["confirmed", "completed"].includes(s.status));
+    const anonymous = group.find(s => s.source === "ical" && anonymousName(s.guestName));
     if (imported && anonymous && (anonymous.channel === imported.channel || ["hostex", "other"].includes(anonymous.channel))) mirrors.add(anonymous);
   }
   const candidates = [...unique.values()].filter(s => !mirrors.has(s)).filter(s => (!listingId || s.listingId === listingId) && !["cancelled", "no_show"].includes(s.status) && s.checkOut <= cleaningDate && new Date(`${s.checkOut}T00:00:00Z`).getTime() >= start);

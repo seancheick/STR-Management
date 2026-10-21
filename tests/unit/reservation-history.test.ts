@@ -32,6 +32,7 @@ describe("reservation reference history", () => {
   for(const stays of [[imported,anonymous],[anonymous,imported]]) {
    const result=matchStay(stays,"2026-05-03");expect(result.status).toBe("matched");expect(result.stay?.id).toBe("csv");expect(result.candidates).toHaveLength(1);
   }
+  expect(matchStay([imported,{...anonymous,guestName:"Reserved"}],"2026-05-03").stay?.id).toBe("csv");
   expect(matchStay([imported,{...anonymous,channel:"hostex"}],"2026-05-03").stay?.id).toBe("csv");
   expect(matchStay([imported,{...anonymous,guestName:"Different guest"}],"2026-05-03").status).toBe("ambiguous");
   expect(matchStay([imported,{...anonymous,checkIn:"2026-04-30"}],"2026-05-03").status).toBe("ambiguous");
