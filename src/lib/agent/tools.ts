@@ -16,7 +16,10 @@ import {
 import { fetchAssignmentDetail, getCleanerSuggestionsAction } from "@/app/actions/assignments";
 import { correctCleaningScopeAction, getCleaningScopeAction } from "@/app/actions/cleaning-scope";
 import { cleaningScopeCorrectionSchema } from "@/lib/validations/cleaning-scope";
-import { recordCleanerPaymentAction, voidCleanerPaymentAction } from "@/app/actions/cleaner-payments";
+import { postCleanerAccountAdjustmentAction } from "@/app/actions/cleaner-account-adjustments";
+import { correctCleaningDateAction } from "@/app/actions/cleaning-date";
+import { importReservationHistoryAction, importReservationCsvAction, getReservationHistoryAction } from "@/app/actions/reservation-history";
+import { recordCleanerPaymentAction, verifyCleanerPaymentAction, voidCleanerPaymentAction } from "@/app/actions/cleaner-payments";
 import { getJobPayAction, removeJobExtraAction, saveJobExtraAction } from "@/app/actions/job-extras";
 import type { AgentScope } from "@/lib/agent/tokens";
 import { listUpcomingUnassignedCleanings } from "@/lib/queries/assignments";
@@ -48,6 +51,11 @@ const paymentMethod = z.enum(["zelle", "venmo", "cash", "check", "bank_transfer"
 const dateTime = z.iso.datetime({ offset: true }).describe("ISO 8601 with offset, e.g. 2026-10-21T11:00:00-04:00");
 
 function tool<S extends z.ZodObject>(def: { name: string; description: string; scope: AgentScope; input: S; run: (input: z.output<S>) => Promise<unknown> }): AgentTool {
+  if(def.scope === "write") {
+    return {...def, input:def.input.extend({approved:z.literal(true).describe("Set true only after the owner explicitly approves this change.")}),
+      run:(input:never)=>{const {approved: _approved,...args}=input as Record<string,unknown>;void _approved;return def.run(args as z.output<S>);},
+    } as AgentTool;
+  }
   return def as AgentTool;
 }
 
@@ -83,6 +91,40 @@ async function currentCleaning(assignmentId: string) {
 }
 
 export const agentTools: AgentTool[] = [
+  tool({
+    name:"post_cleaner_adjustment",scope:"write",
+    description:"Append a dated standalone cleaner account correction, including imported history. Never rewrites original lines. Signed amount is a BALANCE DELTA: positive increases owed, negative decreases owed. charge_correction changes charges; payment_correction changes paid total (negative adds paid, positive reverses paid). Requires reason and new requestId, reused only for identical retries. Read statement before and after.",
+    input:z.object({requestId:id,cleanerId:id,date:z.iso.date(),amount:z.number().finite().refine(n=>n!==0&&Math.abs(n)<=100000&&Number(n.toFixed(2))===n,"Use a nonzero signed amount with at most two decimal places."),kind:z.enum(["charge_correction","payment_correction"]),reason:z.string().trim().min(3).max(1000)}),
+    run:async(input)=>check(await postCleanerAccountAdjustmentAction(input)),
+  }),
+  tool({
+    name:"correct_cleaning_date",scope:"write",
+    description:"Correct the actual cleanedOn day for a completed real job without changing checkout, completion evidence, payment or reconciliation ownership. Requires owner-confirmed date, reason and stable retry requestId. Use post_cleaner_adjustment for imported history instead.",
+    input:z.object({assignmentId:id,cleanedOn:z.iso.date(),reason:z.string().trim().min(3).max(500),requestId:id}),
+    run:async(input)=>check(await correctCleaningDateAction(input)),
+  }),
+  tool({
+    name:"verify_cleaner_payment",scope:"write",
+    description:"Mark an existing nonvoided payment verified only after the owner checks it against bank records. Does not create a payment or change its amount/date/reference.",
+    input:z.object({paymentId:id}),run:async(input)=>check(await verifyCleanerPaymentAction(input.paymentId)),
+  }),
+  tool({
+    name:"get_reservation_history",scope:"read",
+    description:"Find the stay served by a property's cleaning date using live calendar and imported channel history. Pass physical propertyId and booked listingId when known. Returns matched, ambiguous or not_found with candidates; never assumes one listing when ambiguous. Looks back at most two days from cleaningDate.",
+    input:z.object({propertyId:id,cleaningDate:z.iso.date(),listingId:id.optional()}),run:getReservationHistoryAction,
+  }),
+  tool({
+    name:"import_reservation_history",scope:"write",
+    description:"Atomically import reference-only historical stays for ONE booked listing and channel. Never creates cleaning jobs or charges. Use original channel reservation ID as sourceReference, ISO dates, and canonical status. Reuse requestId only for an identical import. Import each listing separately; cancelled/no_show stays are not cleaning matches.",
+    input:z.object({requestId:id,listingId:id,channel:z.enum(["airbnb","booking","vrbo","other"]),stays:z.array(z.object({sourceReference:z.string().trim().min(1).max(200),guestName:z.string().trim().min(1).max(200),checkIn:z.iso.date(),checkOut:z.iso.date(),status:z.enum(["confirmed","completed","cancelled","no_show"])})).min(1).max(5000)}),
+    run:importReservationHistoryAction,
+  }),
+  tool({
+    name:"import_reservation_csv",scope:"write",
+    description:"Import a per-listing channel CSV as reference stays only. Supply exact header names in columns and every raw exported status in statusMap mapped to confirmed/completed/cancelled/no_show. Dates must be ISO YYYY-MM-DD. Inspect headers first; ambiguous dates are refused. Does not create jobs or charges. Stable requestId supports exact retries.",
+    input:z.object({requestId:id,listingId:id,channel:z.enum(["airbnb","booking","vrbo","other"]),csv:z.string().min(1).max(5000000),columns:z.object({sourceReference:z.string(),guestName:z.string(),checkIn:z.string(),checkOut:z.string(),status:z.string()}),statusMap:z.record(z.string(),z.enum(["confirmed","completed","cancelled","no_show"]))}),
+    run:importReservationCsvAction,
+  }),
   tool({
     name: "get_cleaning_scope",
     description: "Preview one cleaning's booked listing, original guest stay, actual cleaning configuration, current total, same-unit scope options and correction history. Match the guest stay and checkout date using get_schedule, then read this preview before correcting scope. A booked two-bedroom stay can have three-bedroom actual cleaning without rewriting the booking.",
@@ -186,10 +228,10 @@ export const agentTools: AgentTool[] = [
     name: "get_cleaner_statement",
     description: "One cleaner's running statement: every charge and payment line, recorded payments with their ids (needed to void one), and the balance.",
     scope: "read",
-    input: z.object({ cleanerId: id }),
+    input: z.object({ cleanerId: id, dateBasis:z.enum(["cleanedOn","checkout"]).default("cleanedOn") }),
     run: async (input) => {
-      const s = await getCleanerFinancialSummary(input.cleanerId);
-      return { cleanerId: s.cleanerId, balance: s.balance, summary: s.summary, statement: s.statementEntries, payments: s.payments };
+      const s = await getCleanerFinancialSummary(input.cleanerId,input.dateBasis);
+      return { cleanerId: s.cleanerId, balance: s.balance, summary: s.summary, totals:s.statementTotals, dateBasis:input.dateBasis, statement: s.statementEntries, payments: s.payments };
     },
   }),
 
@@ -269,23 +311,24 @@ export const agentTools: AgentTool[] = [
   }),
   tool({
     name: "record_cleaner_payment",
-    description: "Record money paid to a cleaner on their account (not tied to one job). requestId makes retries safe: reuse the same requestId when retrying the same payment, and a new one for every new payment.",
+    description: "Record money paid to a cleaner on their account (not tied to one job). Store the bank confirmation in reference; duplicate normalized references are blocked and similar same-amount payments near the date may be blocked for review. requestId makes retries safe: reuse the same requestId when retrying the same payment, and a new one for every new payment.",
     scope: "write",
     input: z.object({
       requestId: id.describe("A new random UUID per payment; reuse it only to retry"),
       cleanerId: id,
       amount: z.number().positive().max(100000)
-        .refine((n) => Math.abs(Math.round(n * 100) - n * 100) < 1e-6, "Use at most two decimal places.")
+        .refine((n) => Number(n.toFixed(2)) === n, "Use at most two decimal places.")
         .describe("Dollars, up to two decimals"),
       date: z.iso.date().describe("Payment date, YYYY-MM-DD, not in the future"),
       method: paymentMethod,
       reference: z.string().max(120).default(""),
       note: z.string().max(500).default(""),
+      verified:z.boolean().default(false).describe("True only after the owner confirms this payment against bank records."),
     }),
     run: async (input) => {
       const result = check(await recordCleanerPaymentAction({
         id: input.requestId, cleanerId: input.cleanerId, amount: input.amount.toFixed(2),
-        date: input.date, method: input.method, reference: input.reference, note: input.note,
+        date: input.date, method: input.method, reference: input.reference, note: input.note, verified:input.verified,
       }));
       return { paymentId: input.requestId, balance: "balance" in result ? result.balance : null };
     },

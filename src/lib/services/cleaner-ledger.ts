@@ -1,10 +1,19 @@
 import { dateKeyInTimeZone } from "@/lib/ical/timezone";
 
+export type StatementEditability = { editable: boolean; lockReason: "imported_history" | "paid" | "reconciled" | "report_linked" | "scope_corrected" | null; correctionPath: string };
 export type LedgerEntry = {
+  sourceId?: string;
+  extraId?: string;
+  paymentId?: string;
+  cleanedOnSource?: "completion_confirmation" | "owner_correction" | null;
+  cleanedOn?: string | null;
+  checkoutAt?: string | null;
+  assignmentId?: string | null;
+  editability?: StatementEditability;
   id: string;
   entry_date: string;
   sequence: number;
-  kind: "cleaning" | "adjustment" | "payment";
+  kind: "cleaning" | "adjustment" | "payment" | "charge_correction" | "payment_correction";
   description: string;
   amount: number;
 };
@@ -44,7 +53,7 @@ export function summarizeLedger(entries: LedgerEntry[]) {
       });
     const month = months.get(key)!;
     balanceCents += cents;
-    if (cents > 0) {
+    if (entry.kind === "charge_correction" || (entry.kind !== "payment_correction" && cents > 0)) {
       chargeCents += cents;
       month.charges += cents / 100;
     } else {

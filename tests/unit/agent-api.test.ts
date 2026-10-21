@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   saveExtra: vi.fn(),
   removeExtra: vi.fn(),
   jobPay: vi.fn(),
+  adjustment:vi.fn(),dateCorrection:vi.fn(),verify:vi.fn(),history:vi.fn(),csvImport:vi.fn(),historyRead:vi.fn(),statement:vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -21,10 +22,13 @@ vi.mock("@/app/(admin)/dashboard/schedule/actions", () => ({
 }));
 vi.mock("@/app/actions/assignments", () => ({ fetchAssignmentDetail: vi.fn(), getCleanerSuggestionsAction: vi.fn() }));
 vi.mock("@/app/actions/cleaning-scope", () => ({ getCleaningScopeAction: mocks.scopePreview, correctCleaningScopeAction: mocks.scopeCorrect }));
-vi.mock("@/app/actions/cleaner-payments", () => ({ recordCleanerPaymentAction: mocks.recordPayment, voidCleanerPaymentAction: vi.fn() }));
+vi.mock("@/app/actions/cleaner-payments", () => ({ recordCleanerPaymentAction: mocks.recordPayment, voidCleanerPaymentAction: vi.fn(),verifyCleanerPaymentAction:mocks.verify }));
+vi.mock("@/app/actions/cleaner-account-adjustments",()=>({postCleanerAccountAdjustmentAction:mocks.adjustment}));
+vi.mock("@/app/actions/cleaning-date",()=>({correctCleaningDateAction:mocks.dateCorrection}));
+vi.mock("@/app/actions/reservation-history",()=>({importReservationHistoryAction:mocks.history,importReservationCsvAction:mocks.csvImport,getReservationHistoryAction:mocks.historyRead}));
 vi.mock("@/app/actions/job-extras", () => ({ saveJobExtraAction: mocks.saveExtra, removeJobExtraAction: mocks.removeExtra, getJobPayAction: mocks.jobPay }));
 vi.mock("@/lib/queries/assignments", () => ({ listUpcomingUnassignedCleanings: vi.fn(async () => [{ id: "job" }]) }));
-vi.mock("@/lib/queries/cleaner-finance", () => ({ getCleanerFinancialSummary: vi.fn(), listCleanerFinancialSummaries: vi.fn() }));
+vi.mock("@/lib/queries/cleaner-finance", () => ({ getCleanerFinancialSummary: mocks.statement, listCleanerFinancialSummaries: vi.fn() }));
 vi.mock("@/lib/queries/properties", () => ({ listProperties: vi.fn() }));
 vi.mock("@/lib/queries/schedule", () => ({ getScheduleRange: vi.fn() }));
 vi.mock("@/lib/queries/team", () => ({ listActiveCleaners: vi.fn(), listCleaners: vi.fn() }));
@@ -50,12 +54,18 @@ import { GET as openapi } from "@/app/api/agent/v1/openapi.json/route";
 import { POST as rest } from "@/app/api/agent/v1/tools/[name]/route";
 import { executeAgentTool } from "@/lib/agent/execute";
 import { bearerToken, hashAgentToken, newAgentToken } from "@/lib/agent/tokens";
+import { BusinessRuleError } from "@/lib/domain/business-error";
 import { agentTools, toolInputSchema } from "@/lib/agent/tools";
 
 const write = { tokenId: "t1", ownerId: "o1", label: "Claude", scope: "write" as const };
 const read = { ...write, tokenId: "t2", scope: "read" as const };
 const cleaner = "6f1c2a8e-1111-4222-8333-944455556666";
 const job = "7a2b3c4d-1111-4222-8333-944455556666";
+
+// Successful write fixtures explicitly represent owner-approved operations.
+function executeApprovedAgentTool(auth:typeof write,name:string,input:Record<string,unknown>) {
+ return executeAgentTool(auth,name,{...input,approved:true});
+}
 
 function rpc(body: unknown, token = "tf_write") {
   return mcp(new Request("http://localhost/api/mcp", { method: "POST", headers: { authorization: `Bearer ${token}` }, body: JSON.stringify(body) }));
@@ -91,12 +101,23 @@ describe("agent tool execution", () => {
     expect(await executeAgentTool(read, "get_cleaning_scope", { assignmentId: job })).toMatchObject({ ok: true, result: { currentTotal: 90 } });
     const input = { requestId: job, assignmentId: job, scopePropertyId: cleaner, total: 120, expectedScopePropertyId: job, expectedCurrentTotal: 90, reason: "Guest used three bedrooms." };
     mocks.scopeCorrect.mockResolvedValue({ error: null, receipt: { id: job, new_total: 120 } });
-    expect(await executeAgentTool(write, "correct_cleaning_scope", input)).toMatchObject({ ok: true, result: { new_total: 120 } });
+    expect(await executeApprovedAgentTool(write, "correct_cleaning_scope", input)).toMatchObject({ ok: true, result: { new_total: 120 } });
     expect(mocks.scopeCorrect).toHaveBeenCalledWith(input);
     expect(mocks.writeLog).toHaveBeenCalledWith(expect.objectContaining({ tool: "correct_cleaning_scope", error: null }));
     expect(await executeAgentTool(read, "correct_cleaning_scope", input)).toMatchObject({ ok: false, status: 403 });
   });
 
+  it("requires explicit approval for every write while keeping reads open", async()=>{
+    expect(await executeAgentTool(write,"add_job_extra",{requestId:job,assignmentId:cleaner,description:"Supplies",amount:5,kind:"service"})).toMatchObject({ok:false,status:400});
+    expect(mocks.saveExtra).not.toHaveBeenCalled();
+    for(const tool of agentTools.filter(t=>t.scope==="write")) expect(toolInputSchema(tool).required).toContain("approved");
+  });
+  it("preserves structured imported history refusals through REST",async()=>{
+    mocks.jobPay.mockRejectedValueOnce(new BusinessRuleError("Imported history.","imported_history","post_cleaner_adjustment"));
+    const response=await rest(new Request("http://localhost/api/agent/v1/tools/get_job_pay",{method:"POST",headers:{authorization:"Bearer tf_read"},body:JSON.stringify({assignmentId:job})}),{params:Promise.resolve({name:"get_job_pay"})});
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({details:{lockReason:"imported_history",correctionPath:"post_cleaner_adjustment"}});
+  });
   it("every tool has a unique name and a JSON schema", () => {
     expect(new Set(agentTools.map((t) => t.name)).size).toBe(agentTools.length);
     for (const t of agentTools) expect(toolInputSchema(t)).toMatchObject({ type: "object" });
@@ -115,7 +136,7 @@ describe("agent tool execution", () => {
   });
 
   it("rejects payment amounts that would be rounded", async () => {
-    const out = await executeAgentTool(write, "record_cleaner_payment", { requestId: job, cleanerId: cleaner, amount: 10.005, date: "2026-10-20", method: "zelle" });
+    const out = await executeApprovedAgentTool(write, "record_cleaner_payment", { requestId: job, cleanerId: cleaner, amount: 10.005, date: "2026-10-20", method: "zelle" });
     expect(out).toMatchObject({ ok: false, status: 400 });
     expect(mocks.recordPayment).not.toHaveBeenCalled();
   });
@@ -123,21 +144,21 @@ describe("agent tool execution", () => {
   it("records payments through the existing action with the requestId as idempotency key and logs the write", async () => {
     mocks.recordPayment.mockResolvedValue({ error: null, balance: 40 });
     const input = { requestId: job, cleanerId: cleaner, amount: 50.1, date: "2026-10-20", method: "zelle" };
-    expect(await executeAgentTool(write, "record_cleaner_payment", input)).toEqual({ ok: true, result: { paymentId: job, balance: 40 } });
-    expect(mocks.recordPayment).toHaveBeenCalledWith({ id: job, cleanerId: cleaner, amount: "50.10", date: "2026-10-20", method: "zelle", reference: "", note: "" });
-    expect(mocks.writeLog).toHaveBeenCalledWith({ token_id: "t1", tool: "record_cleaner_payment", input: { ...input, reference: "", note: "" }, error: null });
+    expect(await executeApprovedAgentTool(write, "record_cleaner_payment", input)).toEqual({ ok: true, result: { paymentId: job, balance: 40 } });
+    expect(mocks.recordPayment).toHaveBeenCalledWith({ id: job, cleanerId: cleaner, amount: "50.10", date: "2026-10-20", method: "zelle", reference: "", note: "", verified:false });
+    expect(mocks.writeLog).toHaveBeenCalledWith({ token_id: "t1", tool: "record_cleaner_payment", input: { ...input, reference: "", note: "", verified:false, approved:true }, error: null });
   });
 
   it("surfaces guard errors from the database and logs them", async () => {
     mocks.recordPayment.mockResolvedValue({ error: "Payment date must be after the reconciled history." });
-    const out = await executeAgentTool(write, "record_cleaner_payment", { requestId: job, cleanerId: cleaner, amount: 5, date: "2020-01-01", method: "cash" });
+    const out = await executeApprovedAgentTool(write, "record_cleaner_payment", { requestId: job, cleanerId: cleaner, amount: 5, date: "2020-01-01", method: "cash" });
     expect(out).toEqual({ ok: false, status: 422, error: "Payment date must be after the reconciled history." });
     expect(mocks.writeLog).toHaveBeenCalledWith(expect.objectContaining({ error: "Payment date must be after the reconciled history." }));
   });
 
   it("reschedule keeps every field the agent did not change, including cleaner and pay", async () => {
     mocks.reschedule.mockResolvedValue({ status: "success", message: "Assignment updated." });
-    await executeAgentTool(write, "reschedule_cleaning", { assignmentId: job, dueAt: "2026-10-22T16:00:00-04:00" });
+    await executeApprovedAgentTool(write, "reschedule_cleaning", { assignmentId: job, dueAt: "2026-10-22T16:00:00-04:00" });
     const sent = Object.fromEntries((mocks.reschedule.mock.calls[0][1] as FormData).entries());
     expect(sent).toEqual({ assignmentId: job, dueAt: "2026-10-22T16:00:00-04:00", checkoutAt: "2026-10-21T15:00:00+00:00", cleanerId: cleaner,
       priority: "normal", expectedDurationMin: "120", fixedPayoutAmount: "90", originalPayoutAmount: "90", accessCode: "1234" });
@@ -145,8 +166,33 @@ describe("agent tool execution", () => {
 
   it("maps a requireRole redirect to a 403 instead of a crash", async () => {
     mocks.reschedule.mockRejectedValue(Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/sign-in;307;" }));
-    expect(await executeAgentTool(write, "reschedule_cleaning", { assignmentId: job })).toMatchObject({ ok: false, status: 403 });
+    expect(await executeApprovedAgentTool(write, "reschedule_cleaning", { assignmentId: job })).toMatchObject({ ok: false, status: 403 });
   });
+});
+
+describe("reconciliation tools",()=>{
+ it("routes exact signed corrections and payment verification through shared actions",async()=>{
+   mocks.adjustment.mockResolvedValue({error:null,balance:644});
+   const input={requestId:job,cleanerId:cleaner,date:"2026-05-03",amount:30,kind:"charge_correction",reason:"Verified 3 bedroom turnover"};
+   expect(await executeApprovedAgentTool(write,"post_cleaner_adjustment",input)).toMatchObject({ok:true,result:{balance:644}});
+   expect(mocks.adjustment).toHaveBeenCalledWith(input);
+   expect(await executeApprovedAgentTool(write,"post_cleaner_adjustment",{...input,amount:30.000001})).toMatchObject({ok:false,status:400});
+   mocks.verify.mockResolvedValue({error:null});
+   expect(await executeApprovedAgentTool(write,"verify_cleaner_payment",{paymentId:job})).toMatchObject({ok:true});
+   expect(mocks.verify).toHaveBeenCalledWith(job);
+ });
+ it("keeps date corrections separate from checkout and imports reference-only data",async()=>{
+   const date={assignmentId:job,cleanedOn:"2026-10-19",reason:"Owner confirmed work day",requestId:cleaner};mocks.dateCorrection.mockResolvedValue({error:null,cleanedOn:date.cleanedOn});
+   expect(await executeApprovedAgentTool(write,"correct_cleaning_date",date)).toMatchObject({ok:true});expect(mocks.dateCorrection).toHaveBeenCalledWith(date);
+   const history={requestId:job,listingId:cleaner,channel:"airbnb",stays:[{sourceReference:"ABC",guestName:"Joe Tanzi",checkIn:"2026-05-01",checkOut:"2026-05-03",status:"completed"}]};
+   mocks.history.mockResolvedValue({imported:1,createsCleanings:false,createsCharges:false});
+   expect(await executeApprovedAgentTool(write,"import_reservation_history",history)).toMatchObject({ok:true,result:{createsCharges:false}});expect(mocks.history).toHaveBeenCalledWith(history);
+ });
+ it("returns full statement totals and requested date grouping",async()=>{
+   mocks.statement.mockResolvedValue({cleanerId:cleaner,balance:644,summary:{},statementTotals:{chargedTotal:12984,paidTotal:12340,balance:644},statementEntries:[],payments:[]});
+   expect(await executeAgentTool(read,"get_cleaner_statement",{cleanerId:cleaner,dateBasis:"checkout"})).toMatchObject({ok:true,result:{totals:{chargedTotal:12984,paidTotal:12340},dateBasis:"checkout"}});
+   expect(mocks.statement).toHaveBeenCalledWith(cleaner,"checkout");
+ });
 });
 
 describe("job extra tools", () => {
@@ -157,23 +203,23 @@ describe("job extra tools", () => {
   it("adds an extra through the existing action with requestId as its id and returns the new pay", async () => {
     mocks.saveExtra.mockResolvedValue({ error: null });
     mocks.jobPay.mockResolvedValue({ total: 120, extras: [{ id: job, amount: 30 }] });
-    const out = await executeAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "Extra bedroom", amount: 30, kind: "service" });
+    const out = await executeApprovedAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "Extra bedroom", amount: 30, kind: "service" });
     expect(mocks.saveExtra).toHaveBeenCalledWith({ assignmentId: cleaner, id: job, description: "Extra bedroom", amount: "30.00", kind: "service" });
     expect(out).toEqual({ ok: true, result: { extraId: job, extraState: "present", total: 120, extras: [{ id: job, amount: 30 }] } });
   });
 
   it("rejects rounded amounts, read tokens, and surfaces the paid-job lock", async () => {
-    expect(await executeAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "x", amount: 1.005, kind: "service" })).toMatchObject({ ok: false, status: 400 });
+    expect(await executeApprovedAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "x", amount: 1.005, kind: "service" })).toMatchObject({ ok: false, status: 400 });
     expect(await executeAgentTool(read, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "x", amount: 1, kind: "service" })).toMatchObject({ ok: false, status: 403 });
     mocks.removeExtra.mockResolvedValue({ error: "Paid or reconciled job pay is locked." });
-    expect(await executeAgentTool(write, "remove_job_extra", { assignmentId: cleaner, extraId: job })).toEqual({ ok: false, status: 422, error: "Paid or reconciled job pay is locked." });
-    expect(await executeAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "Supplies", amount: 1.000000001, kind: "reimbursement" })).toMatchObject({ ok: false, status: 400 });
+    expect(await executeApprovedAgentTool(write, "remove_job_extra", { assignmentId: cleaner, extraId: job })).toEqual({ ok: false, status: 422, error: "Paid or reconciled job pay is locked." });
+    expect(await executeApprovedAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "Supplies", amount: 1.000000001, kind: "reimbursement" })).toMatchObject({ ok: false, status: 400 });
     expect(mocks.saveExtra).not.toHaveBeenCalled();
   });
   it("reports a removed extra accurately when an old successful add request is replayed", async () => {
     mocks.saveExtra.mockResolvedValue({ error: null });
     mocks.jobPay.mockResolvedValue({ total: 90, extras: [] });
-    expect(await executeAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "Supplies", amount: 30, kind: "reimbursement" })).toMatchObject({ ok: true, result: { extraId: job, extraState: "removed", total: 90 } });
+    expect(await executeApprovedAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "Supplies", amount: 30, kind: "reimbursement" })).toMatchObject({ ok: true, result: { extraId: job, extraState: "removed", total: 90 } });
   });
 });
 

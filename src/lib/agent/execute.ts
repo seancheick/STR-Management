@@ -1,4 +1,5 @@
 import "server-only";
+import { BusinessRuleError } from "@/lib/domain/business-error";
 
 import { z } from "zod/v4";
 
@@ -9,7 +10,7 @@ import { runWithSupabaseClient } from "@/lib/supabase/server";
 
 export type AgentCallResult =
   | { ok: true; result: unknown }
-  | { ok: false; status: 400 | 403 | 404 | 422 | 500; error: string };
+  | { ok: false; status: 400 | 403 | 404 | 422 | 500; error: string; details?: BusinessRuleError["details"] };
 
 export function toolsForScope(auth: AgentAuth) {
   return agentTools.filter((t) => t.scope === "read" || auth.scope === "write");
@@ -31,7 +32,8 @@ export async function executeAgentTool(auth: AgentAuth, name: string, args: unkn
     const result = await runWithSupabaseClient(client, () => tool.run(parsed.data as never));
     outcome = { ok: true, result: result ?? null };
   } catch (error) {
-    if (error instanceof AgentToolError) outcome = { ok: false, status: 422, error: error.message };
+    if (error instanceof BusinessRuleError) outcome = {ok:false,status:422,error:error.message,details:error.details};
+    else if (error instanceof AgentToolError) outcome = { ok: false, status: 422, error: error.message };
     // requireRole() redirects when the owner can no longer use this action.
     else if (String((error as { digest?: unknown })?.digest ?? "").startsWith("NEXT_REDIRECT")) {
       outcome = { ok: false, status: 403, error: "The token owner is not allowed to do this." };

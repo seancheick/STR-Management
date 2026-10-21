@@ -91,7 +91,7 @@ describe("canonical recorded payments and running ledger",()=>{
  it("itemizes extras without counting them twice in the running statement",()=>{
   const work={...job("work",95),properties:{name:"Basement",timezone:"America/New_York"},assignment_extras:[{id:"trash",description:"Trash",amount:10},{id:"receipt",description:"Receipt",amount:10}]};
   const result=calculateCleanerFinancialSummary({entries:[],jobs:[work],reconciledThrough:null,ledgerEntries:[],payments:[payment(50)]});
-  expect(result.statementEntries.map(e=>e.amount)).toEqual([75,10,10,-50]);expect(summarizeLedger(result.statementEntries).balance).toBe(45);
+  expect(result.statementEntries[1]).toMatchObject({extraId:"trash",sourceId:"trash",assignmentId:"work",editability:{correctionPath:"remove_job_extra"}});expect(result.statementEntries[3]).toMatchObject({paymentId:"payment1",sourceId:"payment1",assignmentId:null});expect(result.statementEntries.map(e=>e.amount)).toEqual([75,10,10,-50]);expect(summarizeLedger(result.statementEntries).balance).toBe(45);
  });
  it("keeps a legacy payment and a separate account payment distinct",()=>{
   const result=calculateCleanerFinancialSummary({entries:[],jobs:[{...job("legacy",95),paid_at:"2026-10-17T12:00Z"}],reconciledThrough:cutoff,ledgerEntries:ledger,payments:[payment(100)]});
@@ -164,3 +164,42 @@ describe("shared remaining job balances",()=>{
  expect(result.balance).toBe(70);expect(result.jobRemainingAmounts.other).toBe(70);
  });
  });
+
+describe("dated standalone account corrections",()=>{
+ const correction=(id:string,amount:number,kind:"charge_correction"|"payment_correction"="charge_correction")=>({id,cleaner_id:"mary",amount,entry_date:"2026-05-03",reason:"Verified imported charge",kind});
+ const run=(accountAdjustments:ReturnType<typeof correction>[])=>calculateCleanerFinancialSummary({entries:[],jobs:[],reconciledThrough:cutoff,ledgerEntries:[{id:"charges",entry_date:cutoff,sequence:1,kind:"cleaning",description:"Imported charges",amount:12924},{id:"paid",entry_date:cutoff,sequence:2,kind:"payment",description:"Imported payments",amount:-12340}],accountAdjustments});
+ it("adds two dated corrections once without altering original lines",()=>{
+ const first=correction("may",30),second={...correction("july",30),entry_date:"2026-07-02"};
+ const result=run([first,first,second]);const statement=summarizeLedger(result.statementEntries);
+ expect(result.statementEntries.map(e=>e.entry_date)).toEqual([...result.statementEntries.map(e=>e.entry_date)].sort());
+ expect(result.balance).toBe(644);expect(statement.charges).toBe(12984);expect(statement.payments).toBe(12340);
+ expect(result.statementEntries.find(e=>e.id==="charges")).toMatchObject({id:"charges",sourceId:"charges",cleanedOn:null,cleanedOnSource:null,checkoutAt:null,amount:12924,assignmentId:null,editability:{editable:false,lockReason:"imported_history",correctionPath:"post_cleaner_adjustment"}});
+ });
+ it("keeps negative charge corrections in charges, not payments",()=>{
+ const result=run([correction("reduce",-30)]);const statement=summarizeLedger(result.statementEntries);
+ expect(statement.charges).toBe(12894);expect(statement.payments).toBe(12340);expect(statement.balance).toBe(result.balance);
+ });
+ it("models payment corrections as signed balance deltas",()=>{
+ const result=run([correction("payment",-100,"payment_correction"),correction("reversal",20,"payment_correction")]);const statement=summarizeLedger(result.statementEntries);
+ expect(statement.charges).toBe(12924);expect(statement.payments).toBe(12420);expect(statement.balance).toBe(result.balance);
+ });
+ it("reserves account payments for standalone historical corrections before new work",()=>{
+ const result=calculateCleanerFinancialSummary({entries:[],jobs:[job("new",90)],ledgerEntries:[],reconciledThrough:null,accountAdjustments:[correction("old",30)],payments:[payment(50)]});
+ expect(result.jobRemainingAmounts.new).toBe(70);expect(result.balance).toBe(70);
+ });
+ it("exposes actual job identity and lock reasons",()=>{
+ const result=calculateCleanerFinancialSummary({entries:[],jobs:[{...job("paid"),paid_at:"2026-10-06T12:00Z"},{...job("scope"),cleaning_scope_total:120},{...job("draft"),report_linked:true},job("open")],ledgerEntries:[],reconciledThrough:null});
+ const lines=result.statementEntries.filter(e=>e.kind==="cleaning");
+ expect(lines.map(e=>[e.assignmentId,e.editability?.lockReason])).toEqual([["draft","report_linked"],["open",null],["paid","paid"],["scope","scope_corrected"]]);
+ });
+});
+
+describe("cleaned-day statement presentation",()=>{
+ it("groups by the cleaning date while preserving checkout and cutoff ownership",()=>{
+ const work={...job("overnight",90,"2026-10-18T16:00:00Z"),checkout_at:"2026-10-18T16:00:00Z",cleaned_on:"2026-10-19",cleaned_on_source:"owner_correction" as const};
+ const input={entries:[],jobs:[work],reconciledThrough:null,ledgerEntries:[]};
+ expect(calculateCleanerFinancialSummary(input).statementEntries[0]).toMatchObject({entry_date:"2026-10-19",cleanedOn:"2026-10-19",cleanedOnSource:"owner_correction",checkoutAt:"2026-10-18T16:00:00Z"});
+ expect(calculateCleanerFinancialSummary({...input,dateBasis:"checkout"}).statementEntries[0].entry_date).toBe("2026-10-18");
+ expect(calculateCleanerFinancialSummary({...input,reconciledThrough:"2026-10-18"}).statementEntries).toEqual([]);
+ });
+});

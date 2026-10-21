@@ -28,5 +28,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ name: s
   const outcome = await executeAgentTool(auth, name, args);
   return outcome.ok
     ? NextResponse.json({ result: outcome.result }, { headers: { "Cache-Control": "no-store" } })
-    : NextResponse.json({ error: outcome.error }, { status: outcome.status });
+    : NextResponse.json({ error: outcome.error, ...(outcome.details ? {details:outcome.details} : {}) }, { status: outcome.status });
 }

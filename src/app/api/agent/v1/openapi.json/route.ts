@@ -10,11 +10,11 @@ export function GET(req: Request) {
     post: {
       operationId: t.name,
       summary: t.name.replace(/_/g, " "),
-      description: `${t.description}${t.scope === "write" ? " Requires a write token." : ""}`,
+      description: `${t.description}${t.scope === "write" ? " Requires a write token and approved: true after explicit owner approval." : ""}`,
       requestBody: { required: true, content: { "application/json": { schema: toolInputSchema(t) } } },
       responses: {
         "200": { description: "Tool result", content: { "application/json": { schema: { type: "object", properties: { result: {} } } } } },
-        "400": errorResponse, "401": errorResponse, "403": errorResponse, "422": errorResponse, "500": errorResponse,
+        "404": errorResponse, "400": errorResponse, "401": errorResponse, "403": errorResponse, "422": errorResponse, "500": errorResponse,
       },
     },
   }]));
@@ -30,7 +30,7 @@ export function GET(req: Request) {
     security: [{ bearerAuth: [] }],
     components: {
       securitySchemes: { bearerAuth: { type: "http", scheme: "bearer" } },
-      schemas: { Error: { type: "object", properties: { error: { type: "string" } }, required: ["error"] } },
+      schemas: { Error: { type: "object", properties: { error: { type: "string" }, details:{type:"object",properties:{editable:{type:"boolean"},lockReason:{type:"string"},correctionPath:{type:["string","null"]}} } }, required: ["error"] } },
     },
     paths,
   });

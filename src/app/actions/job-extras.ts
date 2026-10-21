@@ -1,4 +1,5 @@
 "use server";
+import { throwMissingCleaning } from "@/lib/queries/statement-identity";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth/session";
@@ -10,7 +11,7 @@ export async function getJobPayAction(assignmentId: string) {
   const client = await createServerSupabaseClient();
   const { data, error } = await client.from("assignments").select("status,cleaner_id,fixed_payout_amount,cleaning_scope_total,assignment_extras(id,assignment_id,description,amount,kind,created_at)").eq("id", z.string().uuid().parse(assignmentId)).eq("owner_id", actor.owner_id).maybeSingle();
   if (error) throw new Error("Could not load job pay. Refresh and try again.");
-  if (!data) throw new Error("Cleaning not found.");
+  if (!data) return throwMissingCleaning(client,assignmentId,actor.owner_id);
   const lock = await client.rpc("cleaning_scope_financial_locked", { target_assignment: assignmentId });
   if (lock.error) throw new Error("Could not verify whether this cleaning's pay is editable.");
   const editRestriction = data.cleaning_scope_total != null ? "This cleaning has a scope correction. Use correct_cleaning_scope to change its total."

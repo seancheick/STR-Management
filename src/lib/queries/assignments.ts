@@ -28,6 +28,9 @@ export type AssignmentListRecord = {
   status: string;
   ack_status: string;
   priority: string;
+  cleaned_on_source?: "completion_confirmation" | "owner_correction" | null;
+  cleaned_on?: string | null;
+  booking_channel?: string | null;
   checkout_at: string | null;
   due_at: string;
   next_checkin_at: string | null;
@@ -103,7 +106,7 @@ export type AssignmentDetailIssueRecord = {
 
 const ASSIGNMENT_LIST_SELECT = `
   id, owner_id, source_reference, calendar_source_id, source_reference, calendar_source_id, property_id, listing_property_id, cleaning_scope_property_id, cleaning_scope_total, cleaner_id, assignment_type,
-  status, ack_status, priority, checkout_at, due_at, next_checkin_at,
+  status, ack_status, priority, cleaned_on, cleaned_on_source, booking_channel, checkout_at, due_at, next_checkin_at,
   expected_duration_min, fixed_payout_amount, access_code, source_type,
   paid_at, payment_method, payment_reference, ledger_entry_id, created_at,
   properties:property_id ( name, address_line_1, city, timezone ),
@@ -325,6 +328,9 @@ export type AssignmentScheduleRecord = {
   status: string;
   ack_status?: string;
   priority: string;
+  cleaned_on_source?: "completion_confirmation" | "owner_correction" | null;
+  cleaned_on?: string | null;
+  booking_channel?: string | null;
   checkout_at: string | null;
   due_at: string;
   expected_duration_min: number | null;
@@ -348,7 +354,7 @@ export type AssignmentScheduleRecord = {
 
 const SCHEDULE_SELECT = `
   id, source_reference, calendar_source_id, property_id, listing_property_id, cleaning_scope_property_id, cleaning_scope_total, cleaner_id, status, ack_status, priority,
-  checkout_at, due_at, expected_duration_min, fixed_payout_amount,
+  cleaned_on, cleaned_on_source, booking_channel, checkout_at, due_at, expected_duration_min, fixed_payout_amount,
   access_code, source_type, next_checkin_at,
   paid_at, payment_method, payment_reference,
   properties:property_id ( name, address_line_1, city, timezone ),

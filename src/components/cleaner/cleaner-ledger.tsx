@@ -104,7 +104,7 @@ export function CleanerLedger({
                 <li
                   key={e.id}
                   className={
-                    e.kind === "payment"
+                    (e.kind === "payment" || e.kind === "payment_correction")
                       ? "-mx-4 bg-green-50/60 px-4 py-3 dark:bg-green-950/20"
                       : "py-3"
                   }
@@ -114,7 +114,7 @@ export function CleanerLedger({
                       {e.description}
                     </span>
                     <span
-                      className={`shrink-0 font-semibold tabular-nums ${e.kind === "payment" ? "text-primary" : ""}`}
+                      className={`shrink-0 font-semibold tabular-nums ${(e.kind === "payment" || e.kind === "payment_correction") ? "text-primary" : ""}`}
                     >
                       {Number(e.amount) < 0 ? "−" : "+"}
                       {money(Math.abs(Number(e.amount)))}
@@ -123,11 +123,11 @@ export function CleanerLedger({
                   <div className="mt-1 flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span>
                       {date(e.entry_date)} ·{" "}
-                      {e.kind === "payment"
+                      {(e.kind === "payment" || e.kind === "payment_correction")
                         ? "Payment"
                         : e.kind === "cleaning"
                           ? "Cleaning"
-                          : "Extra / adjustment"}
+                          : e.kind === "charge_correction" ? "Charge correction" : "Extra / adjustment"}
                     </span>
                     <span className="tabular-nums">
                       Balance {money(e.balance)}

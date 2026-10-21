@@ -1,15 +1,20 @@
 import type { CleanerPayment } from "@/lib/domain/payments";
 import { dateKeyInTimeZone } from "@/lib/ical/timezone";
-import { summarizeLedger, type LedgerEntry } from "./cleaner-ledger";
+import { summarizeLedger, type LedgerEntry, type StatementEditability } from "./cleaner-ledger";
 
+export type AccountAdjustment = {id:string;cleaner_id:string;amount:number;entry_date:string;reason:string;kind:"charge_correction"|"payment_correction"};
 export type FinanceEntry = {
   id: string; assignment_id: string; amount: number; status: string; paid_at: string | null;
-  assignments?: { due_at: string; paid_at?: string | null; assignment_extras?: {id:string;description:string;amount:number}[] } | null;
+  assignments?: { due_at: string; checkout_at?: string | null; cleaned_on?: string | null; cleaned_on_source?: "completion_confirmation" | "owner_correction" | null; cleaning_scope_total?: number | null; paid_at?: string | null; assignment_extras?: {id:string;description:string;amount:number}[] } | null;
   properties?: { name?:string; timezone?: string | null } | null;
   payout_batches?: { status: string; paid_at?: string | null } | null;
 };
 export type PayAdjustment = { id: string; assignment_id: string; cleaner_id: string; amount: number; entry_date: string; reason: string };
 export type FinanceJob = {
+  checkout_at?: string | null;
+  cleaned_on?: string | null; cleaned_on_source?: "completion_confirmation" | "owner_correction" | null;
+  cleaning_scope_total?: number | null;
+  report_linked?: boolean;
   financial_base_amount?: number | null;
   assignment_extras?: {id:string;description:string;amount:number}[];
   id: string; due_at: string; fixed_payout_amount: number | null; paid_at?: string | null;
@@ -18,8 +23,10 @@ export type FinanceJob = {
 
 /** Ledger owns history; committed reports own their jobs; other jobs retain their fixed amount. */
 export function calculateCleanerFinancialSummary<E extends FinanceEntry, J extends FinanceJob>(input: {
-  reconciledThrough: string | null; ledgerEntries: LedgerEntry[]; entries: E[]; jobs: J[]; payments?: CleanerPayment[]; adjustments?: PayAdjustment[];
+  dateBasis?: "cleanedOn" | "checkout"; reconciledThrough: string | null; ledgerEntries: LedgerEntry[]; entries: E[]; jobs: J[]; payments?: CleanerPayment[]; adjustments?: PayAdjustment[]; accountAdjustments?: AccountAdjustment[];
 }) {
+  const accountAdjustments = [...new Map((input.accountAdjustments ?? []).map(a=>[a.id,a])).values()];
+  const accountAdjustmentCents = accountAdjustments.reduce((sum,a)=>sum+Math.round(Number(a.amount)*100),0);
   const adjustments = [...new Map((input.adjustments ?? []).map(a => [a.id, a])).values()];
   const adjustmentTotal = adjustments.reduce((sum,a)=>sum+Math.round(Number(a.amount)*100),0);
   const base = (job: J) => job.financial_base_amount ?? job.fixed_payout_amount;
@@ -49,29 +56,32 @@ export function calculateCleanerFinancialSummary<E extends FinanceEntry, J exten
   const awaitingCents = jobs.filter((job) => !job.paid_at).reduce((sum, job) => sum + cents(base(job)), 0);
   const projectedCents = inReportsCents + jobs.reduce((sum, job) => sum + cents(base(job)), 0);
   const ledgerBalance = summarizeLedger(input.ledgerEntries).balance;
-  const statementEntries: LedgerEntry[] = [...input.ledgerEntries];
-  function addCharge(id:string,amount:number,date:string,name:string,extras:{id:string;description:string;amount:number}[]=[]) {
+  const locked = (lockReason: StatementEditability["lockReason"],correctionPath="post_cleaner_adjustment"): StatementEditability => ({editable:false,lockReason,correctionPath});
+  const jobEditability = (id:string,paid:boolean,scope:boolean,report:boolean): StatementEditability => scope ? locked("scope_corrected","correct_cleaning_scope") : paid || paidJobIds.has(id) ? locked("paid","correct_cleaning_scope") : report ? locked("report_linked","correct_cleaning_scope") : {editable:true,lockReason:null,correctionPath:"correct_cleaning_scope"};
+  const statementEntries: LedgerEntry[] = input.ledgerEntries.map(e=>({...e,sourceId:e.id,assignmentId:null,cleanedOn:null,cleanedOnSource:null,checkoutAt:null,editability:locked("imported_history")}));
+  function addCharge(id:string,amount:number,date:string,name:string,extras:{id:string;description:string;amount:number}[]=[],editability:StatementEditability={editable:true,lockReason:null,correctionPath:"correct_cleaning_scope"}) {
     const extraCents=extras.reduce((sum,extra)=>sum+cents(extra.amount),0);
     if (extraCents <= cents(amount)) {
-      statementEntries.push({id:`job:${id}`,entry_date:date,sequence:1000000,kind:"cleaning",description:name,amount:(cents(amount)-extraCents)/100});
-      extras.forEach((extra,index)=>statementEntries.push({id:`extra:${extra.id}`,entry_date:date,sequence:1000001+index,kind:"adjustment",description:`${extra.description} · ${name}`,amount:Number(extra.amount)}));
-    } else statementEntries.push({id:`job:${id}`,entry_date:date,sequence:1000000,kind:"cleaning",description:`${name} · report amount`,amount:Number(amount)});
+      statementEntries.push({id:`job:${id}`,sourceId:id,assignmentId:id,editability,entry_date:date,sequence:1000000,kind:"cleaning",description:name,amount:(cents(amount)-extraCents)/100});
+      extras.forEach((extra,index)=>statementEntries.push({id:`extra:${extra.id}`,sourceId:extra.id,extraId:extra.id,assignmentId:id,editability:{...editability,correctionPath:editability.editable?"remove_job_extra":"correct_cleaning_scope"},entry_date:date,sequence:1000001+index,kind:"adjustment",description:`${extra.description} · ${name}`,amount:Number(extra.amount)}));
+    } else statementEntries.push({id:`job:${id}`,sourceId:id,assignmentId:id,editability,entry_date:date,sequence:1000000,kind:"cleaning",description:`${name} · report amount`,amount:Number(amount)});
   }
   for (const entry of entries) {
-    const date=dateKeyInTimeZone(new Date(entry.assignments!.due_at),entry.properties?.timezone);
-    addCharge(entry.assignment_id,Number(entry.amount),date,entry.properties?.name ?? "Cleaning",entry.assignments?.assignment_extras);
-    if (entry.paid_at && !paidJobIds.has(entry.assignment_id)) statementEntries.push({id:`legacy-payment:${entry.assignment_id}`,entry_date:dateKeyInTimeZone(new Date(entry.paid_at),entry.properties?.timezone),sequence:2000000,kind:"payment",description:`Payment · ${entry.properties?.name ?? "Cleaning"}`,amount:-Number(entry.amount)});
+    const date=input.dateBasis!=="checkout" && entry.assignments?.cleaned_on ? entry.assignments.cleaned_on : dateKeyInTimeZone(new Date(entry.assignments!.checkout_at ?? entry.assignments!.due_at),entry.properties?.timezone);
+    addCharge(entry.assignment_id,Number(entry.amount),date,entry.properties?.name ?? "Cleaning",entry.assignments?.assignment_extras,jobEditability(entry.assignment_id,!!entry.paid_at,entry.assignments?.cleaning_scope_total!=null,true));
+    if (entry.paid_at && !paidJobIds.has(entry.assignment_id)) statementEntries.push({id:`legacy-payment:${entry.assignment_id}`,assignmentId:entry.assignment_id,editability:locked("paid","post_cleaner_adjustment"),entry_date:dateKeyInTimeZone(new Date(entry.paid_at),entry.properties?.timezone),sequence:2000000,kind:"payment",description:`Payment · ${entry.properties?.name ?? "Cleaning"}`,amount:-Number(entry.amount)});
   }
   for (const job of jobs) {
-    addCharge(job.id,Number(base(job) ?? 0),dateKeyInTimeZone(new Date(job.due_at),job.properties?.timezone),job.properties?.name ?? "Cleaning",job.assignment_extras);
-    if (job.paid_at && !paidJobIds.has(job.id)) statementEntries.push({id:`legacy-payment:${job.id}`,entry_date:dateKeyInTimeZone(new Date(job.paid_at),job.properties?.timezone),sequence:2000000,kind:"payment",description:`Payment · ${job.properties?.name ?? "Cleaning"}`,amount:-Number(base(job) ?? 0)});
+    addCharge(job.id,Number(base(job) ?? 0),input.dateBasis!=="checkout" && job.cleaned_on ? job.cleaned_on : dateKeyInTimeZone(new Date(job.checkout_at ?? job.due_at),job.properties?.timezone),job.properties?.name ?? "Cleaning",job.assignment_extras,jobEditability(job.id,!!job.paid_at,job.cleaning_scope_total!=null,!!job.report_linked));
+    if (job.paid_at && !paidJobIds.has(job.id)) statementEntries.push({id:`legacy-payment:${job.id}`,assignmentId:job.id,editability:locked("paid","post_cleaner_adjustment"),entry_date:dateKeyInTimeZone(new Date(job.paid_at),job.properties?.timezone),sequence:2000000,kind:"payment",description:`Payment · ${job.properties?.name ?? "Cleaning"}`,amount:-Number(base(job) ?? 0)});
   }
-  adjustments.forEach(a=>statementEntries.push({id:`scope-adjustment:${a.id}`,entry_date:a.entry_date,sequence:1500000,kind:"adjustment",description:a.reason,amount:Number(a.amount)}));
-  payments.forEach(payment=>statementEntries.push({id:`payment:${payment.id}`,entry_date:payment.payment_date,sequence:2000001,kind:"payment",description:`Payment received · ${payment.method.replace(/_/g," ")}${payment.reference ? ` · ${payment.reference}` : ""}${payment.note ? ` · ${payment.note}` : ""}`,amount:-Number(payment.amount)}));
+  adjustments.forEach(a=>statementEntries.push({id:`scope-adjustment:${a.id}`,sourceId:a.id,assignmentId:a.assignment_id,editability:locked("scope_corrected","correct_cleaning_scope"),entry_date:a.entry_date,sequence:1500000,kind:"charge_correction",description:a.reason,amount:Number(a.amount)}));
+  accountAdjustments.forEach(a=>statementEntries.push({id:`account-adjustment:${a.id}`,sourceId:a.id,assignmentId:null,cleanedOn:null,cleanedOnSource:null,checkoutAt:null,editability:locked("reconciled"),entry_date:a.entry_date,sequence:1500001,kind:a.kind,description:a.reason,amount:Number(a.amount)}));
+  payments.forEach(payment=>statementEntries.push({id:`payment:${payment.id}`,sourceId:payment.id,paymentId:payment.id,assignmentId:payment.assignment_id,editability:{editable:payment.assignment_id===null,lockReason:payment.assignment_id?"paid":null,correctionPath:payment.assignment_id?"post_cleaner_adjustment":"void_cleaner_payment"},entry_date:payment.payment_date,sequence:2000001,kind:"payment",description:`Payment received · ${payment.method.replace(/_/g," ")}${payment.reference ? ` · ${payment.reference}` : ""}${payment.note ? ` · ${payment.note}` : ""}`,amount:-Number(payment.amount)}));
 
   // Account payments cover older ledger debt first, then completed jobs in date order.
   // This is a balance allocation for display/filtering, not proof of a job-specific payment.
-  let accountCredit = payments.filter(p => !p.assignment_id).reduce((sum,p) => sum+cents(p.amount),0) - Math.round(ledgerBalance*100);
+  let accountCredit = payments.filter(p => !p.assignment_id).reduce((sum,p) => sum+cents(p.amount),0) - Math.round(ledgerBalance*100) - accountAdjustmentCents;
   const outstanding = [
     ...entries.filter(e => !e.paid_at && !paidJobIds.has(e.assignment_id)).map(e => ({id:e.assignment_id,date:e.assignments!.due_at,amount:cents(e.amount)})),
     ...jobs.filter(j => !j.paid_at && !paidJobIds.has(j.id)).map(j => ({id:j.id,date:j.due_at,amount:cents(base(j))})),
@@ -91,8 +101,21 @@ export function calculateCleanerFinancialSummary<E extends FinanceEntry, J exten
     if (job.amount > covered) jobRemainingAmounts[job.id] = (jobRemainingAmounts[job.id] ?? 0) + (job.amount-covered)/100;
   }
 
+  const sourceJobs=new Map<string,FinanceJob>();
+  input.entries.forEach(e=>{if(e.assignments)sourceJobs.set(e.assignment_id,{id:e.assignment_id,fixed_payout_amount:e.amount,...e.assignments});});
+  input.jobs.forEach(j=>sourceJobs.set(j.id,j));
+  for (const line of statementEntries) {
+    if (!line.assignmentId) continue;
+    const source = sourceJobs.get(line.assignmentId);
+    line.cleanedOn=source?.cleaned_on ?? null;
+    line.cleanedOnSource=source?.cleaned_on_source ?? null;
+    line.checkoutAt=source?.checkout_at ?? source?.due_at ?? null;
+  }
+  statementEntries.sort((a,b)=>a.entry_date.localeCompare(b.entry_date)||a.sequence-b.sequence||a.id.localeCompare(b.id));
+  const totals=summarizeLedger(statementEntries);
   return {
-    balance: (Math.round(ledgerBalance * 100) + projectedCents + adjustmentTotal - paidCents) / 100,
+    statementTotals:{chargedTotal:totals.charges,paidTotal:totals.payments,balance:totals.balance},
+    balance: (Math.round(ledgerBalance * 100) + projectedCents + adjustmentTotal + accountAdjustmentCents - paidCents) / 100,
     jobRemainingAmounts, ledgerBalance, entries, jobsOutsideReports: jobs, statementEntries, payments: input.payments ?? [],
     recordedPaymentsTotal: recordedPaymentsCents/100, legacyPaidTotal: legacyPaidCents/100,
     unpaidEntries: entries.filter((entry) => (jobRemainingAmounts[entry.assignment_id]??0)>0).length,

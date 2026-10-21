@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       if (!outcome.ok && outcome.status === 404) return NextResponse.json(rpcError(id, -32602, outcome.error));
       return NextResponse.json(rpcResult(id, outcome.ok
         ? { content: [{ type: "text", text: JSON.stringify(outcome.result) }] }
-        : { content: [{ type: "text", text: outcome.error }], isError: true }));
+        : { content: [{ type: "text", text: outcome.error }], ...(outcome.details ? {structuredContent:{error:outcome.error,details:outcome.details}} : {}), isError: true }));
     }
     default:
       return NextResponse.json(rpcError(id, -32601, `Method not found: ${method}`));

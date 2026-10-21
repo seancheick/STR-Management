@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 const mocks=vi.hoisted(()=>({rpc:vi.fn(),role:vi.fn(),refresh:vi.fn(),from:vi.fn()}));
 vi.mock("server-only",()=>({}));
+vi.mock("@/app/actions/reservation-history",()=>({getReservationHistoryAction:vi.fn(async()=>({status:"not_found",stay:null,candidates:[]}))}));
 vi.mock("next/cache",()=>({revalidatePath:mocks.refresh}));
 vi.mock("@/lib/auth/session",()=>({requireRole:mocks.role}));
 vi.mock("@/lib/supabase/server",()=>({createServerSupabaseClient:async()=>({rpc:mocks.rpc,from:mocks.from})}));
@@ -24,7 +25,7 @@ it("surfaces stale previews and database refusals without claiming success",asyn
 it("uses the authoritative financial lock preview rather than inferring from payment stamps",async()=>{
  mocks.rpc.mockResolvedValue({data:true,error:null});
  mocks.from.mockImplementation((table:string)=>{
-  const value=table==="assignments"?{id:input.assignmentId,status:"approved",assignment_type:"cleaning",property_id:input.expectedScopePropertyId,listing_property_id:input.expectedScopePropertyId,cleaning_scope_property_id:null,cleaning_scope_total:null,fixed_payout_amount:90,paid_at:null,ledger_entry_id:null,booked:{name:"2 bedrooms",bedrooms:2}}:[];
+  const value=table==="assignments"?{id:input.assignmentId,checkout_at:"2026-10-13T15:00:00Z",due_at:"2026-10-13T19:00:00Z",status:"approved",assignment_type:"cleaning",property_id:input.expectedScopePropertyId,listing_property_id:input.expectedScopePropertyId,cleaning_scope_property_id:null,cleaning_scope_total:null,fixed_payout_amount:90,paid_at:null,ledger_entry_id:null,booked:{name:"2 bedrooms",bedrooms:2}}:[];
   const result={data:value,error:null};
   const chain:unknown=new Proxy({}, {get:(_t,key)=>key==="then"?(resolve:(v:unknown)=>void)=>Promise.resolve(result).then(resolve):()=>chain});return chain;
  });

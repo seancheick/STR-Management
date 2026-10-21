@@ -1,4 +1,5 @@
 "use client";
+import { CleaningDateEditor } from "@/components/assignments/cleaning-date-editor";
 import { CleaningWorkflowForm } from "@/components/schedule/cleaning-workflow-form";
 import { JobPayBreakdown } from "@/components/shared/job-pay-breakdown";
 import { CleaningScopeEditor } from "@/components/assignments/cleaning-scope-editor";
@@ -221,6 +222,7 @@ export function AssignmentDrawer({ canManage, detail, onClose, onAssignClick }: 
 
             {canManage && <CleaningWorkflowForm assignment={{id:detail.id,status:detail.status,priority:detail.priority,cleaner_id:detail.cleanerId,checkout_at:detail.checkoutAt,due_at:detail.dueAt,next_checkin_at:detail.nextCheckinAt,expected_duration_min:detail.expectedDurationMin,fixed_payout_amount:detail.fixedPayoutAmount}} cleaners={detail.availableCleaners} onSaved={onClose} />}
             {canManage && <CleaningScopeEditor key={`scope:${detail.id}`} assignmentId={detail.id} onSaved={onClose} />}
+            {canManage && ["approved","completed_pending_review"].includes(detail.status) && <CleaningDateEditor key={`date:${detail.id}`} assignmentId={detail.id} cleanedOn={detail.cleanedOn} />}
             {canManage && <JobExtrasEditor key={detail.id} assignmentId={detail.id} />}
             {!canManage && <JobPayBreakdown total={detail.fixedPayoutAmount} extras={detail.extras} />}
 

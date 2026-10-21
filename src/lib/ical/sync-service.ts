@@ -1,4 +1,5 @@
 import "server-only";
+import { reservationChannel } from "@/lib/reservations/channel";
 
 import { parseIcal, type TurnoverCandidate } from "./parser";
 import { DEFAULT_TIMEZONE, formatInTimeZone, zonedDayTime } from "./timezone";
@@ -186,7 +187,7 @@ async function importCandidate(
   supabase: ReturnType<typeof createServiceSupabaseClient>,
   input: SyncSourceInput,
   candidate: TurnoverCandidate,
-  context: { timeZone: string; defaultCleanerId: string | null; fixedPayoutAmount: number | null; listingPropertyId: string; now: Date },
+  context: { timeZone: string; defaultCleanerId: string | null; fixedPayoutAmount: number | null; listingPropertyId: string; platform: string; now: Date },
 ): Promise<{ created: boolean; conflict: ConflictWarning | null }> {
   const sourceRef = sourceReferenceFor(candidate.uid);
 
@@ -255,6 +256,7 @@ async function importCandidate(
     owner_id: input.ownerId,
     property_id: input.propertyId,
     listing_property_id: context.listingPropertyId,
+    booking_channel: reservationChannel(context.platform, candidate.summary, candidate.description),
     cleaner_id: cleanerId,
     assignment_type: "cleaning",
     fixed_payout_amount: context.fixedPayoutAmount,
@@ -401,7 +403,7 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
       source_type: "ical",
       source_reference: sourceReferenceFor(c.uid),
       calendar_source_id: input.calendarSourceId,
-      platform,
+      platform: reservationChannel(platform, c.summary, c.description),
       guest_name: extractGuestName(c.summary),
       start_at: c.checkinAt,
       end_at: c.checkoutAt,
@@ -454,6 +456,7 @@ export async function syncCalendarSource(input: SyncSourceInput): Promise<SyncRe
         defaultCleanerId: propertyTz?.default_cleaner_id ?? null,
         fixedPayoutAmount: listingProperty.default_clean_price ?? null,
         listingPropertyId,
+        platform,
         now: new Date(),
       });
       if (result.created) {

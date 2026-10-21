@@ -4,7 +4,7 @@ import { cache } from "react";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveOwnerId } from "@/lib/queries/properties";
 import { getCleanerLedger, type CleanerAccount } from "@/lib/queries/cleaner-ledger";
-import { type PayAdjustment, calculateCleanerFinancialSummary } from "@/lib/services/cleaner-finance";
+import { type AccountAdjustment, type PayAdjustment, calculateCleanerFinancialSummary } from "@/lib/services/cleaner-finance";
 import { withListingConfiguration } from "@/lib/services/booking-configuration";
 import type { PayoutEntryRecord } from "@/lib/queries/payouts";
 import type { AssignmentListRecord } from "@/lib/queries/assignments";
@@ -17,7 +17,7 @@ const loadFinance = cache(async () => {
   const jobs: AssignmentListRecord[] = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from("payout_entries")
-      .select("*, properties:property_id(name,timezone),assignments(due_at,assignment_type,expected_duration_min,paid_at,assignment_extras(id,assignment_id,description,amount,kind,created_at)),payout_batches:batch_id(status,paid_at)")
+      .select("*, properties:property_id(name,timezone),assignments(due_at,checkout_at,cleaned_on,cleaned_on_source,cleaning_scope_total,assignment_type,expected_duration_min,paid_at,assignment_extras(id,assignment_id,description,amount,kind,created_at)),payout_batches:batch_id(status,paid_at)")
       .eq("owner_id", ownerId).eq("status", "included").order("id").range(offset, offset + 999);
     if (error) throw new Error(error.message);
     entries.push(...((data ?? []) as unknown as Entry[]));
@@ -47,27 +47,44 @@ const loadFinance = cache(async () => {
     adjustments.push(...((data??[]) as PayAdjustment[]));
     if((data?.length??0)<1000) break;
   }
-  return { adjustments, payments, entries, jobs, accounts: (accounts ?? []) as CleanerAccount[] };
+  const accountAdjustments: AccountAdjustment[] = [];
+  for(let offset=0;;offset+=1000) {
+    const {data,error}=await supabase.from("cleaner_account_adjustments").select("id,cleaner_id,amount,entry_date,reason,kind").eq("owner_id",ownerId).order("id").range(offset,offset+999);
+    if(error) throw new Error(error.message);
+    accountAdjustments.push(...((data??[]) as AccountAdjustment[]));
+    if((data?.length??0)<1000)break;
+  }
+  // Any report membership locks extras, including drafts and excluded entries.
+  const reportLinked=new Set<string>();
+  for(let offset=0;;offset+=1000) {
+    const {data,error}=await supabase.from("payout_entries").select("assignment_id").eq("owner_id",ownerId).order("id").range(offset,offset+999);
+    if(error)throw new Error(error.message);
+    for(const row of data??[])reportLinked.add(row.assignment_id);
+    if((data?.length??0)<1000)break;
+  }
+  return { accountAdjustments, reportLinked, adjustments, payments, entries, jobs, accounts: (accounts ?? []) as CleanerAccount[] };
 });
 
-export const getCleanerFinancialSummary = cache(async (cleanerId: string) => {
+export const getCleanerFinancialSummary = cache(async (cleanerId: string, dateBasis: "cleanedOn" | "checkout" = "cleanedOn") => {
   const data = await loadFinance();
   const ledger = await getCleanerLedger(cleanerId);
   const accounting = calculateCleanerFinancialSummary({
+    dateBasis,
     reconciledThrough: ledger?.account.reconciled_through ?? null,
     ledgerEntries: ledger?.entries ?? [],
+    accountAdjustments: data.accountAdjustments.filter(a=>a.cleaner_id===cleanerId),
     adjustments: data.adjustments.filter(a=>a.cleaner_id===cleanerId),
     payments: data.payments.filter(payment=>payment.cleaner_id===cleanerId),
     entries: data.entries.filter((entry) => entry.cleaner_id === cleanerId),
-    jobs: data.jobs.filter((job) => job.cleaner_id === cleanerId),
+    jobs: data.jobs.filter((job) => job.cleaner_id === cleanerId).map(job=>({...job,report_linked:data.reportLinked.has(job.id)})),
   });
   return { cleanerId, ledger, ...accounting };
 });
 
 export async function listCleanerFinancialSummaries(cleanerIds?: string[]) {
   const data = await loadFinance();
-  const ids = cleanerIds ?? [...new Set([...data.accounts.map((a) => a.cleaner_id), ...data.payments.map(p=>p.cleaner_id), ...data.entries.map((e) => e.cleaner_id), ...data.jobs.flatMap((j) => j.cleaner_id ? [j.cleaner_id] : [])])];
-  return Promise.all(ids.map(getCleanerFinancialSummary));
+  const ids = cleanerIds ?? [...new Set([...data.accountAdjustments.map(a=>a.cleaner_id), ...data.accounts.map((a) => a.cleaner_id), ...data.payments.map(p=>p.cleaner_id), ...data.entries.map((e) => e.cleaner_id), ...data.jobs.flatMap((j) => j.cleaner_id ? [j.cleaner_id] : [])])];
+  return Promise.all(ids.map(id=>getCleanerFinancialSummary(id)));
 }
 
 /** Canonical completed-work balances shared by the assignment filter and payouts. */

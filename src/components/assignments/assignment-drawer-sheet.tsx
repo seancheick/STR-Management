@@ -1,4 +1,5 @@
 "use client";
+import { CleaningDateEditor } from "@/components/assignments/cleaning-date-editor";
 import { CleaningScopeEditor } from "@/components/assignments/cleaning-scope-editor";
 import { JobExtrasEditor } from "@/components/assignments/job-extras-editor";
 
@@ -12,6 +13,7 @@ import {
 } from "@/components/schedule/assignment-edit-form";
 
 type AssignmentForSheet = EditableAssignment & {
+  cleaned_on?:string|null;
   properties?: { name: string } | null;
 };
 
@@ -84,6 +86,7 @@ export function AssignmentDrawerSheet({
             onSaved={onClose}
           />
           <CleaningScopeEditor key={`scope:${assignment.id}`} assignmentId={assignment.id} onSaved={onClose} />
+          {["approved","completed_pending_review"].includes(assignment.status) && <CleaningDateEditor key={`date:${assignment.id}`} assignmentId={assignment.id} cleanedOn={assignment.cleaned_on??null} />}
           <JobExtrasEditor key={assignment.id} assignmentId={assignment.id} />
         </div>
       </aside>
