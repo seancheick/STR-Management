@@ -2,7 +2,8 @@ import "server-only";
 
 import { getAvailabilities, getListingCalendars, getPricingRatios, getProperties } from "@/lib/hostex/client";
 import { sendNotification } from "@/lib/notifications/notification-service";
-import { scanBookability, type Finding, type ListingSettings } from "@/lib/services/bookability";
+import { getPriceLabsListings, priceLabsConfigured } from "@/lib/pricelabs/client";
+import { scanBookability, type Finding, type ListingSettings, type PriceLabsSync } from "@/lib/services/bookability";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 export const DEFAULT_HORIZON_DAYS = 180;
@@ -62,7 +63,8 @@ export async function runBookabilityScan(ownerId: string, horizonDays = DEFAULT_
       getAvailabilities(owned.map((p) => p.id), start, end),
     ]);
     const availability = new Map(availabilities.map((p) => [p.id, new Map(p.availabilities.map((a) => [a.date, a.available]))]));
-    const { findings, updates } = scanBookability({ listings, calendars, availability, now });
+    const pricelabs = listings.some((l) => l.pricing_authority === "pricelabs") ? await priceLabsSync() : undefined;
+    const { findings, updates } = scanBookability({ listings, calendars, availability, now, pricelabs });
 
     for (const u of updates) {
       const { error } = await db.from("channel_listings").update({ price_snapshot: u.price_snapshot, prices_changed_at: u.prices_changed_at, last_verified_at: now.toISOString() })
@@ -81,6 +83,20 @@ export async function runBookabilityScan(ownerId: string, horizonDays = DEFAULT_
       .catch((e) => { console.error("[bookability-scan-failure]", e); return []; });
     await notifyCritical(ownerId, opened);
     return { ok: false as const, error: message };
+  }
+}
+
+/** PriceLabs' push record for the staleness rule; a PriceLabs outage must not fail the Hostex scan. */
+async function priceLabsSync(): Promise<PriceLabsSync | undefined> {
+  if (!priceLabsConfigured()) return undefined;
+  try {
+    const listings = await getPriceLabsListings();
+    return { ok: true, listings: listings.filter((l) => l.pms === "hostex").map((l) => ({
+      name: l.name, push_enabled: Boolean(l.push_enabled), last_date_pushed: l.last_date_pushed ?? null,
+      airbnb_ids: (l.channel_listing_details ?? []).filter((c) => c.channel_name === "airbnb").map((c) => String(c.channel_listing_id)),
+    })) };
+  } catch (error) {
+    return { ok: false, error: (error instanceof Error ? error.message : String(error)).slice(0, 300) };
   }
 }
 

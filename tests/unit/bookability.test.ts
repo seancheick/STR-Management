@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { HostexCalendarDay } from "@/lib/hostex/client";
-import { scanBookability, scanIsStale, toRanges, type ListingSettings } from "@/lib/services/bookability";
+import { scanBookability, scanIsStale, toRanges, type ListingSettings, type PriceLabsSync } from "@/lib/services/bookability";
 
 const NOW = new Date("2026-10-21T12:00:00Z");
 const DATES = ["2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24"];
@@ -97,6 +97,43 @@ describe("bookability guardian", () => {
     const shifted = { "2026-10-20": 50, "2026-10-21": 90, "2026-10-22": 90, "2026-10-23": 180 };
     const r = scan([listing("j", "booking.com", { price_snapshot: shifted, prices_changed_at: "2026-10-10T00:00:00Z" })], cal);
     expect(r.updates.find((u) => u.listing_id === "j")!.prices_changed_at).toBe("2026-10-10T00:00:00Z");
+  });
+
+  describe("PriceLabs push record", () => {
+    // Prices never change in these cases: staleness must come from PriceLabs' own push time.
+    const snapshot = Object.fromEntries(DATES.map((d, i) => [d, [100, 100, 200, 100][i]!]));
+    const owned = (over: Partial<ListingSettings> = {}) => listing("air", "airbnb", { pricing_authority: "pricelabs", price_snapshot: snapshot, prices_changed_at: "2026-10-01T00:00:00Z", ...over });
+    const run = (pricelabs: PriceLabsSync | undefined, over: Partial<ListingSettings> = {}) =>
+      scanBookability({ listings: [owned(over)], calendars: [AIRBNB], availability: allOpen, now: NOW, pricelabs }).findings.filter((f) => f.rule === "pricing_stale");
+    const synced = (lastPushed: string | null, push_enabled = true, airbnb_ids = ["air"]): PriceLabsSync =>
+      ({ ok: true, listings: [{ name: "1st FL 2BD", push_enabled, last_date_pushed: lastPushed, airbnb_ids }] });
+
+    it("trusts a recent push even when no price changed", () => {
+      expect(run(synced("2026-10-21T02:00:00Z"))).toEqual([]);
+    });
+
+    it("flags a property PriceLabs has not pushed for 36 hours", () => {
+      const [f] = run(synced("2026-10-17T12:47:00Z"));
+      expect(f).toMatchObject({ severity: "critical", subject: "pricelabs" });
+      expect(f!.detail.cause).toBe("1st FL 2BD: no push in 95 hours");
+    });
+
+    it("flags sync turned off and properties missing from PriceLabs", () => {
+      expect(run(synced("2026-10-21T02:00:00Z", false))[0]!.detail.cause).toBe("1st FL 2BD: sync turned off in PriceLabs");
+      expect(run(synced("2026-10-21T02:00:00Z", true, ["other"]))[0]!.detail.cause).toBe("Hostex property 1: not found in PriceLabs");
+    });
+
+    it("gives a newly assigned authority 36 hours before alerting", () => {
+      expect(run(synced("2026-10-17T12:47:00Z"), { authority_changed_at: "2026-10-21T00:00:00Z" })).toEqual([]);
+    });
+
+    it("warns instead of guessing when the PriceLabs API cannot be read", () => {
+      expect(run({ ok: false, error: "PriceLabs /v1/listings failed: API_KEY_INVALID" })).toMatchObject([{ severity: "warning", subject: "pricelabs" }]);
+    });
+
+    it("falls back to price changes when no PriceLabs key is configured", () => {
+      expect(run(undefined)).toMatchObject([{ severity: "critical", detail: { problem: "PriceLabs has not changed any price in 492 hours" } }]);
+    });
   });
 
   it("raises a critical finding when Hostex returns no calendar for a listing", () => {

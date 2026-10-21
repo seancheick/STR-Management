@@ -35,6 +35,13 @@ export type ListingUpdate = { channel_type: string; listing_id: string; price_sn
 export const RATIO_TOLERANCE = 0.02;
 export const FAR_OUT_MIN_STAY = 7;
 export const PRICING_STALE_HOURS = 72;
+/** PriceLabs pushes nightly; a day and a half without a push means it stopped. */
+export const PRICELABS_PUSH_STALE_HOURS = 36;
+
+/** PriceLabs' own sync record, when a Customer API key is configured. */
+export type PriceLabsSync =
+  | { ok: true; listings: Array<{ name: string; push_enabled: boolean; last_date_pushed: string | null; airbnb_ids: string[] }> }
+  | { ok: false; error: string };
 export const SCAN_STALE_HOURS = 26;
 
 function nextDay(date: string) {
@@ -76,6 +83,8 @@ export function scanBookability(input: {
   /** Hostex property id → date → open for sale. */
   availability: Map<number, Map<string, boolean>>;
   now: Date;
+  /** Omitted when no PriceLabs key is set: PriceLabs is then judged by price changes like TurnFlow. */
+  pricelabs?: PriceLabsSync;
 }): { findings: Finding[]; updates: ListingUpdate[] } {
   const nowIso = input.now.toISOString();
   const calendarOf = new Map(input.calendars.map((c) => [`${c.channel_type}:${c.listing_id}`, c]));
@@ -133,17 +142,47 @@ export function scanBookability(input: {
     updates.push({ channel_type: l.channel_type, listing_id: l.listing_id, price_snapshot: snapshot, prices_changed_at: changed ? nowIso : l.prices_changed_at! });
   }
 
-  // One staleness finding per active authority: its prices must move somewhere.
+  // One staleness finding per active authority. PriceLabs is judged by its own push record when
+  // available, because it can push every night without any price changing.
   const changedAt = new Map(updates.map((u) => [`${u.channel_type}:${u.listing_id}`, u.prices_changed_at]));
   for (const authority of ["pricelabs", "turnflow"] as const) {
     const owned = input.listings.filter((l) => l.pricing_authority === authority);
     if (!owned.length) continue;
+    if (authority === "pricelabs" && input.pricelabs) {
+      const finding = priceLabsSyncFinding(owned, input.listings, input.pricelabs, input.now);
+      if (finding) findings.push(finding);
+      continue;
+    }
     const latest = Math.max(...owned.map((l) => Math.max(Date.parse(l.authority_changed_at), Date.parse(changedAt.get(`${l.channel_type}:${l.listing_id}`) ?? "") || 0)));
     const hours = (input.now.getTime() - latest) / 3_600_000;
     if (hours > PRICING_STALE_HOURS) findings.push({ rule: "pricing_stale", severity: "critical", subject: authority, channel_type: null, start_date: null, end_date: null,
       detail: { problem: `${authority === "pricelabs" ? "PriceLabs" : "TurnFlow"} has not changed any price in ${Math.floor(hours)} hours`, cause: "Pricing provider stopped, unpaid or disconnected", action: "Check the provider's sync status and billing", listings: owned.length, lastChange: new Date(latest).toISOString() } });
   }
   return { findings, updates };
+}
+
+function priceLabsSyncFinding(owned: ListingSettings[], all: ListingSettings[], sync: PriceLabsSync, now: Date): Finding | null {
+  const base = { rule: "pricing_stale" as const, subject: "pricelabs", channel_type: null, start_date: null, end_date: null };
+  if (!sync.ok) return { ...base, severity: "warning", detail: { problem: "Could not check PriceLabs sync status", cause: sync.error, action: "Check PRICELABS_API_KEY and PriceLabs API status; pricing staleness is unverified until this works" } };
+  const problems: Array<{ property: string; issue: string; lastPushed: string | null }> = [];
+  for (const propertyId of new Set(owned.map((l) => l.hostex_property_id))) {
+    const airbnb = all.filter((l) => l.hostex_property_id === propertyId && l.channel_type === "airbnb").map((l) => l.listing_id);
+    const match = sync.listings.find((p) => p.airbnb_ids.some((id) => airbnb.includes(id)));
+    const grace = Math.max(...owned.filter((l) => l.hostex_property_id === propertyId).map((l) => Date.parse(l.authority_changed_at)));
+    const lastPushed = match?.last_date_pushed ?? null;
+    const hours = (now.getTime() - Math.max(grace, Date.parse(lastPushed ?? "") || 0)) / 3_600_000;
+    const label = match?.name ?? `Hostex property ${propertyId}`;
+    if (!match) problems.push({ property: label, issue: "not found in PriceLabs", lastPushed });
+    else if (!match.push_enabled) problems.push({ property: label, issue: "sync turned off in PriceLabs", lastPushed });
+    else if (hours > PRICELABS_PUSH_STALE_HOURS) problems.push({ property: label, issue: `no push in ${Math.floor(hours)} hours`, lastPushed });
+  }
+  if (!problems.length) return null;
+  return { ...base, severity: "critical", detail: {
+    problem: `PriceLabs is not pushing prices for ${problems.length} ${problems.length === 1 ? "property" : "properties"}`,
+    cause: problems.map((p) => `${p.property}: ${p.issue}`).join("; "),
+    action: "Open PriceLabs: check billing, the listing's Sync toggle and its sync error, then Save & Refresh",
+    properties: problems,
+  } };
 }
 
 /** Heartbeat check, used on read: a scanner that silently stops is itself critical. */
