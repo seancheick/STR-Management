@@ -76,7 +76,9 @@ describe("bookability guardian", () => {
     const snapshot = Object.fromEntries(DATES.map((d, i) => [d, [90, 90, 180, 90][i]!]));
     const cal = [{ channel_type: "booking.com", listing_id: "h", calendar: days([90, 90, 180, 90]) }];
     const stale = scan([listing("h", "booking.com", { pricing_authority: "pricelabs", price_snapshot: snapshot, prices_changed_at: old })], cal);
-    expect(stale.findings.find((f) => f.rule === "pricing_stale")).toMatchObject({ subject: "pricelabs", severity: "critical" });
+    expect(stale.findings.find((f) => f.rule === "pricing_stale")).toMatchObject({ subject: "pricelabs", severity: "warning" });
+    const ownEngine = scan([listing("h", "booking.com", { pricing_authority: "turnflow", price_snapshot: snapshot, prices_changed_at: old })], cal);
+    expect(ownEngine.findings.find((f) => f.rule === "pricing_stale")).toMatchObject({ subject: "turnflow", severity: "critical" });
     expect(stale.updates.find((u) => u.listing_id === "h")!.prices_changed_at).toBe(old);
     expect(rules(scan([listing("h", "booking.com", { price_snapshot: snapshot, prices_changed_at: old })], cal))).toEqual([]);
   });
@@ -139,8 +141,10 @@ describe("bookability guardian", () => {
       expect(run({ ok: false, error: "PriceLabs /v1/listings failed: API_KEY_INVALID" })).toMatchObject([{ severity: "warning", subject: "pricelabs" }]);
     });
 
-    it("falls back to price changes when no PriceLabs key is configured", () => {
-      expect(run(undefined)).toMatchObject([{ severity: "critical", detail: { problem: "PriceLabs has not changed any price in 492 hours" } }]);
+    it("without a PriceLabs key, unchanged prices only raise a warning to check PriceLabs", () => {
+      const [f] = run(undefined);
+      expect(f).toMatchObject({ severity: "warning", detail: { problem: "PriceLabs has not changed any price in 492 hours" } });
+      expect(f!.detail.action).toMatch(/last_date_pushed/);
     });
   });
 

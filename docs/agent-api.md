@@ -82,7 +82,7 @@ TurnFlow scans every Hostex channel calendar (each Airbnb listing and each Booki
 | Rule | Severity | Meaning |
 |---|---|---|
 | `missing_price` | critical | Open, sellable night with no price (or Hostex returned no calendar) |
-| `pricing_stale` | critical | PriceLabs-owned calendars: with `PRICELABS_API_KEY`, a property PriceLabs hasn't pushed for 36 hours, has sync off, or doesn't list (a warning if the PriceLabs API can't be read). Without the key, and for TurnFlow-owned calendars: no price changed for 72 hours. Changing the authority starts a fresh grace period |
+| `pricing_stale` | critical / warning | PriceLabs-owned calendars with `PRICELABS_API_KEY`: **critical** when a property hasn't been pushed for 36 hours, has sync off, or isn't in PriceLabs (warning if the API can't be read). Without the key (the current setup): **warning** after 72 hours with no price change, because PriceLabs can push unchanged prices; confirm with the PriceLabs MCP connector (`get_listing_data` → `last_date_pushed`). TurnFlow-owned calendars: **critical** after 72 hours with no price change. Changing the authority starts a fresh grace period |
 | `scan_stale` | critical | The scan failed, or (on read) no successful scan in 26 hours |
 | `closed_while_available` | warning | Property open but this calendar has zero inventory, unless marked intentionally closed |
 | `ratio_drift` | warning | Price moved more than 2% from the plan's ratio to Airbnb (configured or observed) |
