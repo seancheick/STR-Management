@@ -5,7 +5,7 @@ Production MCP endpoint: https://str-management-sean-cheicks-projects.vercel.app
 REST schema: https://str-management-sean-cheicks-projects.vercel.app/api/agent/v1/openapi.json
 
 Create a token under Settings → AI agents. Send `Authorization: Bearer <token>`.
-Read tokens expose nine read tools; write tokens expose all 19 tools. Revoke a token in Settings to block subsequent requests.
+Read tokens expose ten read tools; write tokens expose all 22 tools. Revoke a token in Settings to block subsequent requests.
 
 ## Server credentials
 

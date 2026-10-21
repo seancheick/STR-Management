@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   inScope: vi.fn(),
   scopePreview: vi.fn(),
   scopeCorrect: vi.fn(),
+  saveExtra: vi.fn(),
+  removeExtra: vi.fn(),
+  jobPay: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -19,6 +22,7 @@ vi.mock("@/app/(admin)/dashboard/schedule/actions", () => ({
 vi.mock("@/app/actions/assignments", () => ({ fetchAssignmentDetail: vi.fn(), getCleanerSuggestionsAction: vi.fn() }));
 vi.mock("@/app/actions/cleaning-scope", () => ({ getCleaningScopeAction: mocks.scopePreview, correctCleaningScopeAction: mocks.scopeCorrect }));
 vi.mock("@/app/actions/cleaner-payments", () => ({ recordCleanerPaymentAction: mocks.recordPayment, voidCleanerPaymentAction: vi.fn() }));
+vi.mock("@/app/actions/job-extras", () => ({ saveJobExtraAction: mocks.saveExtra, removeJobExtraAction: mocks.removeExtra, getJobPayAction: mocks.jobPay }));
 vi.mock("@/lib/queries/assignments", () => ({ listUpcomingUnassignedCleanings: vi.fn(async () => [{ id: "job" }]) }));
 vi.mock("@/lib/queries/cleaner-finance", () => ({ getCleanerFinancialSummary: vi.fn(), listCleanerFinancialSummaries: vi.fn() }));
 vi.mock("@/lib/queries/properties", () => ({ listProperties: vi.fn() }));
@@ -142,6 +146,24 @@ describe("agent tool execution", () => {
   it("maps a requireRole redirect to a 403 instead of a crash", async () => {
     mocks.reschedule.mockRejectedValue(Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/sign-in;307;" }));
     expect(await executeAgentTool(write, "reschedule_cleaning", { assignmentId: job })).toMatchObject({ ok: false, status: 403 });
+  });
+});
+
+describe("job extra tools", () => {
+  it("adds an extra through the existing action with requestId as its id and returns the new pay", async () => {
+    mocks.saveExtra.mockResolvedValue({ error: null });
+    mocks.jobPay.mockResolvedValue({ total: 120, extras: [{ id: job, amount: 30 }] });
+    const out = await executeAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "Extra bedroom", amount: 30, kind: "service" });
+    expect(mocks.saveExtra).toHaveBeenCalledWith({ assignmentId: cleaner, id: job, description: "Extra bedroom", amount: "30.00", kind: "service" });
+    expect(out).toEqual({ ok: true, result: { extraId: job, total: 120, extras: [{ id: job, amount: 30 }] } });
+  });
+
+  it("rejects rounded amounts, read tokens, and surfaces the paid-job lock", async () => {
+    expect(await executeAgentTool(write, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "x", amount: 1.005, kind: "service" })).toMatchObject({ ok: false, status: 400 });
+    expect(await executeAgentTool(read, "add_job_extra", { requestId: job, assignmentId: cleaner, description: "x", amount: 1, kind: "service" })).toMatchObject({ ok: false, status: 403 });
+    mocks.removeExtra.mockResolvedValue({ error: "Paid or reconciled job pay is locked." });
+    expect(await executeAgentTool(write, "remove_job_extra", { assignmentId: cleaner, extraId: job })).toEqual({ ok: false, status: 422, error: "Paid or reconciled job pay is locked." });
+    expect(mocks.saveExtra).not.toHaveBeenCalled();
   });
 });
 
