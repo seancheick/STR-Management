@@ -560,7 +560,7 @@ async function reconcileWithFeed(
 
   const { data: existing, error } = await supabase
     .from("assignments")
-    .select("id, source_reference, status, cleaner_id, calendar_source_id, due_at, checkout_at, next_checkin_at")
+    .select("id, source_reference, hostex_reservation_code, status, cleaner_id, calendar_source_id, due_at, checkout_at, next_checkin_at")
     .eq("owner_id", input.ownerId)
     .eq("property_id", input.propertyId)
     .eq("assignment_type", "cleaning")
@@ -597,7 +597,7 @@ async function reconcileWithFeed(
       .from("assignments")
       .update({ calendar_source_id: input.calendarSourceId })
       .in("id", plan.stampSourceIds)
-      .is("calendar_source_id", null);
+      .is("calendar_source_id", null).is("hostex_reservation_code", null);
     if (stampError) throw new Error(stampError.message);
   }
 
@@ -607,7 +607,7 @@ async function reconcileWithFeed(
       .update({ calendar_source_id: transfer.calendarSourceId, source_reference: transfer.sourceReference })
       .eq("id", transfer.id)
       .eq("owner_id", input.ownerId)
-      .eq("calendar_source_id", input.calendarSourceId)
+      .eq("calendar_source_id", input.calendarSourceId).is("hostex_reservation_code", null)
       .in("status", [...SYNC_MUTABLE_STATUSES]);
     if (transferError) throw new Error(transferError.message);
     // Source ownership may move between equivalent feeds, but an explicit
@@ -616,7 +616,7 @@ async function reconcileWithFeed(
     const { error: priceError } = await supabase.from("assignments")
       .update({ fixed_payout_amount: transfer.fixedPayoutAmount, listing_property_id: transfer.listingPropertyId })
       .eq("id", transfer.id).eq("owner_id", input.ownerId)
-      .eq("calendar_source_id", transfer.calendarSourceId)
+      .eq("calendar_source_id", transfer.calendarSourceId).is("hostex_reservation_code", null)
       .is("cleaning_scope_property_id", null)
       .in("status", [...SYNC_MUTABLE_STATUSES]);
     if (priceError) throw new Error(priceError.message);
@@ -653,7 +653,7 @@ async function reconcileWithFeed(
     const { data: moved, error: moveError } = await supabase
       .from("assignments")
       .update(update.patch)
-      .eq("id", update.id)
+      .eq("id", update.id).eq("owner_id", input.ownerId).is("hostex_reservation_code", null)
       .in("status", [...SYNC_MUTABLE_STATUSES])
       .select("id");
     if (moveError) throw new Error(moveError.message);
@@ -679,7 +679,7 @@ async function reconcileWithFeed(
       .from("assignments")
       .update({ status: "cancelled" })
       .eq("id", job.id)
-      .eq("owner_id", input.ownerId)
+      .eq("owner_id", input.ownerId).is("hostex_reservation_code", null)
       .or(`checkout_at.gt.${cancelBeforeCheckout},and(checkout_at.is.null,due_at.gt.${cancelBeforeCheckout})`)
       .in("status", [...SYNC_MUTABLE_STATUSES])
       .select("id");

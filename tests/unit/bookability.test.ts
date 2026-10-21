@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { HostexCalendarDay } from "@/lib/hostex/client";
-import { scanBookability, scanIsStale, toRanges, type ListingSettings, type PriceLabsSync } from "@/lib/services/bookability";
+import { assertBookabilityCoverage, scanBookability, scanIsStale, toRanges, type ListingSettings, type PriceLabsSync } from "@/lib/services/bookability";
 
 const NOW = new Date("2026-10-21T12:00:00Z");
 const DATES = ["2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24"];
@@ -108,7 +108,7 @@ describe("bookability guardian", () => {
     const run = (pricelabs: PriceLabsSync | undefined, over: Partial<ListingSettings> = {}) =>
       scanBookability({ listings: [owned(over)], calendars: [AIRBNB], availability: allOpen, now: NOW, pricelabs }).findings.filter((f) => f.rule === "pricing_stale");
     const synced = (lastPushed: string | null, push_enabled = true, channel_ids = ["air"]): PriceLabsSync =>
-      ({ ok: true, listings: [{ name: "1st FL 2BD", push_enabled, last_date_pushed: lastPushed, channel_ids }] });
+      ({ ok: true, listings: [{ name: "1st FL 2BD", push_enabled, last_date_pushed: lastPushed, channels: channel_ids.map((listing_id) => ({ channel_type: "airbnb", listing_id })) }] });
 
     it("trusts a recent push even when no price changed", () => {
       expect(run(synced("2026-10-21T02:00:00Z"))).toEqual([]);
@@ -127,7 +127,7 @@ describe("bookability guardian", () => {
 
     it("matches a property that only has a Booking.com calendar", () => {
       const booking = listing("673162101-19469074", "booking.com", { pricing_authority: "pricelabs", price_snapshot: snapshot, prices_changed_at: "2026-10-01T00:00:00Z" });
-      const sync = (ids: string[]): PriceLabsSync => ({ ok: true, listings: [{ name: "Booking-only", push_enabled: true, last_date_pushed: "2026-10-21T02:00:00Z", channel_ids: ids }] });
+      const sync = (ids: string[]): PriceLabsSync => ({ ok: true, listings: [{ name: "Booking-only", push_enabled: true, last_date_pushed: "2026-10-21T02:00:00Z", channels: ids.map((listing_id) => ({ channel_type: "bookingcom", listing_id })) }] });
       const run1 = (s: PriceLabsSync) => scanBookability({ listings: [booking], calendars: [{ channel_type: "booking.com", listing_id: "673162101-19469074", calendar: days([110, 110, 220, 110]) }], availability: allOpen, now: NOW, pricelabs: s }).findings.filter((f) => f.rule === "pricing_stale");
       expect(run1(sync(["673162101-19469074"]))).toEqual([]);
       expect(run1(sync(["other"]))[0]!.detail.cause).toBe("Hostex property 1: not found in PriceLabs");
@@ -163,4 +163,32 @@ describe("bookability guardian", () => {
       { start: "2026-10-31", end: "2026-11-01", days: 2 }, { start: "2026-11-03", end: "2026-11-03", days: 1 },
     ]);
   });
+});
+
+describe("complete observation before reconciliation", () => {
+  it("accepts full calendar and availability coverage", () => {
+    expect(() => assertBookabilityCoverage([listing("air", "airbnb")], [AIRBNB], allOpen, DATES)).not.toThrow();
+  });
+  it("rejects omitted property availability and individual dates", () => {
+    expect(() => assertBookabilityCoverage([listing("air", "airbnb")], [AIRBNB], new Map(), DATES)).toThrow(/Incomplete/);
+    const partial = new Map([[1, new Map([[DATES[0], true]])]]);
+    expect(() => assertBookabilityCoverage([listing("air", "airbnb")], [AIRBNB], partial, DATES)).toThrow(/Incomplete/);
+  });
+  it("rejects empty or partial calendars", () => {
+    for (const calendar of [[], AIRBNB.calendar.slice(0, 1)]) {
+      expect(() => assertBookabilityCoverage([listing("air", "airbnb")], [{ ...AIRBNB, calendar }], allOpen, DATES)).toThrow(/Incomplete/);
+    }
+  });
+});
+
+it("does not match PriceLabs records from a different channel with the same numeric id", () => {
+  const r = scanBookability({ listings: [listing("air", "airbnb", { pricing_authority: "pricelabs" })], calendars: [AIRBNB], availability: allOpen, now: NOW,
+    pricelabs: { ok: true, listings: [{ name: "Different property", push_enabled: true, last_date_pushed: NOW.toISOString(), channels: [{ channel_type: "bookingcom", listing_id: "air" }] }] } });
+  expect(r.findings.find((f) => f.rule === "pricing_stale")?.detail.cause).toMatch(/not found/);
+});
+
+it("reports ambiguous PriceLabs mappings as unverified", () => {
+  const record = { name: "Duplicate", push_enabled: true, last_date_pushed: NOW.toISOString(), channels: [{ channel_type: "airbnb", listing_id: "air" }] };
+  const r = scanBookability({ listings: [listing("air", "airbnb", { pricing_authority: "pricelabs" })], calendars: [AIRBNB], availability: allOpen, now: NOW, pricelabs: { ok: true, listings: [record, record] } });
+  expect(r.findings.find((f) => f.rule === "pricing_stale")).toMatchObject({ severity: "warning", detail: { problem: "PriceLabs sync status is unverified" } });
 });

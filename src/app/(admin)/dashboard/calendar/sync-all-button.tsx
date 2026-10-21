@@ -32,10 +32,9 @@ export function SyncAllButton() {
             const response = await syncAllCalendarsAction();
             setResult(response);
             setError(response.error);
-            if (!response.error) {
-              window.dispatchEvent(new Event(JOBS_CHANGED_EVENT));
-              startTransition(() => router.refresh());
-            }
+            // A partial sync can still change jobs; refresh even if another provider failed.
+            window.dispatchEvent(new Event(JOBS_CHANGED_EVENT));
+            startTransition(() => router.refresh());
           } catch {
             setError("Could not confirm the sync finished. Refresh to check the latest changes, or try syncing again.");
             startTransition(() => router.refresh());

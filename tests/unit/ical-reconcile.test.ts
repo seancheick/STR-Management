@@ -182,3 +182,9 @@ describe("superseded reschedule", () => {
     expect(plan.ownershipTransfers[0]).toMatchObject({ listingPropertyId: "3bed", fixedPayoutAmount: 120 });
   });
 });
+
+// Hostex owns linked jobs even if its read later fails; stale feeds cannot undo them.
+it.each([{ candidates: [] }, { candidates: [candidate("booking-1", "2026-10-21T15:00:00Z", "2026-10-21T19:00:00Z")] }])("does not change a Hostex-linked job from iCal", ({ candidates }) => {
+  const result = planReconciliation({ existing: [row({ hostex_reservation_code: "HM1" })], candidates, calendarSourceId: SOURCE, now: NOW });
+  expect([result.updates, result.cancels, result.ownershipTransfers, result.stampSourceIds].flat()).toEqual([]);
+});

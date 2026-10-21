@@ -7,6 +7,7 @@ export const SYNC_MUTABLE_STATUSES = ["unassigned", "assigned", "confirmed"] as 
 export type ImportedAssignment = {
   id: string;
   source_reference: string | null;
+  hostex_reservation_code?: string | null;
   status: string;
   cleaner_id: string | null;
   calendar_source_id: string | null;
@@ -61,6 +62,9 @@ export function planReconciliation(input: {
   const plan: ReconciliationPlan = { updates: [], stampSourceIds: [], ownershipTransfers: [], cancels: [] };
 
   for (const row of input.existing) {
+    // Hostex is authoritative once linked. A stale backup feed must not undo
+    // its dates or cancel its job, including during a Hostex API outage.
+    if (row.hostex_reservation_code) continue;
     if (!row.source_reference || !mutable.has(row.status) || new Date(row.due_at).getTime() <= input.now.getTime()) continue;
     // Providers prune a departed stay after checkout, before the cleaning's
     // deadline. The turnover still needs its cleaner; feed absence is no longer

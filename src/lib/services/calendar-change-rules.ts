@@ -17,6 +17,7 @@ export const LARGE_PRICE_CHANGE = 0.4;
 const DAY = 86_400_000;
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 const toTime = (d: string) => Date.parse(`${d}T00:00:00Z`);
+const validDate = (d: string) => isoDate.test(d) && Number.isFinite(toTime(d)) && new Date(toTime(d)).toISOString().slice(0, 10) === d;
 
 export function datesIn(range: { start_date: string; end_date: string }) {
   const out: string[] = [];
@@ -42,7 +43,7 @@ export function validateChange(kind: ChangeKind, ranges: ChangeRange[], target: 
   const seen = new Set<string>();
   ranges.forEach((r, i) => {
     const at = `Range ${i + 1}`;
-    if (!isoDate.test(r.start_date) || !isoDate.test(r.end_date) || Number.isNaN(toTime(r.start_date)) || Number.isNaN(toTime(r.end_date))) { errors.push(`${at}: dates must be YYYY-MM-DD.`); return; }
+    if (!validDate(r.start_date) || !validDate(r.end_date)) { errors.push(`${at}: dates must be YYYY-MM-DD.`); return; }
     if (r.end_date < r.start_date) errors.push(`${at}: end_date is before start_date.`);
     if (r.start_date < today) errors.push(`${at}: starts in the past (${today} is today).`);
     if (r.end_date > limit) errors.push(`${at}: ends more than three years ahead.`);
@@ -57,8 +58,10 @@ export function validateChange(kind: ChangeKind, ranges: ChangeRange[], target: 
         const v = r[f];
         if (f.startsWith("closed_") ? typeof v !== "boolean" : !Number.isInteger(v) || (v as number) < 0 || (v as number) > 365) errors.push(`${at}: ${f} is invalid.`);
       }
-      const min = r.min_stay_on_arrival as number | undefined, max = r.max_stay_on_arrival as number | undefined;
-      if (min && max && min > max) errors.push(`${at}: min_stay_on_arrival is above max_stay_on_arrival.`);
+      for (const suffix of ["on_arrival", "through"] as const) {
+        const min = r[`min_stay_${suffix}`], max = r[`max_stay_${suffix}`];
+        if (min && max && min > max) errors.push(`${at}: min_stay_${suffix} is above max_stay_${suffix}.`);
+      }
     }
     if (r.end_date >= r.start_date && r.end_date <= limit) for (const d of datesIn(r)) {
       if (seen.has(d)) { errors.push(`${at}: overlaps another range on ${d}.`); break; }
@@ -107,4 +110,22 @@ export function samePayload(a: unknown, b: unknown): boolean {
   const canon = (v: unknown): unknown => Array.isArray(v) ? v.map(canon)
     : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).sort(([x], [y]) => x.localeCompare(y)).map(([k, x]) => [k, canon(x)])) : v;
   return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+}
+
+/** Validate the resulting calendar, including restrictions omitted from a partial update. */
+export function validateObservedChange(kind: ChangeKind, ranges: ChangeRange[], current: Map<string, HostexCalendarDay>): string[] {
+  const errors: string[] = [];
+  for (const range of ranges) for (const date of datesIn(range)) {
+    const day = current.get(date);
+    if (!day) { errors.push(`${date}: Hostex returned no current calendar data; cannot safely change this date.`); continue; }
+    if (kind !== "restrictions") continue;
+    const merged = { ...day.restrictions, ...Object.fromEntries(RESTRICTION_FIELDS.filter((f) => range[f] !== undefined).map((f) => [f, range[f]])) };
+    for (const suffix of ["on_arrival", "through"] as const) {
+      const min = merged[`min_stay_${suffix}`], max = merged[`max_stay_${suffix}`];
+      if (min > 0 && max > 0 && min > max) errors.push(`${date}: resulting min_stay_${suffix} is above max_stay_${suffix}.`);
+    }
+    const exact = merged.exact_stay_on_arrival;
+    if (exact > 0 && ((merged.min_stay_on_arrival > 0 && exact < merged.min_stay_on_arrival) || (merged.max_stay_on_arrival > 0 && exact > merged.max_stay_on_arrival))) errors.push(`${date}: resulting stay bounds contradict exact_stay_on_arrival.`);
+  }
+  return errors;
 }

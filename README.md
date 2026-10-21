@@ -19,7 +19,7 @@
 [![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com)
 
 [![MCP](https://img.shields.io/badge/MCP_server-36_tools-16423c?style=flat-square&logo=anthropic&logoColor=white)](#-ai-native-mcp--rest-for-your-agents)
-[![Tests](https://img.shields.io/badge/tests-490_unit_·_12_RLS_suites-2ea44f?style=flat-square&logo=vitest&logoColor=white)](#-quality-bar)
+[![Tests](https://img.shields.io/badge/tests-unit_·_database_suites-2ea44f?style=flat-square&logo=vitest&logoColor=white)](#-quality-bar)
 [![Migrations](https://img.shields.io/badge/migrations-59-3ecf8e?style=flat-square&logo=postgresql&logoColor=white)](./supabase/migrations)
 [![Row Level Security](https://img.shields.io/badge/RLS-every_table-b43f33?style=flat-square&logo=supabase&logoColor=white)](#-security-is-enforced-in-the-database)
 [![PWA](https://img.shields.io/badge/cleaner_app-installable_PWA-5a0fc8?style=flat-square&logo=pwa&logoColor=white)](#-built-for-three-kinds-of-people)
@@ -286,15 +286,15 @@ These aren't UI hints. The database and server code enforce them, so a crafted r
 
 <div align="center">
 
-| 490 | 12 | 59 | 36 | 5 |
-|:---:|:---:|:---:|:---:|:---:|
-| unit tests | RLS and integrity suites | migrations | agent tools | scheduled jobs |
+| Unit tests | Database integrity | Types | Production build |
+|:---:|:---:|:---:|:---:|
+| `npm test` | `npm run test:db` | `npm run typecheck` | `npm run build` |
 
 </div>
 
 ```bash
-npm test             # 490 unit tests: state machine, validator, iCal, reconciliation, ledger, guardian, agent API
-npm run test:db      # applies all 59 migrations to a throwaway Postgres, then tries the attacks
+npm test             # unit tests: state machine, validator, iCal, reconciliation, ledger, guardian, agent API
+npm run test:db      # applies all migrations to a throwaway Postgres, then tries the attacks
 npm run typecheck
 npm run build
 ```

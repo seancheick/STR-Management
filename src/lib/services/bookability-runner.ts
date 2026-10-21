@@ -3,7 +3,8 @@ import "server-only";
 import { getAvailabilities, getListingCalendars, getPricingRatios, getProperties } from "@/lib/hostex/client";
 import { sendNotification } from "@/lib/notifications/notification-service";
 import { getPriceLabsListings, priceLabsConfigured } from "@/lib/pricelabs/client";
-import { scanBookability, type Finding, type ListingSettings, type PriceLabsSync } from "@/lib/services/bookability";
+import { assertBookabilityCoverage, scanBookability, type Finding, type ListingSettings, type PriceLabsSync } from "@/lib/services/bookability";
+import { datesIn } from "@/lib/services/calendar-change-rules";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 export const DEFAULT_HORIZON_DAYS = 180;
@@ -52,12 +53,13 @@ export async function runBookabilityScan(ownerId: string, horizonDays = DEFAULT_
   try {
     const [properties, mapped] = await Promise.all([
       getProperties(),
-      db.from("properties").select("id, hostex_property_id").eq("owner_id", ownerId).not("hostex_property_id", "is", null),
+      db.from("properties").select("id, hostex_property_id").eq("owner_id", ownerId).eq("active", true).not("hostex_property_id", "is", null),
     ]);
     if (mapped.error) throw mapped.error;
     const propertyOf = new Map((mapped.data ?? []).map((p) => [Number(p.hostex_property_id), p.id as string]));
     const owned = properties.filter((p) => propertyOf.has(p.id));
     if (!owned.length) throw new Error("No Hostex properties are mapped to this workspace.");
+    if (owned.length !== propertyOf.size) throw new Error("Hostex did not return every actively mapped property; existing findings are preserved.");
 
     const ratios = new Map((await Promise.all(owned.map((p) => getPricingRatios(p.id)))).flat().map((r) => [`${r.channel_type}:${r.listing_id}`, r]));
     const upsert = await db.from("channel_listings").upsert(owned.flatMap((p) => p.channels.map((c) => {
@@ -73,7 +75,8 @@ export async function runBookabilityScan(ownerId: string, horizonDays = DEFAULT_
       .select("channel_type, listing_id, hostex_property_id, pricing_authority, intentionally_closed, expected_ratio, price_readonly, authority_changed_at, price_snapshot, prices_changed_at")
       .eq("owner_id", ownerId).in("hostex_property_id", owned.map((p) => p.id));
     if (listingError) throw listingError;
-    const listings = (listingRows ?? []).map((l) => ({ ...l, hostex_property_id: Number(l.hostex_property_id), expected_ratio: l.expected_ratio === null ? null : Number(l.expected_ratio) })) as ListingSettings[];
+    const activeKeys = new Set(owned.flatMap((p) => p.channels.map((c) => `${p.id}:${c.channel_type}:${c.listing_id}`)));
+    const listings = (listingRows ?? []).filter((l) => activeKeys.has(`${Number(l.hostex_property_id)}:${l.channel_type}:${l.listing_id}`)).map((l) => ({ ...l, hostex_property_id: Number(l.hostex_property_id), expected_ratio: l.expected_ratio === null ? null : Number(l.expected_ratio) })) as ListingSettings[];
 
     const timeZone = owned[0]!.timezone || "America/New_York";
     const start = localDate(timeZone), end = localDate(timeZone, horizonDays - 1);
@@ -82,6 +85,7 @@ export async function runBookabilityScan(ownerId: string, horizonDays = DEFAULT_
       getAvailabilities(owned.map((p) => p.id), start, end),
     ]);
     const availability = new Map(availabilities.map((p) => [p.id, new Map(p.availabilities.map((a) => [a.date, a.available]))]));
+    assertBookabilityCoverage(listings, calendars, availability, datesIn({ start_date: start, end_date: end }));
     const pricelabs = listings.some((l) => l.pricing_authority === "pricelabs") ? await priceLabsSync() : undefined;
     const { findings, updates } = scanBookability({ listings, calendars, availability, now, pricelabs });
 
@@ -112,7 +116,7 @@ async function priceLabsSync(): Promise<PriceLabsSync | undefined> {
     const listings = await getPriceLabsListings();
     return { ok: true, listings: listings.filter((l) => l.pms === "hostex").map((l) => ({
       name: l.name, push_enabled: Boolean(l.push_enabled), last_date_pushed: l.last_date_pushed ?? null,
-      channel_ids: (l.channel_listing_details ?? []).map((c) => String(c.channel_listing_id)),
+      channels: (l.channel_listing_details ?? []).map((c) => ({ channel_type: c.channel_name, listing_id: String(c.channel_listing_id) })),
     })) };
   } catch (error) {
     return { ok: false, error: (error instanceof Error ? error.message : String(error)).slice(0, 300) };

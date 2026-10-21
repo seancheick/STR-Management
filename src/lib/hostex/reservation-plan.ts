@@ -8,8 +8,8 @@ export type HostexListing = { id: string; ownerId: string; hostexPropertyId: num
 
 export type HostexPlanJob = {
   id: string; ownerId: string; propertyId: string; status: string; sourceType: string | null;
-  checkoutAt: string | null; dueAt: string; cleanerId: string | null;
-  hostexReservationCode: string | null; bookingChannel: string | null; reservationCancelledAt: string | null;
+  checkoutAt: string | null; dueAt: string; nextCheckinAt?: string | null; cleanerId: string | null;
+  hostexReservationCode: string | null; hostexStayCode?: string | null; bookingChannel: string | null; reservationCancelledAt: string | null;
   /** Paid, ledger-reconciled or linked to a payout report. Never altered. */
   locked: boolean;
 };
@@ -34,8 +34,9 @@ type Stay = {
 export type HostexPlan = {
   reservations: Array<{ owner_id: string; property_id: string; listing_property_id: string; source_type: "hostex"; source_reference: string; calendar_source_id: null; platform: string; guest_name: string | null; start_at: string; end_at: string; summary: null }>;
   removedReservations: Array<{ ownerId: string; sourceReference: string }>;
-  links: Array<{ jobId: string; ownerId: string; code: string; patch: { hostex_reservation_code: string; booking_channel: string } }>;
+  links: Array<{ jobId: string; ownerId: string; code: string; previousCode: string | null; patch: { hostex_reservation_code: string; hostex_stay_code: string; booking_channel: string } }>;
   moves: Array<{ jobId: string; ownerId: string; code: string; cleanerId: string | null; previousDueAt: string; patch: { checkout_at: string; due_at: string; next_checkin_at: string | null } }>;
+  arrivals: Array<{ jobId: string; ownerId: string; patch: { next_checkin_at: string | null } }>;
   creates: Array<{ ownerId: string; listingId: string; unitId: string; code: string; stayCode: string; channel: string; checkoutAt: string; dueAt: string; nextCheckinAt: string | null }>;
   cancels: Array<{ jobId: string; ownerId: string; code: string; cleanerId: string | null; dueAt: string }>;
   flags: Array<{ jobId: string; ownerId: string; propertyId: string; code: string }>;
@@ -56,7 +57,7 @@ const at = (date: string, hour: number, timeZone: string) => {
  * before checkout are moved or cancelled; anything else is flagged.
  */
 export function planHostexReconciliation(input: HostexPlanInput): HostexPlan {
-  const plan: HostexPlan = { reservations: [], removedReservations: [], links: [], moves: [], creates: [], cancels: [], flags: [],
+  const plan: HostexPlan = { reservations: [], removedReservations: [], links: [], moves: [], arrivals: [], creates: [], cancels: [], flags: [],
     summary: { stays: 0, ignored: 0, pending: 0, matched: 0, linked: 0, moved: 0, created: 0, skippedBeforeCutoff: 0, skippedPast: 0, cancelled: 0, flagged: 0 } };
   const now = input.now.getTime();
 
@@ -86,8 +87,14 @@ export function planHostexReconciliation(input: HostexPlanInput): HostexPlan {
     .filter((s) => sameUnit(s, stay.ownerId, stay.unitId) && s.checkinAt >= stay.checkoutAt)
     .map((s) => s.checkinAt).sort()[0] ?? null;
   const jobDay = (job: HostexPlanJob, timeZone: string) => dateKeyInTimeZone(new Date(job.checkoutAt ?? job.dueAt), timeZone);
-  const mutable = (job: HostexPlanJob) => !job.locked && (SYNC_MUTABLE_STATUSES as readonly string[]).includes(job.status) &&
+  const automated = (job: HostexPlanJob) => job.sourceType === "ical" || job.sourceType === "hostex";
+  const mutable = (job: HostexPlanJob) => automated(job) && !job.locked && (SYNC_MUTABLE_STATUSES as readonly string[]).includes(job.status) &&
     new Date(job.checkoutAt ?? job.dueAt).getTime() > now;
+  // Legacy links contain only reservation_code. Moving them is safe only when
+  // that reservation has a single stay on this physical unit.
+  const linkedTo = (job: HostexPlanJob, stay: Stay) => job.hostexStayCode
+    ? job.hostexStayCode === stay.stayCode
+    : job.hostexReservationCode === stay.code && stays.filter((s) => s.ownerId === stay.ownerId && s.unitId === stay.unitId && s.code === stay.code).length === 1;
   const claimed = new Set<string>();
   const createdDays = new Set<string>();
   const live = (stay: Stay) => input.jobs.filter((j) => j.ownerId === stay.ownerId && j.propertyId === stay.unitId && j.status !== "cancelled" && !claimed.has(j.id));
@@ -103,8 +110,9 @@ export function planHostexReconciliation(input: HostexPlanInput): HostexPlan {
       start_at: stay.checkinAt, end_at: stay.checkoutAt, summary: null });
     const jobs = live(stay);
     const onDay = jobs.filter((j) => jobDay(j, stay.timeZone) === stay.day);
-    const linked = jobs.filter((j) => j.hostexReservationCode === stay.code);
-    let target = onDay.find((j) => j.hostexReservationCode === stay.code) ?? onDay.find((j) => !j.hostexReservationCode);
+    const linked = jobs.filter((j) => linkedTo(j, stay));
+    let target = onDay.find((j) => linkedTo(j, stay)) ?? onDay.find((j) => !j.hostexReservationCode)
+      ?? onDay.find((j) => !accepted.some((other) => linkedTo(j, other)));
     if (!target && !onDay.length) {
       // The guest changed dates: move this stay's unstarted job instead of creating a second one.
       target = linked.find((j) => mutable(j) && new Date(stay.dueAt).getTime() > now);
@@ -116,8 +124,12 @@ export function planHostexReconciliation(input: HostexPlanInput): HostexPlan {
     }
     if (target) {
       claimed.add(target.id);
-      if (!target.locked && (target.hostexReservationCode !== stay.code || target.bookingChannel !== stay.channel)) {
-        plan.links.push({ jobId: target.id, ownerId: stay.ownerId, code: stay.code, patch: { hostex_reservation_code: stay.code, booking_channel: stay.channel } });
+      if (mutable(target) && !plan.moves.some((m) => m.jobId === target.id) &&
+        (target.nextCheckinAt ?? null) !== nextCheckin(stay)) {
+        plan.arrivals.push({ jobId: target.id, ownerId: stay.ownerId, patch: { next_checkin_at: nextCheckin(stay) } });
+      }
+      if (automated(target) && !target.locked && (target.hostexReservationCode !== stay.code || target.hostexStayCode !== stay.stayCode || target.bookingChannel !== stay.channel)) {
+        plan.links.push({ jobId: target.id, ownerId: stay.ownerId, code: stay.code, previousCode: target.hostexReservationCode, patch: { hostex_reservation_code: stay.code, hostex_stay_code: stay.stayCode, booking_channel: stay.channel } });
         plan.summary.linked++;
       } else plan.summary.matched++;
     } else if (onDay.length) {
@@ -146,10 +158,10 @@ export function planHostexReconciliation(input: HostexPlanInput): HostexPlan {
     plan.removedReservations.push({ ownerId: stay.ownerId, sourceReference: hostexSourceReference(stay.stayCode) });
     if (stay.status !== "cancelled") continue;
     const jobs = live(stay);
-    const linked = jobs.filter((j) => j.hostexReservationCode === stay.code);
+    const linked = jobs.filter((j) => linkedTo(j, stay));
     // An unlinked job that day may belong to another booking; only take it when no live stay covers the day.
     const covered = accepted.some((s) => sameUnit(s, stay.ownerId, stay.unitId) && s.day === stay.day);
-    const targets = linked.length ? linked : covered ? [] : jobs.filter((j) =>
+    const targets = linked.length ? linked.filter((j) => !accepted.some((s) => sameUnit(s, stay.ownerId, stay.unitId) && s.day === jobDay(j, stay.timeZone))) : covered ? [] : jobs.filter((j) =>
       !j.hostexReservationCode && (j.sourceType === "ical" || j.sourceType === "hostex") && jobDay(j, stay.timeZone) === stay.day);
     for (const job of targets) retire(job, stay.code);
   }

@@ -19,7 +19,7 @@
 
 ```bash
 npm run typecheck   # must pass before committing
-npm test            # all tests must stay green (201 as of 2026-10-08)
+npm test            # all tests must stay green; use the current runner summary for the count
 npm run test:db     # RLS / tenant security tests; starts a throwaway local Postgres, never touches Supabase
 npm run build       # use Node 20+
 ```

@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth/session";
 import { resolveOwnerId } from "@/lib/queries/properties";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { syncCalendarSource } from "@/lib/ical/sync-service";
+import { syncHostexReservations } from "@/lib/hostex/reservation-sync";
 import { assertPublicHttpsUrl } from "@/lib/ical/url-guard";
 import type { SyncResult } from "@/lib/ical/sync-service";
 
@@ -155,11 +156,14 @@ export async function manualSyncAction(
         ?.primary_checklist_template_id ?? null,
   });
 
+  const hostex = process.env.HOSTEX_API_TOKEN
+    ? await syncHostexReservations({ ownerId: source.owner_id as string }).catch(() => ({ ok: false }))
+    : null;
   revalidatePath("/dashboard/calendar");
   revalidatePath("/dashboard/assignments");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/schedule");
-  return { error: result.error ?? null, result };
+  return { error: result.error ? "Calendar feed sync failed. Check sync history." : hostex && !hostex.ok ? "Hostex reservation sync needs attention; the calendar feed was refreshed." : null, result };
 }
 
 export type SyncAllCalendarsResult = {
@@ -226,6 +230,19 @@ export async function syncAllCalendarsAction(): Promise<SyncAllCalendarsResult> 
       summary.failures.push({ sourceId: source.id, sourceName: source.name, propertyName: source.properties.name });
     } else {
       summary.succeeded++;
+    }
+  }
+  if (process.env.HOSTEX_API_TOKEN) {
+    try {
+      const hostex = await syncHostexReservations({ ownerId });
+      if (hostex.summary) {
+        summary.assignmentsCreated += hostex.summary.created;
+        summary.assignmentsRescheduled += hostex.summary.moved;
+        summary.assignmentsCancelled += hostex.summary.cancelled;
+      }
+      if (!hostex.ok) summary.error = "Hostex reservation sync needs attention; calendar feed results were kept. Retry or check System health.";
+    } catch {
+      summary.error = "Hostex reservation sync needs attention; calendar feed results were kept. Retry or check System health.";
     }
   }
   revalidatePath("/dashboard", "layout");

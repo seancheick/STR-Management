@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ role: vi.fn(), owner: vi.fn(), sync: vi.fn(), refresh: vi.fn(), query: vi.fn(), filters: [] as unknown[][] }));
+const mocks = vi.hoisted(() => ({ role: vi.fn(), owner: vi.fn(), sync: vi.fn(), hostex: vi.fn(), refresh: vi.fn(), query: vi.fn(), filters: [] as unknown[][] }));
+vi.mock("@/lib/hostex/reservation-sync", () => ({ syncHostexReservations: mocks.hostex }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.refresh }));
 vi.mock("@/lib/auth/session", () => ({ requireRole: mocks.role }));
 vi.mock("@/lib/queries/properties", () => ({ resolveOwnerId: mocks.owner }));
@@ -12,7 +13,7 @@ vi.mock("@/lib/supabase/server", () => ({ createServerSupabaseClient: async () =
 import { syncAllCalendarsAction } from "@/app/(admin)/dashboard/calendar/actions";
 const result = { eventsFound: 2, assignmentsCreated: 1, assignmentsSkipped: 1, assignmentsRescheduled: 2, assignmentsCancelled: 1, reservationsUpserted: 2, conflictCount: 1, conflicts: [] };
 const feed = (id: string) => ({ id, property_id: `property-${id}`, name: `Feed ${id}`, properties: { name: "1st floor", primary_checklist_template_id: null } });
-beforeEach(() => { vi.clearAllMocks(); mocks.filters = []; mocks.owner.mockResolvedValue("owner"); mocks.query.mockResolvedValue({ data: [], error: null }); mocks.sync.mockResolvedValue(result); });
+beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("HOSTEX_API_TOKEN", "test"); mocks.filters = []; mocks.owner.mockResolvedValue("owner"); mocks.hostex.mockResolvedValue({ok:true,summary:{created:0,moved:0,cancelled:0}}); mocks.query.mockResolvedValue({ data: [], error: null }); mocks.sync.mockResolvedValue(result); });
 it("restricts the owner-scoped feed list to active, nonretired sources and active properties", async () => {
   await syncAllCalendarsAction();
   expect(mocks.role).toHaveBeenCalledWith(["owner", "admin", "supervisor"]);
@@ -49,4 +50,19 @@ it("does not read or sync feeds when the caller lacks permission", async () => {
   expect(mocks.owner).not.toHaveBeenCalled();
   expect(mocks.query).not.toHaveBeenCalled();
   expect(mocks.sync).not.toHaveBeenCalled();
+});
+
+it("includes owner-scoped Hostex reconciliation after all fallback feeds", async () => {
+  mocks.query.mockResolvedValue({data:[feed("a")],error:null});
+  mocks.hostex.mockResolvedValue({ok:true,summary:{created:2,moved:1,cancelled:0}});
+  const output=await syncAllCalendarsAction();
+  expect(mocks.hostex).toHaveBeenCalledWith({ownerId:"owner"});
+  expect(mocks.hostex.mock.invocationCallOrder[0]).toBeGreaterThan(mocks.sync.mock.invocationCallOrder[0]);
+  expect(output.assignmentsCreated).toBe(3); expect(output.assignmentsRescheduled).toBe(3);
+});
+it("exposes a Hostex failure even when all iCal feeds succeeded", async () => {
+ mocks.hostex.mockResolvedValue({ok:false,error:"secret provider failure",summary:null});
+ const output=await syncAllCalendarsAction();
+ expect(output.error).toMatch(/Hostex/); expect(output.error).not.toContain("secret provider");
+ expect(mocks.refresh).toHaveBeenCalledWith("/dashboard/schedule");
 });

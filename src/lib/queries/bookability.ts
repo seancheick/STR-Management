@@ -60,9 +60,11 @@ export async function getBookabilityAlert(): Promise<{ critical: number; stale: 
       supabase.from("channel_listings").select("id", { count: "exact", head: true }),
       supabase.from("bookability_scans").select("finished_at").eq("result", "success").order("finished_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
+    for (const result of [critical, configured, success]) if (result.error) throw new Error(result.error.message);
     return { critical: critical.count ?? 0, stale: (configured.count ?? 0) > 0 && scanIsStale((success.data?.finished_at as string | undefined) ?? null, new Date()) };
   } catch (error) {
     console.error("[bookability-alert]", error);
-    return { critical: 0, stale: false };
+    // Unknown health must remain visible instead of being presented as healthy.
+    return { critical: 0, stale: true };
   }
 }

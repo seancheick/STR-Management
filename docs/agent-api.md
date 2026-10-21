@@ -84,7 +84,7 @@ TurnFlow scans every Hostex channel calendar (each Airbnb listing and each Booki
 | Rule | Severity | Meaning |
 |---|---|---|
 | `missing_price` | critical | Open, sellable night with no price (or Hostex returned no calendar) |
-| `pricing_stale` | critical / warning | PriceLabs-owned calendars with `PRICELABS_API_KEY`: **critical** when a property hasn't been pushed for 36 hours, has sync off, or isn't in PriceLabs (warning if the API can't be read). Without the key (the current setup): **warning** after 72 hours with no price change, because PriceLabs can push unchanged prices; confirm with the PriceLabs MCP connector (`get_listing_data` → `last_date_pushed`). TurnFlow-owned calendars: **critical** after 72 hours with no price change. Changing the authority starts a fresh grace period |
+| `pricing_stale` | critical / warning | PriceLabs-owned calendars with `PRICELABS_API_KEY`: **critical** when a property hasn't been pushed for 36 hours, has sync off, or isn't in PriceLabs (warning if the API can't be read). Without the key: **warning** after 72 hours with no price change, because PriceLabs can push unchanged prices; confirm with the PriceLabs MCP connector (`get_listing_data` → `last_date_pushed`). TurnFlow-owned calendars: **critical** after 72 hours with no price change. Changing the authority starts a fresh grace period |
 | `scan_stale` | critical | The scan failed, or (on read) no successful scan in 26 hours |
 | `closed_while_available` | warning | Property open but this calendar has zero inventory, unless marked intentionally closed |
 | `ratio_drift` | warning | Price moved more than 2% from the plan's ratio to Airbnb (configured or observed) |
@@ -106,3 +106,10 @@ Booked and owner-blocked nights are never judged.
 To reverse a change, read its `before` values from `list_calendar_changes`, then preview and apply them as a new change with a new `requestId`, after approval. Check `get_schedule` first: nights booked since the change are unaffected by a price reversal, but restriction reversals can change what is sellable.
 
 Not available through agents: Airbnb availability-window settings (how far ahead guests can book), inventory changes, and rate-plan derivation rules. These are changed in Hostex or the channel extranet by the owner.
+
+
+### Calendar verification and retries
+
+Calendar writes recheck the current workspace mapping, Hostex connection, and read-only status. Missing current data, invalid civil dates, or conflicting resulting stay restrictions block the write. A timeout after submission means the outcome is uncertain: retain the same requestId and call `verify_calendar_change`; never assume nothing was applied or resend under a new requestId. Verification confirms Hostex's channel-calendar readback, not an independent check of the OTA website.
+
+A scan needs every requested calendar and availability date before resolving existing findings. A partial response or failed health read stays visible as unverified/stale. Disconnected channels are retained as audit history but are excluded from new scans and cannot receive new writes.

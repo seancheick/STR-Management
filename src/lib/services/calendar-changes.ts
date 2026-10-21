@@ -2,9 +2,9 @@ import "server-only";
 
 import { requireRole } from "@/lib/auth/session";
 import { AgentToolError } from "@/lib/agent/errors";
-import { getListingCalendars, updateListingPrices, updateListingRestrictions, type HostexCalendarDay } from "@/lib/hostex/client";
+import { getProperties, getPricingRatios, getListingCalendars, updateListingPrices, updateListingRestrictions, type HostexCalendarDay } from "@/lib/hostex/client";
 import { localDate } from "@/lib/services/bookability-runner";
-import { beforeSnapshot, changeSpan, compareReadback, priceWarnings, samePayload, validateChange, type ChangeKind, type ChangeRange } from "@/lib/services/calendar-change-rules";
+import { beforeSnapshot, changeSpan, compareReadback, priceWarnings, samePayload, validateChange, validateObservedChange, type ChangeKind, type ChangeRange } from "@/lib/services/calendar-change-rules";
 import { createServiceSupabaseClient } from "@/lib/supabase/service";
 
 /**
@@ -19,16 +19,25 @@ const TIME_ZONE = "America/New_York";
 
 async function target(ownerId: string, channelType: string, listingId: string) {
   const { data, error } = await createServiceSupabaseClient().from("channel_listings")
-    .select("channel_type, listing_id, property_title, listing_title, currency, pricing_authority, price_readonly")
+    .select("channel_type, listing_id, property_title, listing_title, currency, pricing_authority, price_readonly, hostex_property_id")
     .eq("owner_id", ownerId).eq("channel_type", channelType).eq("listing_id", listingId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new AgentToolError("Channel calendar not found. Use get_bookability_report for valid channelType/listingId pairs.");
-  return data;
+  const mapping = await createServiceSupabaseClient().from("properties").select("id")
+    .eq("owner_id", ownerId).eq("hostex_property_id", data.hostex_property_id).eq("active", true).maybeSingle();
+  if (mapping.error) throw new Error(mapping.error.message);
+  if (!mapping.data) throw new AgentToolError("This Hostex property is no longer actively mapped to this workspace.");
+  const properties = await getProperties();
+  const property = properties.find((p) => p.id === Number(data.hostex_property_id) && p.channels.some((c) => c.channel_type === channelType && c.listing_id === listingId));
+  if (!property) throw new AgentToolError("This channel calendar is no longer connected in Hostex. Run run_bookability_scan and choose an active calendar.");
+  const ratio = (await getPricingRatios(property.id)).find((r) => r.channel_type === channelType && r.listing_id === listingId);
+  return { ...data, price_readonly: ratio?.readonly ?? null };
 }
 
 async function readCalendar(channelType: string, listingId: string, ranges: ChangeRange[]) {
   const span = changeSpan(ranges);
-  const [cal] = await getListingCalendars([{ channel_type: channelType, listing_id: listingId }], span.start, span.end);
+  const calendars = await getListingCalendars([{ channel_type: channelType, listing_id: listingId }], span.start, span.end);
+  const cal = calendars.find((c) => c.channel_type === channelType && c.listing_id === listingId);
   return new Map<string, HostexCalendarDay>((cal?.calendar ?? []).map((d) => [d.date, d]));
 }
 
@@ -37,6 +46,7 @@ export async function previewCalendarChange(input: CalendarChangeInput) {
   const listing = await target(profile.owner_id, input.channelType, input.listingId);
   const errors = validateChange(input.kind, input.ranges, listing, localDate(TIME_ZONE));
   const current = errors.length ? new Map<string, HostexCalendarDay>() : await readCalendar(input.channelType, input.listingId, input.ranges);
+  if (!errors.length) errors.push(...validateObservedChange(input.kind, input.ranges, current));
   return {
     valid: errors.length === 0, errors,
     warnings: input.kind === "price" ? priceWarnings(input.ranges, current) : [],
@@ -60,7 +70,10 @@ export async function applyCalendarChange(input: CalendarChangeInput & { request
   const listing = await target(profile.owner_id, input.channelType, input.listingId);
   const errors = validateChange(input.kind, input.ranges, listing, localDate(TIME_ZONE));
   if (errors.length) throw new AgentToolError(errors.join(" "));
-  const before = beforeSnapshot(input.kind, input.ranges, await readCalendar(input.channelType, input.listingId, input.ranges));
+  const current = await readCalendar(input.channelType, input.listingId, input.ranges);
+  const observedErrors = validateObservedChange(input.kind, input.ranges, current);
+  if (observedErrors.length) throw new AgentToolError(observedErrors.join(" "));
+  const before = beforeSnapshot(input.kind, input.ranges, current);
   // Claim the requestId before calling Hostex, so concurrent retries cannot send twice.
   const claim = await db.from("calendar_change_requests").insert({
     request_id: input.requestId, owner_id: profile.owner_id, channel_type: input.channelType, listing_id: input.listingId,
@@ -75,8 +88,8 @@ export async function applyCalendarChange(input: CalendarChangeInput & { request
     else await updateListingRestrictions(input.channelType, input.listingId, input.ranges);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await db.from("calendar_change_requests").update({ status: "failed", error: message.slice(0, 500) }).eq("request_id", input.requestId);
-    throw new AgentToolError(`Hostex rejected the change: ${message}. Nothing was applied; fix the cause and use a new requestId.`);
+    await db.from("calendar_change_requests").update({ error: message.slice(0, 500) }).eq("request_id", input.requestId);
+    throw new AgentToolError(`Hostex submission outcome is uncertain: ${message}. The change may have been accepted. Keep this requestId and call verify_calendar_change; do not resend with a new requestId.`);
   }
   return { ...claim.data, next: "Hostex processes changes asynchronously. Call verify_calendar_change with this requestId in a minute or two." };
 }
@@ -97,7 +110,7 @@ export async function verifyCalendarChange(requestId: string) {
   if (saved.error) throw new Error(saved.error.message);
   return {
     ...saved.data, mismatchCount: mismatches.length,
-    next: status === "verified" ? "Live on the channel calendar. Call run_bookability_scan to refresh findings."
+    next: status === "verified" ? "Verified in Hostex’s channel calendar. Call run_bookability_scan to refresh findings; check Hostex sync status for delivery to the booking channel."
       : status === "submitted" ? `Not visible yet (${Math.round(waited)} min since submission). Check again shortly.`
       : "Still different after 15 minutes. Check the task result in the Hostex price portal before resubmitting; never resend blindly.",
   };

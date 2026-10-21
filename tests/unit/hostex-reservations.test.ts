@@ -32,7 +32,7 @@ describe("Hostex reservations drive cleanings", () => {
   it("links the iCal job on the same physical unit and checkout day instead of duplicating it", () => {
     const result = plan({ stays: [stay("HM1", 102, "2026-10-24", "2026-10-26")], jobs: [job("ical-job", "2026-10-26")] });
     expect(result.creates).toEqual([]);
-    expect(result.links).toEqual([{ jobId: "ical-job", ownerId: "owner", code: "HM1", patch: { hostex_reservation_code: "HM1", booking_channel: "airbnb" } }]);
+    expect(result.links).toEqual([{ jobId: "ical-job", ownerId: "owner", code: "HM1", previousCode: null, patch: { hostex_reservation_code: "HM1", hostex_stay_code: "HM1", booking_channel: "airbnb" } }]);
     expect(result.reservations[0]).toMatchObject({ property_id: "unit", listing_property_id: "three-bed", source_type: "hostex", source_reference: "hostex:HM1",
       platform: "airbnb", guest_name: "Example Guest", start_at: "2026-10-24T19:00:00.000Z", end_at: "2026-10-26T15:00:00.000Z" });
   });
@@ -42,8 +42,8 @@ describe("Hostex reservations drive cleanings", () => {
     const first = plan({ stays, jobs: [job("ical-job", "2026-10-26")] });
     expect(first.creates.map((c) => c.code)).toEqual(["HM2"]);
     const second = plan({ stays, jobs: [
-      job("ical-job", "2026-10-26", { hostexReservationCode: "HM1", bookingChannel: "airbnb" }),
-      job("hostex-job", "2026-10-29", { propertyId: "basement", sourceType: "hostex", hostexReservationCode: "HM2", bookingChannel: "airbnb" }),
+      job("ical-job", "2026-10-26", { hostexReservationCode: "HM1", hostexStayCode: "HM1", bookingChannel: "airbnb" }),
+      job("hostex-job", "2026-10-29", { propertyId: "basement", sourceType: "hostex", hostexReservationCode: "HM2", hostexStayCode: "HM2", bookingChannel: "airbnb" }),
     ] });
     expect([second.links, second.creates, second.moves, second.cancels, second.flags].flat()).toEqual([]);
     expect(second.summary.matched).toBe(2);
@@ -54,6 +54,34 @@ describe("Hostex reservations drive cleanings", () => {
     expect(result.reservations).toHaveLength(2);
     expect(result.creates).toHaveLength(1);
     expect(result.creates[0]).toMatchObject({ unitId: "unit", listingId: "two-bed", checkoutAt: "2026-10-26T15:00:00.000Z", dueAt: "2026-10-26T19:00:00.000Z" });
+  });
+
+  it("keeps a linked turnover when its cancelled booking is replaced by a live stay", () => {
+    const result = plan({ stays: [stay("OLD", 101, "2026-10-24", "2026-10-26", { status: "cancelled" }), stay("NEW", 101, "2026-10-24", "2026-10-26")],
+      jobs: [job("existing", "2026-10-26", { hostexReservationCode: "OLD", hostexStayCode: "OLD" })] });
+    expect(result.cancels).toEqual([]);
+    expect(result.creates).toEqual([]);
+    expect(result.links[0]?.patch).toMatchObject({ hostex_reservation_code: "NEW", hostex_stay_code: "NEW" });
+  });
+
+  it("uses stay identity when one reservation has multiple stays on the unit", () => {
+    const result = plan({ stays: [stay("BOOKING", 101, "2026-10-24", "2026-10-26", { stay_code: "S1" }), stay("BOOKING", 102, "2026-10-27", "2026-10-29", { stay_code: "S2" })],
+      jobs: [job("later", "2026-10-29", { hostexReservationCode: "BOOKING", hostexStayCode: "S2" })] });
+    expect(result.moves).toEqual([]);
+    expect(result.cancels).toEqual([]);
+    expect(result.creates.map((c) => c.stayCode)).toEqual(["S1"]);
+  });
+
+  it("refreshes a matched Hostex job's next arrival", () => {
+    const result = plan({ stays: [stay("A", 101, "2026-10-22", "2026-10-25"), stay("B", 102, "2026-10-25", "2026-10-27")],
+      jobs: [job("a", "2026-10-25", { hostexReservationCode: "A", hostexStayCode: "A", nextCheckinAt: null })] });
+    expect(result.arrivals).toEqual([{ jobId: "a", ownerId: "owner", patch: { next_checkin_at: "2026-10-25T19:00:00.000Z" } }]);
+  });
+
+  it("clears a stale next arrival when the following stay is cancelled", () => {
+    const result = plan({ stays: [stay("A", 101, "2026-10-22", "2026-10-25"), stay("B", 102, "2026-10-25", "2026-10-27", { status: "cancelled" })],
+      jobs: [job("a", "2026-10-25", { hostexReservationCode: "A", hostexStayCode: "A", nextCheckinAt: "2026-10-25T19:00:00Z" })] });
+    expect(result.arrivals[0]?.patch.next_checkin_at).toBeNull();
   });
 
   it("maps Hostex channel types to booking channels", () => {
@@ -109,6 +137,18 @@ describe("Hostex reservations drive cleanings", () => {
     expect(result.cancels).toEqual([]);
     expect(result.flags).toEqual([]);
     expect(result.links[0]).toMatchObject({ jobId: "ical-job", code: "AIRBNB" });
+  });
+
+  it("does not acquire cancellation authority over an existing manual job", () => {
+    const jobs = [job("manual", "2026-10-26", { sourceType: "manual" })];
+    const result = plan({ stays: [stay("HM1", 101, "2026-10-24", "2026-10-26")], jobs });
+    expect(result.creates).toEqual([]);
+    expect(result.links).toEqual([]);
+    expect(result.arrivals).toEqual([]);
+    const cancelled = plan({ stays: [stay("HM1", 101, "2026-10-24", "2026-10-26", { status: "cancelled" })],
+      jobs: [job("manual", "2026-10-26", { sourceType: "manual", hostexReservationCode: "HM1", hostexStayCode: "HM1" })] });
+    expect(cancelled.cancels).toEqual([]);
+    expect(cancelled.flags.map((f) => f.jobId)).toEqual(["manual"]);
   });
 
   it("only cancels unlinked automated jobs when the cancelled stay has no linked job", () => {

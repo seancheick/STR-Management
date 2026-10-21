@@ -40,7 +40,7 @@ export const PRICELABS_PUSH_STALE_HOURS = 36;
 
 /** PriceLabs' own sync record, when a Customer API key is configured. */
 export type PriceLabsSync =
-  | { ok: true; listings: Array<{ name: string; push_enabled: boolean; last_date_pushed: string | null; channel_ids: string[] }> }
+  | { ok: true; listings: Array<{ name: string; push_enabled: boolean; last_date_pushed: string | null; channels: Array<{ channel_type: string; listing_id: string }> }> }
   | { ok: false; error: string };
 export const SCAN_STALE_HOURS = 26;
 
@@ -165,14 +165,19 @@ export function scanBookability(input: {
   return { findings, updates };
 }
 
+const normalizeChannel = (channel: string) => channel.toLowerCase().replace(/[^a-z0-9]/g, "");
+
 function priceLabsSyncFinding(owned: ListingSettings[], all: ListingSettings[], sync: PriceLabsSync, now: Date): Finding | null {
   const base = { rule: "pricing_stale" as const, subject: "pricelabs", channel_type: null, start_date: null, end_date: null };
   if (!sync.ok) return { ...base, severity: "warning", detail: { problem: "Could not check PriceLabs sync status", cause: sync.error, action: "Check PRICELABS_API_KEY and PriceLabs API status; pricing staleness is unverified until this works" } };
   const problems: Array<{ property: string; issue: string; lastPushed: string | null }> = [];
+  const ambiguous: number[] = [];
   for (const propertyId of new Set(owned.map((l) => l.hostex_property_id))) {
     // Match on any channel listing id PriceLabs reports, so a Booking.com-only property still resolves.
-    const ids = new Set(all.filter((l) => l.hostex_property_id === propertyId).map((l) => l.listing_id));
-    const match = sync.listings.find((p) => p.channel_ids.some((id) => ids.has(id)));
+    const ids = new Set(all.filter((l) => l.hostex_property_id === propertyId).map((l) => `${normalizeChannel(l.channel_type)}:${l.listing_id}`));
+    const matches = sync.listings.filter((p) => p.channels.some((c) => ids.has(`${normalizeChannel(c.channel_type)}:${c.listing_id}`)));
+    if (matches.length > 1) { ambiguous.push(propertyId); continue; }
+    const match = matches[0];
     const grace = Math.max(...owned.filter((l) => l.hostex_property_id === propertyId).map((l) => Date.parse(l.authority_changed_at)));
     const lastPushed = match?.last_date_pushed ?? null;
     const hours = (now.getTime() - Math.max(grace, Date.parse(lastPushed ?? "") || 0)) / 3_600_000;
@@ -181,12 +186,13 @@ function priceLabsSyncFinding(owned: ListingSettings[], all: ListingSettings[], 
     else if (!match.push_enabled) problems.push({ property: label, issue: "sync turned off in PriceLabs", lastPushed });
     else if (hours > PRICELABS_PUSH_STALE_HOURS) problems.push({ property: label, issue: `no push in ${Math.floor(hours)} hours`, lastPushed });
   }
+  if (!problems.length && ambiguous.length) return { ...base, severity: "warning", detail: { problem: "PriceLabs sync status is unverified", cause: `Multiple PriceLabs listings match Hostex properties: ${ambiguous.join(", ")}`, action: "Resolve duplicate channel mappings in PriceLabs, then scan again" } };
   if (!problems.length) return null;
   return { ...base, severity: "critical", detail: {
     problem: `PriceLabs is not pushing prices for ${problems.length} ${problems.length === 1 ? "property" : "properties"}`,
     cause: problems.map((p) => `${p.property}: ${p.issue}`).join("; "),
     action: "Open PriceLabs: check billing, the listing's Sync toggle and its sync error, then Save & Refresh",
-    properties: problems,
+    properties: problems, ambiguousProperties: ambiguous,
   } };
 }
 
@@ -194,4 +200,16 @@ function priceLabsSyncFinding(owned: ListingSettings[], all: ListingSettings[], 
 export function scanIsStale(lastSuccessAt: string | null, now: Date) {
   if (!lastSuccessAt) return true;
   return (now.getTime() - Date.parse(lastSuccessAt)) / 3_600_000 > SCAN_STALE_HOURS;
+}
+
+/** A successful HTTP response is not proof that every requested date was observed. */
+export function assertBookabilityCoverage(listings: ListingSettings[], calendars: HostexListingCalendar[], availability: Map<number, Map<string, boolean>>, dates: string[]) {
+  for (const listing of listings) {
+    const calendar = calendars.find((c) => c.channel_type === listing.channel_type && c.listing_id === listing.listing_id);
+    const observedDates = new Set(calendar?.calendar.map((d) => d.date));
+    const open = availability.get(listing.hostex_property_id);
+    for (const date of dates) {
+      if (!observedDates.has(date) || typeof open?.get(date) !== "boolean") throw new Error(`Incomplete Hostex calendar/availability coverage for ${listing.channel_type}:${listing.listing_id} on ${date}; existing findings are preserved.`);
+    }
+  }
 }

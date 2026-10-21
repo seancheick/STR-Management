@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { HostexCalendarDay } from "@/lib/hostex/client";
-import { beforeSnapshot, compareReadback, priceWarnings, samePayload, validateChange, type ChangeTarget } from "@/lib/services/calendar-change-rules";
+import { beforeSnapshot, compareReadback, priceWarnings, samePayload, validateChange, validateObservedChange, type ChangeTarget } from "@/lib/services/calendar-change-rules";
 
 const TODAY = "2026-10-21";
 const writable: ChangeTarget = { pricing_authority: "manual", price_readonly: false, channel_type: "booking.com" };
@@ -74,4 +74,31 @@ describe("calendar change rules", () => {
     expect(samePayload(stored, sent)).toBe(true);
     expect(samePayload(stored, { ...sent, ranges: [{ ...sent.ranges[0], price: 151 }] })).toBe(false);
   });
+});
+
+describe("observed calendar change validation", () => {
+  const range = { start_date: "2026-11-01", end_date: "2026-11-01" };
+  it("rejects contradictory through bounds", () => {
+    expect(validateChange("restrictions", [{ ...range, min_stay_through: 10, max_stay_through: 3 }], writable, TODAY).join()).toMatch(/above max/);
+  });
+  it("rejects a partial update that contradicts an existing maximum", () => {
+    const current = day(range.start_date, 100);
+    current.restrictions.max_stay_on_arrival = 4;
+    expect(validateObservedChange("restrictions", [{ ...range, min_stay_on_arrival: 5 }], cal(current)).join()).toMatch(/above max/);
+  });
+  it("rejects bounds contradicting an existing exact stay", () => {
+    const current = day(range.start_date, 100);
+    current.restrictions.exact_stay_on_arrival = 3;
+    expect(validateObservedChange("restrictions", [{ ...range, min_stay_on_arrival: 5 }], cal(current)).join()).toMatch(/exact_stay/);
+  });
+  it("requires readback for every changed date", () => {
+    expect(validateObservedChange("price", [{ ...range, price: 100 }], cal()).join()).toMatch(/no current calendar/);
+  });
+});
+
+it("rejects impossible civil dates and accepts a real leap day", () => {
+  for (const date of ["2027-02-30", "2027-02-29", "2026-11-31"]) {
+    expect(validateChange("price", [{ start_date: date, end_date: date, price: 100 }], writable, TODAY).join()).toMatch(/YYYY-MM-DD/);
+  }
+  expect(validateChange("price", [{ start_date: "2028-02-29", end_date: "2028-02-29", price: 100 }], writable, TODAY)).toEqual([]);
 });
